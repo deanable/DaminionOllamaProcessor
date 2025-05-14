@@ -47,34 +47,45 @@ namespace DaminionOllamaWpfApp
             // Scroll to end if using a TextBox, for TextBlock it's less direct
         }
 
+        // In DaminionOllamaWpfApp/MainWindow.xaml.cs
+
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
         {
+            Console.WriteLine("---- LoginButton_Click: START ----"); // <-- ADD THIS
+
             if (_daminionClient == null)
             {
-                UpdateStatus("Error: Daminion client not initialized."); // Possible message source
+                UpdateStatus("Error: Daminion client not initialized.");
+                Console.WriteLine("---- LoginButton_Click: ERROR - _daminionClient is null ----"); // <-- ADD THIS
                 return;
             }
+            Console.WriteLine("---- LoginButton_Click: _daminionClient is NOT null ----"); // <-- ADD THIS
 
             string daminionUrl = DaminionUrlTextBox.Text;
             string username = UsernameTextBox.Text;
             string password = PasswordBox.Password;
 
+            Console.WriteLine($"---- LoginButton_Click: URL='{daminionUrl}', User='{username}' ----"); // <-- ADD THIS (Password intentionally omitted from this log line)
+
             if (string.IsNullOrWhiteSpace(daminionUrl) ||
                 string.IsNullOrWhiteSpace(username) /* Password can be empty by design for some systems */)
             {
-                UpdateStatus("Please enter Daminion URL and Username. Password may be required."); // Possible message source
+                UpdateStatus("Please enter Daminion URL and Username. Password may be required.");
+                Console.WriteLine("---- LoginButton_Click: ERROR - URL or Username is empty ----"); // <-- ADD THIS
                 return;
             }
 
             LoginButton.IsEnabled = false;
             FetchTagsButton.IsEnabled = false;
             StartProcessingButton.IsEnabled = false;
-            UpdateStatus("Logging in to Daminion..."); // You should see this in your UI
+            UpdateStatus("Logging in to Daminion...");
 
             try
             {
-                // The call to LoginAsync is where our detailed DaminionApiClient logs should appear
+                Console.WriteLine("---- LoginButton_Click: TRY block entered, BEFORE calling _daminionClient.LoginAsync ----"); // <-- ADD THIS
                 bool loginSuccess = await _daminionClient.LoginAsync(daminionUrl, username, password);
+                Console.WriteLine($"---- LoginButton_Click: AFTER calling _daminionClient.LoginAsync, loginSuccess = {loginSuccess} ----"); // <-- ADD THIS
+
                 if (loginSuccess)
                 {
                     UpdateStatus("Successfully logged in to Daminion.");
@@ -82,28 +93,33 @@ namespace DaminionOllamaWpfApp
                 }
                 else
                 {
-                    // This is the MOST LIKELY place your UI message is coming from
                     UpdateStatus("Failed to log in to Daminion. Check credentials and server URL. See console/debug output for details.");
                 }
             }
             catch (ArgumentException argEx)
             {
-                UpdateStatus($"Login input error: {argEx.Message}"); // Possible message source
+                UpdateStatus($"Login input error: {argEx.Message}");
+                Console.WriteLine($"---- LoginButton_Click: CATCH ArgumentException: {argEx.Message} ----"); // <-- ADD THIS
             }
             catch (HttpRequestException httpEx)
             {
-                // Or this one, if LoginAsync re-throws it
                 UpdateStatus($"Login network error: {httpEx.Message}. Ensure Daminion server is accessible. Check Debug Output.");
+                Console.WriteLine($"---- LoginButton_Click: CATCH HttpRequestException: {httpEx.Message} ----"); // <-- ADD THIS
+                if (httpEx.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerHttpRequestException: {httpEx.InnerException.Message} ----"); // <-- ADD THIS
             }
             catch (Exception ex)
             {
-                // Or this one
                 UpdateStatus($"An unexpected error occurred during login: {ex.Message}. Check Debug Output.");
+                Console.WriteLine($"---- LoginButton_Click: CATCH Exception: {ex.Message} ----"); // <-- ADD THIS
+                if (ex.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerException: {ex.InnerException.Message} ----"); // <-- ADD THIS
+                Console.WriteLine($"---- LoginButton_Click: StackTrace: {ex.StackTrace} ----"); // <-- ADD THIS
             }
             finally
             {
                 LoginButton.IsEnabled = true;
+                Console.WriteLine("---- LoginButton_Click: FINALLY block executed ----"); // <-- ADD THIS
             }
+            Console.WriteLine("---- LoginButton_Click: END ----"); // <-- ADD THIS
         }
         private async void FetchTagsButton_Click(object sender, RoutedEventArgs e)
         {
