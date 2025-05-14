@@ -306,7 +306,7 @@ namespace DaminionOllamaInteractionLib
     // If you moved it to the .Daminion sub-namespace, ensure this client can find it or move it back.
     internal class LoginRequest
     {
-        [System.Text.Json.Serialization.JsonPropertyName("username0rEmailAddress")]
+        [System.Text.Json.Serialization.JsonPropertyName("usernameOrEmailAddress")]
         public string UsernameOrEmailAddress { get; set; } = string.Empty;
 
         [System.Text.Json.Serialization.JsonPropertyName("password")]
