@@ -1,15 +1,14 @@
 ﻿// DaminionOllamaInteractionLib/DaminionApiClient.cs
-// This is the state AFTER applying "Step 2.A" (enhancing GetTagsAsync).
-
 using System;
-using System.Collections.Generic; // Required for List
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
+using System.Text.Json; // Required for JsonSerializer and JsonException
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using System.Linq;
-using DaminionOllamaInteractionLib.Daminion; // <--- CRUCIAL: Using directive for DTOs
+using DaminionOllamaInteractionLib.Daminion; // For Daminion DTOs
 
 namespace DaminionOllamaInteractionLib
 {
@@ -21,95 +20,131 @@ namespace DaminionOllamaInteractionLib
 
         public DaminionApiClient()
         {
-            _httpClient = new HttpClient(); // IDE0017 suggestion: can be simplified to `= new();`
+            _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(60);
+            Console.WriteLine("[DaminionApiClient] Initialized.");
         }
 
         public bool IsAuthenticated => !string.IsNullOrEmpty(_authenticationCookie);
 
         public async Task<bool> LoginAsync(string daminionServerUrl, string username, string password)
         {
+            Console.WriteLine("[DaminionApiClient] Attempting LoginAsync...");
+
             if (string.IsNullOrWhiteSpace(daminionServerUrl))
+            {
+                Console.Error.WriteLine("[DaminionApiClient] Login Error: Daminion server URL cannot be empty.");
                 throw new ArgumentException("Daminion server URL cannot be empty.", nameof(daminionServerUrl));
+            }
             if (string.IsNullOrWhiteSpace(username))
+            {
+                Console.Error.WriteLine("[DaminionApiClient] Login Error: Username cannot be empty.");
                 throw new ArgumentException("Username cannot be empty.", nameof(username));
-            if (string.IsNullOrWhiteSpace(password))
-                throw new ArgumentException("Password cannot be empty.", nameof(password));
+            }
+            // Password can be empty if Daminion allows it.
 
             _apiBaseUrl = daminionServerUrl.TrimEnd('/');
             string loginUrl = $"{_apiBaseUrl}/account/login";
+            Console.WriteLine($"[DaminionApiClient] Login URL: {loginUrl}");
 
-            // IDE0017 suggestion: new LoginRequest can be simplified to new()
             var loginRequest = new LoginRequest { UsernameOrEmailAddress = username, Password = password };
-            string jsonRequest = JsonSerializer.Serialize(loginRequest);
+            string jsonRequest = "";
+            try
+            {
+                jsonRequest = JsonSerializer.Serialize(loginRequest);
+                // WARNING: Logging passwords is a security risk. For temporary debugging only.
+                Console.WriteLine($"[DaminionApiClient] Login Request Payload (JSON): {jsonRequest} <-- CONTAINS SENSITIVE DATA");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[DaminionApiClient] Error serializing login request: {ex.Message}");
+                throw;
+            }
+
             var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
             try
             {
                 _httpClient.DefaultRequestHeaders.Remove("Cookie");
+                _authenticationCookie = null;
 
+                Console.WriteLine($"[DaminionApiClient] Sending POST request to {loginUrl}...");
                 HttpResponseMessage response = await _httpClient.PostAsync(loginUrl, content);
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                Console.WriteLine($"[DaminionApiClient] Login Response Status Code: {response.StatusCode} ({response.ReasonPhrase})");
+                Console.WriteLine($"[DaminionApiClient] Login Response Headers: {response.Headers.ToString().Trim()}");
+                Console.WriteLine($"[DaminionApiClient] Login Response Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 1000))}");
 
                 if (response.IsSuccessStatusCode)
                 {
-                    if (response.Headers.TryGetValues("Set-Cookie", out var cookieValues))
+                    if (response.Headers.TryGetValues("Set-Cookie", out IEnumerable<string>? cookieValues))
                     {
                         _authenticationCookie = cookieValues.FirstOrDefault(c => c.StartsWith("AspNet.ApplicationCookie=", StringComparison.OrdinalIgnoreCase));
                         if (!string.IsNullOrEmpty(_authenticationCookie))
                         {
                             _authenticationCookie = _authenticationCookie.Split(';')[0];
                             _httpClient.DefaultRequestHeaders.Add("Cookie", _authenticationCookie);
+                            Console.WriteLine($"[DaminionApiClient] Authentication cookie found and applied: {_authenticationCookie.Substring(0, Math.Min(_authenticationCookie.Length, 50))}...");
                             return true;
                         }
                         else
                         {
-                            Console.Error.WriteLine("Login successful but authentication cookie was not found in the response.");
+                            Console.Error.WriteLine("[DaminionApiClient] Login HTTP call successful, but 'AspNet.ApplicationCookie' not found in 'Set-Cookie' header.");
                             _authenticationCookie = null;
                             return false;
                         }
                     }
                     else
                     {
-                        Console.Error.WriteLine("Login successful but 'Set-Cookie' header was not found in the response.");
+                        Console.Error.WriteLine("[DaminionApiClient] Login HTTP call successful, but 'Set-Cookie' header was not found in the response.");
                         _authenticationCookie = null;
                         return false;
                     }
                 }
                 else
                 {
-                    string errorContent = await response.Content.ReadAsStringAsync();
-                    Console.Error.WriteLine($"Login failed. Status: {response.StatusCode}, Reason: {response.ReasonPhrase}, Content: {errorContent}");
+                    Console.Error.WriteLine($"[DaminionApiClient] Login HTTP call failed. Full Response Body: {responseBody}");
                     _authenticationCookie = null;
                     return false;
                 }
             }
             catch (HttpRequestException ex)
             {
-                Console.Error.WriteLine($"HTTP request error during login: {ex.Message}");
+                Console.Error.WriteLine($"[DaminionApiClient] HTTP request error during login to {loginUrl}: {ex.Message}");
+                if (ex.InnerException != null) { Console.Error.WriteLine($"[DaminionApiClient] Inner Exception: {ex.InnerException.Message}"); }
+                Console.Error.WriteLine($"[DaminionApiClient] HttpRequestException StackTrace: {ex.StackTrace}");
                 _authenticationCookie = null;
                 throw;
             }
+            catch (TaskCanceledException ex)
+            {
+                Console.Error.WriteLine($"[DaminionApiClient] Login request to {loginUrl} timed out after {_httpClient.Timeout.TotalSeconds} seconds: {ex.Message}");
+                if (ex.InnerException != null) { Console.Error.WriteLine($"[DaminionApiClient] Inner Exception (Timeout): {ex.InnerException.Message}"); }
+                _authenticationCookie = null;
+                throw new HttpRequestException($"Login request timed out. Timeout: {_httpClient.Timeout.TotalSeconds}s.", ex);
+            }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"An unexpected error occurred during login: {ex.Message}");
+                Console.Error.WriteLine($"[DaminionApiClient] An unexpected error occurred during login: {ex.Message}");
+                if (ex.InnerException != null) { Console.Error.WriteLine($"[DaminionApiClient] Inner Exception: {ex.InnerException.Message}"); }
+                Console.Error.WriteLine($"[DaminionApiClient] Exception StackTrace: {ex.StackTrace}");
                 _authenticationCookie = null;
                 throw;
             }
         }
 
-        /// <summary>
-        /// Gets a list of tags from the Daminion server.
-        /// </summary>
-        /// <returns>A list of DaminionTag objects or null if an error occurs.</returns>
-        public async Task<List<DaminionTag>?> GetTagsAsync() // Line 104 (approx) in your file for the error
+        public async Task<List<DaminionTag>?> GetTagsAsync()
         {
+            Console.WriteLine("[DaminionApiClient] Attempting GetTagsAsync...");
             if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
             {
-                Console.Error.WriteLine("Cannot get tags: Client is not authenticated or API base URL is not set.");
+                Console.Error.WriteLine("[DaminionApiClient] GetTags Error: Client is not authenticated or API base URL is not set.");
                 return null;
             }
 
             string tagsUrl = $"{_apiBaseUrl}/api/settings/getTags";
+            Console.WriteLine($"[DaminionApiClient] GetTags URL: {tagsUrl}");
             try
             {
                 _httpClient.DefaultRequestHeaders.Accept.Clear();
@@ -117,61 +152,70 @@ namespace DaminionOllamaInteractionLib
 
                 HttpResponseMessage response = await _httpClient.GetAsync(tagsUrl);
                 string responseBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[DaminionApiClient] GetTags Response Status Code: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
                 {
-                    // Line 123 (approx) in your file for the error
-                    var getTagsResponse = JsonSerializer.Deserialize<DaminionGetTagsResponse>(responseBody);
+                    DaminionGetTagsResponse? getTagsResponse = null;
+                    try
+                    {
+                        getTagsResponse = JsonSerializer.Deserialize<DaminionGetTagsResponse>(responseBody);
+                    }
+                    catch (System.Text.Json.JsonException jsonEx)
+                    {
+                        Console.Error.WriteLine($"[DaminionApiClient] Error deserializing GetTags response: {jsonEx.Message}. Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return null;
+                    }
+
                     if (getTagsResponse != null && getTagsResponse.Success)
                     {
+                        Console.WriteLine($"[DaminionApiClient] Successfully fetched {getTagsResponse.Data?.Count ?? 0} tags.");
                         return getTagsResponse.Data;
                     }
                     else
                     {
-                        // IDE0057 suggestion: Substring can be simplified using ranges, e.g., responseBody[..Math.Min(responseBody.Length, 500)]
-                        Console.Error.WriteLine($"Failed to get tags. Success: {getTagsResponse?.Success}, Error: {getTagsResponse?.Error}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        Console.Error.WriteLine($"[DaminionApiClient] GetTags API call reported failure or bad data. Success: {getTagsResponse?.Success}, Error: {getTagsResponse?.Error}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
                         return null;
                     }
                 }
                 else
                 {
-                    // IDE0057 suggestion: Substring can be simplified
-                    Console.Error.WriteLine($"Failed to get tags. Status: {response.StatusCode}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    Console.Error.WriteLine($"[DaminionApiClient] GetTags HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
                     return null;
                 }
             }
-            catch (JsonException jsonEx)
+            catch (HttpRequestException ex)
             {
-                Console.Error.WriteLine($"Error deserializing tags response: {jsonEx.Message}");
-                return null;
+                Console.Error.WriteLine($"[DaminionApiClient] HTTP request error during GetTags: {ex.Message}");
+                throw;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Error getting tags: {ex.Message}");
+                Console.Error.WriteLine($"[DaminionApiClient] An unexpected error occurred during GetTags: {ex.Message}");
                 return null;
             }
         }
 
-        // Add these methods inside your public class DaminionApiClient : IDisposable
-
-        // ... (after GetTagsAsync() method, for example) ...
-
         public async Task<DaminionPathResult> GetAbsolutePathsAsync(List<long> itemIds)
         {
-            var result = new DaminionPathResult { Success = false, Paths = new Dictionary<string, string>() };
+            Console.WriteLine($"[DaminionApiClient] Attempting GetAbsolutePathsAsync for {itemIds?.Count} items...");
+            var result = new DaminionPathResult { Success = false, Paths = new Dictionary<string, string>() }; // Ensure Paths is initialized
             if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
             {
                 result.ErrorMessage = "Client is not authenticated or API base URL is not set.";
+                Console.Error.WriteLine($"[DaminionApiClient] GetAbsolutePaths Error: {result.ErrorMessage}");
                 return result;
             }
             if (itemIds == null || !itemIds.Any())
             {
                 result.ErrorMessage = "Item IDs list cannot be null or empty.";
+                Console.Error.WriteLine($"[DaminionApiClient] GetAbsolutePaths Error: {result.ErrorMessage}");
                 return result;
             }
 
             string idsQueryParam = string.Join(",", itemIds);
             string pathsUrl = $"{_apiBaseUrl}/api/mediaItems/getAbsolutePaths?ids={idsQueryParam}";
+            Console.WriteLine($"[DaminionApiClient] GetAbsolutePaths URL: {pathsUrl}");
 
             try
             {
@@ -180,6 +224,7 @@ namespace DaminionOllamaInteractionLib
 
                 HttpResponseMessage response = await _httpClient.GetAsync(pathsUrl);
                 string responseBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[DaminionApiClient] GetAbsolutePaths Response Status Code: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -188,110 +233,129 @@ namespace DaminionOllamaInteractionLib
                     {
                         paths = JsonSerializer.Deserialize<Dictionary<string, string>>(responseBody);
                     }
-                    catch (JsonException)
+                    catch (System.Text.Json.JsonException ex)
                     {
-                        try
-                        {
-                            var wrappedResponse = JsonSerializer.Deserialize<JsonElement>(responseBody);
-                            if (wrappedResponse.TryGetProperty("data", out var dataElement))
-                            {
-                                paths = JsonSerializer.Deserialize<Dictionary<string, string>>(dataElement.GetRawText());
-                            }
-                        }
-                        catch (JsonException innerEx)
-                        {
-                            Console.Error.WriteLine($"Failed to deserialize paths (inner attempt): {innerEx.Message}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
-                            result.ErrorMessage = $"Failed to deserialize paths response: {innerEx.Message}";
-                            return result;
-                        }
+                        Console.Error.WriteLine($"[DaminionApiClient] Failed to deserialize paths directly: {ex.Message}. Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        // Optionally, attempt wrapped deserialization if your API might do that
+                        // For now, we assume direct dictionary or failure based on Daminion PDF
+                        result.ErrorMessage = $"Failed to deserialize paths response: {ex.Message}";
                     }
 
-                    if (paths != null)
+                    if (paths != null && paths.Any())
                     {
                         result.Paths = paths;
                         result.Success = true;
+                        Console.WriteLine($"[DaminionApiClient] Successfully fetched {paths.Count} absolute paths.");
                     }
-                    else
+                    else if (string.IsNullOrEmpty(result.ErrorMessage))
                     {
-                        result.ErrorMessage = "Successfully called API, but paths data was not in the expected format or was empty.";
-                        Console.Error.WriteLine($"Paths data not in expected format. Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        result.ErrorMessage = "Successfully called API for paths, but no paths data was returned or parsed correctly.";
+                        Console.Error.WriteLine($"[DaminionApiClient] {result.ErrorMessage} Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
                     }
                     return result;
                 }
                 else
                 {
-                    result.ErrorMessage = $"API call failed. Status: {response.StatusCode}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}";
-                    Console.Error.WriteLine(result.ErrorMessage);
+                    result.ErrorMessage = $"API call for paths failed. Status: {response.StatusCode}";
+                    Console.Error.WriteLine($"[DaminionApiClient] {result.ErrorMessage} Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
                     return result;
                 }
             }
             catch (Exception ex)
             {
                 result.ErrorMessage = $"Error getting absolute paths: {ex.Message}";
-                Console.Error.WriteLine(result.ErrorMessage);
+                Console.Error.WriteLine($"[DaminionApiClient] GetAbsolutePaths Exception: {ex.Message} StackTrace: {ex.StackTrace}");
                 return result;
             }
         }
 
         public async Task<DaminionBatchChangeResponse?> UpdateItemMetadataAsync(List<long> itemIds, List<DaminionUpdateOperation> operations)
         {
+            Console.WriteLine($"[DaminionApiClient] Attempting UpdateItemMetadataAsync for {itemIds?.Count} items with {operations?.Count} operations...");
             if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
             {
-                Console.Error.WriteLine("Cannot update metadata: Client is not authenticated or API base URL is not set.");
+                Console.Error.WriteLine("[DaminionApiClient] UpdateItemMetadata Error: Client is not authenticated or API base URL is not set.");
                 return new DaminionBatchChangeResponse { Success = false, Error = "Not authenticated." };
             }
             if (itemIds == null || !itemIds.Any() || operations == null || !operations.Any())
             {
-                Console.Error.WriteLine("Item IDs and operations list cannot be null or empty for updating metadata.");
+                Console.Error.WriteLine("[DaminionApiClient] UpdateItemMetadata Error: Item IDs and operations list cannot be null or empty.");
                 return new DaminionBatchChangeResponse { Success = false, Error = "Item IDs or operations missing." };
             }
 
             string updateUrl = $"{_apiBaseUrl}/api/itemData/batchChange";
+            Console.WriteLine($"[DaminionApiClient] UpdateItemMetadata URL: {updateUrl}");
             var requestPayload = new DaminionBatchChangeRequest
             {
                 Ids = itemIds,
                 Data = operations
             };
 
-            string jsonRequest = JsonSerializer.Serialize(requestPayload);
+            string jsonRequest = "";
+            try
+            {
+                jsonRequest = JsonSerializer.Serialize(requestPayload);
+                Console.WriteLine($"[DaminionApiClient] UpdateItemMetadata Request Payload (snippet): {jsonRequest.Substring(0, Math.Min(jsonRequest.Length, 500))}...");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[DaminionApiClient] Error serializing update metadata request: {ex.Message}");
+                return new DaminionBatchChangeResponse { Success = false, Error = $"Serialization error: {ex.Message}" };
+            }
             var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
             try
             {
                 HttpResponseMessage response = await _httpClient.PostAsync(updateUrl, content);
                 string responseBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[DaminionApiClient] UpdateItemMetadata Response Status Code: {response.StatusCode}");
 
-                var batchChangeResponse = JsonSerializer.Deserialize<DaminionBatchChangeResponse>(responseBody);
+                DaminionBatchChangeResponse? batchChangeResponse = null;
+                try
+                {
+                    // Daminion API PDF doesn't specify response for batchChange. Assuming similar structure.
+                    batchChangeResponse = JsonSerializer.Deserialize<DaminionBatchChangeResponse>(responseBody);
+                }
+                catch (System.Text.Json.JsonException jsonEx)
+                {
+                    Console.Error.WriteLine($"[DaminionApiClient] Error deserializing batchChange response: {jsonEx.Message}. Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    // If it's a success status with non-JSON body, we might assume success
+                    if (response.IsSuccessStatusCode) return new DaminionBatchChangeResponse { Success = true, Error = "Response was not valid JSON, but HTTP status was success." };
+                    return new DaminionBatchChangeResponse { Success = false, Error = $"JSON Deserialization error: {jsonEx.Message}" };
+                }
+
                 if (batchChangeResponse == null)
                 {
                     if (response.IsSuccessStatusCode && string.IsNullOrWhiteSpace(responseBody))
                     {
+                        Console.WriteLine("[DaminionApiClient] UpdateItemMetadata returned success status with empty body. Assuming success.");
                         return new DaminionBatchChangeResponse { Success = true };
                     }
-                    Console.Error.WriteLine($"Failed to deserialize batchChange response or response was empty. Status: {response.StatusCode}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
-                    return new DaminionBatchChangeResponse { Success = false, Error = $"Failed to deserialize response. Status: {response.StatusCode}" };
+                    Console.Error.WriteLine($"[DaminionApiClient] Failed to deserialize batchChange response or response object was null. Status: {response.StatusCode}, Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    return new DaminionBatchChangeResponse { Success = false, Error = $"Failed to deserialize response or null object. Status: {response.StatusCode}" };
                 }
 
                 if (!batchChangeResponse.Success)
                 {
-                    Console.Error.WriteLine($"Batch change operation failed. Error: {batchChangeResponse.Error}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    Console.Error.WriteLine($"[DaminionApiClient] UpdateItemMetadata operation reported failure. Error: {batchChangeResponse.Error}. Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                }
+                else
+                {
+                    Console.WriteLine("[DaminionApiClient] UpdateItemMetadata reported success.");
                 }
                 return batchChangeResponse;
             }
-            catch (JsonException jsonEx) // This is where using System.Text.Json; is needed in this file.
+            catch (HttpRequestException httpEx)
             {
-                Console.Error.WriteLine($"Error deserializing batchChange response: {jsonEx.Message}");
-                return new DaminionBatchChangeResponse { Success = false, Error = $"JSON Deserialization error: {jsonEx.Message}" };
+                Console.Error.WriteLine($"[DaminionApiClient] HTTP request error updating item metadata: {httpEx.Message}");
+                throw; // Let UI handle this
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Error updating item metadata: {ex.Message}");
+                Console.Error.WriteLine($"[DaminionApiClient] An unexpected error occurred updating item metadata: {ex.Message}");
                 return new DaminionBatchChangeResponse { Success = false, Error = $"Exception: {ex.Message}" };
             }
         }
-
-        // ... (ensure this is within the DaminionApiClient class, before the final closing brace `}`) ...
-
 
         public void Dispose()
         {
@@ -300,16 +364,14 @@ namespace DaminionOllamaInteractionLib
         }
     }
 
-    // This LoginRequest DTO should also be in your library,
-    // either directly in this namespace or in DaminionOllamaInteractionLib.Daminion
-    // For simplicity here, keeping it as it was in the previous step.
-    // If you moved it to the .Daminion sub-namespace, ensure this client can find it or move it back.
+    // This LoginRequest DTO should be defined.
+    // Make sure it's accessible. If it's defined in this file as internal, that's fine for DaminionApiClient.
     internal class LoginRequest
     {
-        [System.Text.Json.Serialization.JsonPropertyName("usernameOrEmailAddress")]
+        [JsonPropertyName("username0rEmailAddress")]
         public string UsernameOrEmailAddress { get; set; } = string.Empty;
 
-        [System.Text.Json.Serialization.JsonPropertyName("password")]
+        [JsonPropertyName("password")]
         public string Password { get; set; } = string.Empty;
     }
 }

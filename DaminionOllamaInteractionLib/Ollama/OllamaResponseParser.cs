@@ -19,6 +19,7 @@ namespace DaminionOllamaInteractionLib.Ollama
 
             string description = llavaResponseText;
 
+            // Attempt to extract categories
             var categoriesMatch = Regex.Match(llavaResponseText, @"Categories:(.*?)(\n\n|\z)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
             if (categoriesMatch.Success)
             {
@@ -31,6 +32,7 @@ namespace DaminionOllamaInteractionLib.Ollama
                 parsedContent.SuccessfullyParsed = true;
             }
 
+            // Attempt to extract keywords
             var keywordsMatch = Regex.Match(llavaResponseText, @"Keywords:(.*?)(\n\n|\z)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
             if (keywordsMatch.Success)
             {
@@ -45,19 +47,22 @@ namespace DaminionOllamaInteractionLib.Ollama
 
             parsedContent.Description = description.Trim();
 
+            // If no specific sections were found, the whole text is the description.
             if (!parsedContent.SuccessfullyParsed && !string.IsNullOrWhiteSpace(parsedContent.Description))
             {
                 parsedContent.SuccessfullyParsed = true;
             }
             else if (string.IsNullOrWhiteSpace(parsedContent.Description) && !parsedContent.Categories.Any() && !parsedContent.Keywords.Any())
             {
+                // This case handles if parsing resulted in empty fields but raw response wasn't empty.
                 if (!string.IsNullOrWhiteSpace(llavaResponseText))
                 {
-                    parsedContent.Description = llavaResponseText;
-                    parsedContent.SuccessfullyParsed = true;
+                    parsedContent.Description = llavaResponseText; // Fallback to raw response as description
+                    parsedContent.SuccessfullyParsed = true; // Consider it "parsed" as a description block
                 }
                 else
                 {
+                    // This case should be rare if initial null/whitespace check passed.
                     parsedContent.Description = "Ollama returned content, but parsing failed to extract structured data.";
                     parsedContent.SuccessfullyParsed = false;
                 }

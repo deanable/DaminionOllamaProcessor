@@ -19,7 +19,7 @@ namespace DaminionOllamaInteractionLib.Daminion
         public string Guid { get; set; } = string.Empty;
 
         [JsonPropertyName("id")]
-        public long Id { get; set; }
+        public long Id { get; set; } // Tag value ID. Set to 0 if assigning by text.
 
         [JsonPropertyName("value")]
         public string Value { get; set; } = string.Empty;
