@@ -368,7 +368,7 @@ namespace DaminionOllamaInteractionLib
     // Make sure it's accessible. If it's defined in this file as internal, that's fine for DaminionApiClient.
     internal class LoginRequest
     {
-        [JsonPropertyName("username0rEmailAddress")]
+        [JsonPropertyName("usernameOrEmailAddress")]
         public string UsernameOrEmailAddress { get; set; } = string.Empty;
 
         [JsonPropertyName("password")]
