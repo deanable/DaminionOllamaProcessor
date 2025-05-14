@@ -31,7 +31,7 @@
         </Grid.ColumnDefinitions>
 
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Daminion Server URL:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <TextBox Grid.Row="0" Grid.Column="1" x:Name="DaminionUrlTextBox" Margin="0,5" Padding="5" Text="http://your-daminion-server.com"/>
+        <TextBox Grid.Row="0" Grid.Column="1" x:Name="DaminionUrlTextBox" Margin="0,5" Padding="5" Text="http://damserver.local/daminion"/>
 
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Daminion Username:" VerticalAlignment="Center" Margin="0,0,10,0"/>
         <TextBox Grid.Row="1" Grid.Column="1" x:Name="UsernameTextBox" Margin="0,5" Padding="5" Text="admin"/>
@@ -45,7 +45,7 @@
         <Separator Grid.Row="5" Grid.ColumnSpan="2" Margin="0,10"/>
 
         <TextBlock Grid.Row="6" Grid.Column="0" Text="Ollama Server URL:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <TextBox Grid.Row="6" Grid.Column="1" x:Name="OllamaUrlTextBox" Margin="0,5" Padding="5" Text="http://localhost:11434"/>
+        <TextBox Grid.Row="6" Grid.Column="1" x:Name="OllamaUrlTextBox" Margin="0,5" Padding="5" Text="http://damserver.local:11434"/>
 
         <TextBlock Grid.Row="7" Grid.Column="0" Text="Ollama Model Name:" VerticalAlignment="Center" Margin="0,0,10,0"/>
         <TextBox Grid.Row="7" Grid.Column="1" x:Name="OllamaModelTextBox" Margin="0,5" Padding="5" Text="llava"/>
