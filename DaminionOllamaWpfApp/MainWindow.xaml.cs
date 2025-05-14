@@ -51,7 +51,7 @@ namespace DaminionOllamaWpfApp
         {
             if (_daminionClient == null)
             {
-                UpdateStatus("Error: Daminion client not initialized.");
+                UpdateStatus("Error: Daminion client not initialized."); // Possible message source
                 return;
             }
 
@@ -62,47 +62,49 @@ namespace DaminionOllamaWpfApp
             if (string.IsNullOrWhiteSpace(daminionUrl) ||
                 string.IsNullOrWhiteSpace(username) /* Password can be empty by design for some systems */)
             {
-                UpdateStatus("Please enter Daminion URL and Username. Password may be required.");
+                UpdateStatus("Please enter Daminion URL and Username. Password may be required."); // Possible message source
                 return;
             }
 
             LoginButton.IsEnabled = false;
             FetchTagsButton.IsEnabled = false;
             StartProcessingButton.IsEnabled = false;
-            UpdateStatus("Logging in to Daminion...");
+            UpdateStatus("Logging in to Daminion..."); // You should see this in your UI
 
             try
             {
+                // The call to LoginAsync is where our detailed DaminionApiClient logs should appear
                 bool loginSuccess = await _daminionClient.LoginAsync(daminionUrl, username, password);
                 if (loginSuccess)
                 {
                     UpdateStatus("Successfully logged in to Daminion.");
                     FetchTagsButton.IsEnabled = true;
-                    // StartProcessingButton will be enabled after tags are fetched and Item ID is provided
                 }
                 else
                 {
+                    // This is the MOST LIKELY place your UI message is coming from
                     UpdateStatus("Failed to log in to Daminion. Check credentials and server URL. See console/debug output for details.");
                 }
             }
             catch (ArgumentException argEx)
             {
-                UpdateStatus($"Login input error: {argEx.Message}");
+                UpdateStatus($"Login input error: {argEx.Message}"); // Possible message source
             }
             catch (HttpRequestException httpEx)
             {
-                UpdateStatus($"Login network error: {httpEx.Message}. Ensure Daminion server is accessible.");
+                // Or this one, if LoginAsync re-throws it
+                UpdateStatus($"Login network error: {httpEx.Message}. Ensure Daminion server is accessible. Check Debug Output.");
             }
             catch (Exception ex)
             {
-                UpdateStatus($"An unexpected error occurred during login: {ex.Message}");
+                // Or this one
+                UpdateStatus($"An unexpected error occurred during login: {ex.Message}. Check Debug Output.");
             }
             finally
             {
                 LoginButton.IsEnabled = true;
             }
         }
-
         private async void FetchTagsButton_Click(object sender, RoutedEventArgs e)
         {
             if (_daminionClient == null || !_daminionClient.IsAuthenticated)
