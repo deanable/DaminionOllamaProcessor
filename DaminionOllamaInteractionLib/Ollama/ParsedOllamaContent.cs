@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
-    public class ParsedOllamaContent
+    public class ParsedOllamaContent // Must be public
     {
         public string Description { get; set; } = string.Empty;
         public List<string> Categories { get; set; } = new List<string>();

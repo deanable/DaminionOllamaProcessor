@@ -31,7 +31,7 @@ namespace DaminionOllamaInteractionLib.Daminion
     public class DaminionBatchChangeResponse // Must be public
     {
         [JsonPropertyName("success")]
-        public bool Success { get; set; } // Ensure this property exists and is public
+        public bool Success { get; set; } // Must be public
 
         [JsonPropertyName("error")]
         public string? Error { get; set; }

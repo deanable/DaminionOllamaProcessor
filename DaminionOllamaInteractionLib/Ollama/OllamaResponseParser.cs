@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
-    public static class OllamaResponseParser // Must be public static
+    public static class OllamaResponseParser // Must be public and static
     {
         public static ParsedOllamaContent ParseLlavaResponse(string llavaResponseText)
         {
