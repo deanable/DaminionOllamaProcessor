@@ -152,6 +152,147 @@ namespace DaminionOllamaInteractionLib
             }
         }
 
+        // Add these methods inside your public class DaminionApiClient : IDisposable
+
+        // ... (after GetTagsAsync() method, for example) ...
+
+        public async Task<DaminionPathResult> GetAbsolutePathsAsync(List<long> itemIds)
+        {
+            var result = new DaminionPathResult { Success = false, Paths = new Dictionary<string, string>() };
+            if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
+            {
+                result.ErrorMessage = "Client is not authenticated or API base URL is not set.";
+                return result;
+            }
+            if (itemIds == null || !itemIds.Any())
+            {
+                result.ErrorMessage = "Item IDs list cannot be null or empty.";
+                return result;
+            }
+
+            string idsQueryParam = string.Join(",", itemIds);
+            string pathsUrl = $"{_apiBaseUrl}/api/mediaItems/getAbsolutePaths?ids={idsQueryParam}";
+
+            try
+            {
+                _httpClient.DefaultRequestHeaders.Accept.Clear();
+                _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = await _httpClient.GetAsync(pathsUrl);
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Dictionary<string, string>? paths = null;
+                    try
+                    {
+                        paths = JsonSerializer.Deserialize<Dictionary<string, string>>(responseBody);
+                    }
+                    catch (JsonException)
+                    {
+                        try
+                        {
+                            var wrappedResponse = JsonSerializer.Deserialize<JsonElement>(responseBody);
+                            if (wrappedResponse.TryGetProperty("data", out var dataElement))
+                            {
+                                paths = JsonSerializer.Deserialize<Dictionary<string, string>>(dataElement.GetRawText());
+                            }
+                        }
+                        catch (JsonException innerEx)
+                        {
+                            Console.Error.WriteLine($"Failed to deserialize paths (inner attempt): {innerEx.Message}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                            result.ErrorMessage = $"Failed to deserialize paths response: {innerEx.Message}";
+                            return result;
+                        }
+                    }
+
+                    if (paths != null)
+                    {
+                        result.Paths = paths;
+                        result.Success = true;
+                    }
+                    else
+                    {
+                        result.ErrorMessage = "Successfully called API, but paths data was not in the expected format or was empty.";
+                        Console.Error.WriteLine($"Paths data not in expected format. Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    }
+                    return result;
+                }
+                else
+                {
+                    result.ErrorMessage = $"API call failed. Status: {response.StatusCode}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}";
+                    Console.Error.WriteLine(result.ErrorMessage);
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                result.ErrorMessage = $"Error getting absolute paths: {ex.Message}";
+                Console.Error.WriteLine(result.ErrorMessage);
+                return result;
+            }
+        }
+
+        public async Task<DaminionBatchChangeResponse?> UpdateItemMetadataAsync(List<long> itemIds, List<DaminionUpdateOperation> operations)
+        {
+            if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
+            {
+                Console.Error.WriteLine("Cannot update metadata: Client is not authenticated or API base URL is not set.");
+                return new DaminionBatchChangeResponse { Success = false, Error = "Not authenticated." };
+            }
+            if (itemIds == null || !itemIds.Any() || operations == null || !operations.Any())
+            {
+                Console.Error.WriteLine("Item IDs and operations list cannot be null or empty for updating metadata.");
+                return new DaminionBatchChangeResponse { Success = false, Error = "Item IDs or operations missing." };
+            }
+
+            string updateUrl = $"{_apiBaseUrl}/api/itemData/batchChange";
+            var requestPayload = new DaminionBatchChangeRequest
+            {
+                Ids = itemIds,
+                Data = operations
+            };
+
+            string jsonRequest = JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
+
+            try
+            {
+                HttpResponseMessage response = await _httpClient.PostAsync(updateUrl, content);
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                var batchChangeResponse = JsonSerializer.Deserialize<DaminionBatchChangeResponse>(responseBody);
+                if (batchChangeResponse == null)
+                {
+                    if (response.IsSuccessStatusCode && string.IsNullOrWhiteSpace(responseBody))
+                    {
+                        return new DaminionBatchChangeResponse { Success = true };
+                    }
+                    Console.Error.WriteLine($"Failed to deserialize batchChange response or response was empty. Status: {response.StatusCode}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    return new DaminionBatchChangeResponse { Success = false, Error = $"Failed to deserialize response. Status: {response.StatusCode}" };
+                }
+
+                if (!batchChangeResponse.Success)
+                {
+                    Console.Error.WriteLine($"Batch change operation failed. Error: {batchChangeResponse.Error}, Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                }
+                return batchChangeResponse;
+            }
+            catch (JsonException jsonEx) // This is where using System.Text.Json; is needed in this file.
+            {
+                Console.Error.WriteLine($"Error deserializing batchChange response: {jsonEx.Message}");
+                return new DaminionBatchChangeResponse { Success = false, Error = $"JSON Deserialization error: {jsonEx.Message}" };
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error updating item metadata: {ex.Message}");
+                return new DaminionBatchChangeResponse { Success = false, Error = $"Exception: {ex.Message}" };
+            }
+        }
+
+        // ... (ensure this is within the DaminionApiClient class, before the final closing brace `}`) ...
+
+
         public void Dispose()
         {
             _httpClient?.Dispose();

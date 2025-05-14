@@ -12,7 +12,8 @@ using Microsoft.Win32; // For OpenFileDialog
 // These are for your class library types:
 using DaminionOllamaInteractionLib;
 using DaminionOllamaInteractionLib.Daminion; // For Daminion DTOs
-using DaminionOllamaInteractionLib.Ollama;  // For Ollama DTOs and Parser
+using DaminionOllamaInteractionLib.Ollama;
+using System.Net.Http;  // For Ollama DTOs and Parser
 
 namespace DaminionOllamaWpfApp
 {
