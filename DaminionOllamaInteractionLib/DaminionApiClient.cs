@@ -199,7 +199,7 @@ namespace DaminionOllamaInteractionLib
         public async Task<DaminionPathResult> GetAbsolutePathsAsync(List<long> itemIds)
         {
             Console.WriteLine($"[DaminionApiClient] Attempting GetAbsolutePathsAsync for {itemIds?.Count} items...");
-            var result = new DaminionPathResult { Success = false, Paths = new Dictionary<string, string>() }; // Ensure Paths is initialized
+            var result = new DaminionPathResult { Success = false, Paths = new Dictionary<string, string>() };
             if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
             {
                 result.ErrorMessage = "Client is not authenticated or API base URL is not set.";
@@ -236,8 +236,6 @@ namespace DaminionOllamaInteractionLib
                     catch (System.Text.Json.JsonException ex)
                     {
                         Console.Error.WriteLine($"[DaminionApiClient] Failed to deserialize paths directly: {ex.Message}. Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
-                        // Optionally, attempt wrapped deserialization if your API might do that
-                        // For now, we assume direct dictionary or failure based on Daminion PDF
                         result.ErrorMessage = $"Failed to deserialize paths response: {ex.Message}";
                     }
 
@@ -313,13 +311,11 @@ namespace DaminionOllamaInteractionLib
                 DaminionBatchChangeResponse? batchChangeResponse = null;
                 try
                 {
-                    // Daminion API PDF doesn't specify response for batchChange. Assuming similar structure.
                     batchChangeResponse = JsonSerializer.Deserialize<DaminionBatchChangeResponse>(responseBody);
                 }
                 catch (System.Text.Json.JsonException jsonEx)
                 {
                     Console.Error.WriteLine($"[DaminionApiClient] Error deserializing batchChange response: {jsonEx.Message}. Body(snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
-                    // If it's a success status with non-JSON body, we might assume success
                     if (response.IsSuccessStatusCode) return new DaminionBatchChangeResponse { Success = true, Error = "Response was not valid JSON, but HTTP status was success." };
                     return new DaminionBatchChangeResponse { Success = false, Error = $"JSON Deserialization error: {jsonEx.Message}" };
                 }
@@ -348,7 +344,7 @@ namespace DaminionOllamaInteractionLib
             catch (HttpRequestException httpEx)
             {
                 Console.Error.WriteLine($"[DaminionApiClient] HTTP request error updating item metadata: {httpEx.Message}");
-                throw; // Let UI handle this
+                throw;
             }
             catch (Exception ex)
             {
@@ -364,8 +360,6 @@ namespace DaminionOllamaInteractionLib
         }
     }
 
-    // This LoginRequest DTO should be defined.
-    // Make sure it's accessible. If it's defined in this file as internal, that's fine for DaminionApiClient.
     internal class LoginRequest
     {
         [JsonPropertyName("usernameOrEmailAddress")]
