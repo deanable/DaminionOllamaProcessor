@@ -13,7 +13,8 @@ using Microsoft.Win32; // For OpenFileDialog
 using DaminionOllamaInteractionLib;
 using DaminionOllamaInteractionLib.Daminion; // For Daminion DTOs
 using DaminionOllamaInteractionLib.Ollama;
-using System.Net.Http;  // For Ollama DTOs and Parser
+using System.Net.Http;
+using DaminionOllamaWpfApp.Services;  // For Ollama DTOs and Parser
 
 namespace DaminionOllamaWpfApp
 {
@@ -47,31 +48,29 @@ namespace DaminionOllamaWpfApp
             // Scroll to end if using a TextBox, for TextBlock it's less direct
         }
 
-        // In DaminionOllamaWpfApp/MainWindow.xaml.cs
-
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
         {
-            Console.WriteLine("---- LoginButton_Click: START ----"); // <-- ADD THIS
+            Console.WriteLine("---- LoginButton_Click: START ----"); // <--- IS THIS LINE IN YOUR CODE?
 
             if (_daminionClient == null)
             {
                 UpdateStatus("Error: Daminion client not initialized.");
-                Console.WriteLine("---- LoginButton_Click: ERROR - _daminionClient is null ----"); // <-- ADD THIS
+                Console.WriteLine("---- LoginButton_Click: ERROR - _daminionClient is null ----"); // <--- AND THIS?
                 return;
             }
-            Console.WriteLine("---- LoginButton_Click: _daminionClient is NOT null ----"); // <-- ADD THIS
+            Console.WriteLine("---- LoginButton_Click: _daminionClient is NOT null ----"); // <--- AND THIS?
 
             string daminionUrl = DaminionUrlTextBox.Text;
             string username = UsernameTextBox.Text;
             string password = PasswordBox.Password;
 
-            Console.WriteLine($"---- LoginButton_Click: URL='{daminionUrl}', User='{username}' ----"); // <-- ADD THIS (Password intentionally omitted from this log line)
+            Console.WriteLine($"---- LoginButton_Click: URL='{daminionUrl}', User='{username}' ----"); // <--- AND THIS?
 
             if (string.IsNullOrWhiteSpace(daminionUrl) ||
                 string.IsNullOrWhiteSpace(username) /* Password can be empty by design for some systems */)
             {
                 UpdateStatus("Please enter Daminion URL and Username. Password may be required.");
-                Console.WriteLine("---- LoginButton_Click: ERROR - URL or Username is empty ----"); // <-- ADD THIS
+                Console.WriteLine("---- LoginButton_Click: ERROR - URL or Username is empty ----"); // <--- AND THIS?
                 return;
             }
 
@@ -82,9 +81,9 @@ namespace DaminionOllamaWpfApp
 
             try
             {
-                Console.WriteLine("---- LoginButton_Click: TRY block entered, BEFORE calling _daminionClient.LoginAsync ----"); // <-- ADD THIS
+                Console.WriteLine("---- LoginButton_Click: TRY block entered, BEFORE calling _daminionClient.LoginAsync ----"); // <--- AND THIS?
                 bool loginSuccess = await _daminionClient.LoginAsync(daminionUrl, username, password);
-                Console.WriteLine($"---- LoginButton_Click: AFTER calling _daminionClient.LoginAsync, loginSuccess = {loginSuccess} ----"); // <-- ADD THIS
+                Console.WriteLine($"---- LoginButton_Click: AFTER calling _daminionClient.LoginAsync, loginSuccess = {loginSuccess} ----"); // <--- AND THIS?
 
                 if (loginSuccess)
                 {
@@ -99,27 +98,27 @@ namespace DaminionOllamaWpfApp
             catch (ArgumentException argEx)
             {
                 UpdateStatus($"Login input error: {argEx.Message}");
-                Console.WriteLine($"---- LoginButton_Click: CATCH ArgumentException: {argEx.Message} ----"); // <-- ADD THIS
+                Console.WriteLine($"---- LoginButton_Click: CATCH ArgumentException: {argEx.Message} ----"); // <--- AND THIS?
             }
             catch (HttpRequestException httpEx)
             {
                 UpdateStatus($"Login network error: {httpEx.Message}. Ensure Daminion server is accessible. Check Debug Output.");
-                Console.WriteLine($"---- LoginButton_Click: CATCH HttpRequestException: {httpEx.Message} ----"); // <-- ADD THIS
-                if (httpEx.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerHttpRequestException: {httpEx.InnerException.Message} ----"); // <-- ADD THIS
+                Console.WriteLine($"---- LoginButton_Click: CATCH HttpRequestException: {httpEx.Message} ----"); // <--- AND THIS?
+                if (httpEx.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerHttpRequestException: {httpEx.InnerException.Message} ----");
             }
             catch (Exception ex)
             {
                 UpdateStatus($"An unexpected error occurred during login: {ex.Message}. Check Debug Output.");
-                Console.WriteLine($"---- LoginButton_Click: CATCH Exception: {ex.Message} ----"); // <-- ADD THIS
-                if (ex.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerException: {ex.InnerException.Message} ----"); // <-- ADD THIS
-                Console.WriteLine($"---- LoginButton_Click: StackTrace: {ex.StackTrace} ----"); // <-- ADD THIS
+                Console.WriteLine($"---- LoginButton_Click: CATCH Exception: {ex.Message} ----"); // <--- AND THIS?
+                if (ex.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerException: {ex.InnerException.Message} ----");
+                Console.WriteLine($"---- LoginButton_Click: StackTrace: {ex.StackTrace} ----");
             }
             finally
             {
                 LoginButton.IsEnabled = true;
-                Console.WriteLine("---- LoginButton_Click: FINALLY block executed ----"); // <-- ADD THIS
+                Console.WriteLine("---- LoginButton_Click: FINALLY block executed ----"); // <--- AND THIS?
             }
-            Console.WriteLine("---- LoginButton_Click: END ----"); // <-- ADD THIS
+            Console.WriteLine("---- LoginButton_Click: END ----"); // <--- AND THIS?
         }
         private async void FetchTagsButton_Click(object sender, RoutedEventArgs e)
         {
@@ -223,6 +222,39 @@ namespace DaminionOllamaWpfApp
                         sb.AppendLine($"Successfully Parsed Flag: {parsedContent.SuccessfullyParsed}");
                         sb.AppendLine("--- RAW OLLAMA RESPONSE (first 500 chars) ---");
                         sb.AppendLine(ollamaApiResponse.Response.Substring(0, Math.Min(ollamaApiResponse.Response.Length, 500)));
+
+                        // ... inside TestOllamaButton_Click, after:
+                        // ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response);
+                        // ... and after displaying the parsed content to your StatusTextBlock ...
+
+                        if (parsedContent.SuccessfullyParsed && !string.IsNullOrEmpty(openFileDialog.FileName)) // openFileDialog.FileName should hold the path of the image processed
+                        {
+                            UpdateStatus("Attempting to write metadata to image file...", true);
+                            Console.WriteLine($"[MainWindow] Attempting to write metadata to: {openFileDialog.FileName}"); // For debug
+
+                            bool metadataWritten = ImageMetadataWriter.WriteMetadataToImage(openFileDialog.FileName, parsedContent);
+
+                            if (metadataWritten)
+                            {
+                                UpdateStatus($"Successfully wrote metadata to: {openFileDialog.FileName}", true);
+                                Console.WriteLine($"[MainWindow] Successfully wrote metadata to: {openFileDialog.FileName}"); // For debug
+                            }
+                            else
+                            {
+                                UpdateStatus($"Failed to write metadata to: {openFileDialog.FileName}. Check Debug Output for errors from ImageMetadataWriter.", true);
+                                Console.Error.WriteLine($"[MainWindow] Failed to write metadata to: {openFileDialog.FileName}"); // For debug
+                            }
+                        }
+                        else if (string.IsNullOrEmpty(openFileDialog.FileName))
+                        {
+                            UpdateStatus("Cannot write metadata: image file path is missing.", true);
+                            Console.Error.WriteLine("[MainWindow] Cannot write metadata: image file path is missing."); // For debug
+                        }
+                        else
+                        {
+                            UpdateStatus("Skipping metadata writing as Ollama content was not successfully parsed or is empty.", true);
+                            Console.WriteLine("[MainWindow] Skipping metadata writing (Ollama content not successfully parsed or empty)."); // For debug
+                        }
                     }
                     else if (ollamaApiResponse != null)
                     {

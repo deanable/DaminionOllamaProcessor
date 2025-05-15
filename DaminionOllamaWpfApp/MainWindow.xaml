@@ -48,7 +48,7 @@
         <TextBox Grid.Row="6" Grid.Column="1" x:Name="OllamaUrlTextBox" Margin="0,5" Padding="5" Text="http://damserver.local:11434"/>
 
         <TextBlock Grid.Row="7" Grid.Column="0" Text="Ollama Model Name:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <TextBox Grid.Row="7" Grid.Column="1" x:Name="OllamaModelTextBox" Margin="0,5" Padding="5" Text="llava"/>
+        <TextBox Grid.Row="7" Grid.Column="1" x:Name="OllamaModelTextBox" Margin="0,5" Padding="5" Text="llava:13b-v1.6"/>
 
         <TextBlock Grid.Row="8" Grid.Column="0" Text="Ollama Prompt:" VerticalAlignment="Top" Margin="0,5,10,0"/>
         <TextBox Grid.Row="8" Grid.Column="1" x:Name="OllamaPromptTextBox" Margin="0,5" Padding="5" Text="Describe this image in detail. Provide suitable categories and keywords." AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="80" VerticalScrollBarVisibility="Auto"/>
