@@ -1,10 +1,12 @@
-﻿// DaminionOllamaWpfApp/Services/ImageMetadataWriter.cs (Example structure)
-using ImageMagick; // This using statement is for Magick.NET
+﻿// DaminionOllamaWpfApp/Services/ImageMetadataWriter.cs
+using ImageMagick;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using DaminionOllamaInteractionLib.Ollama; // For ParsedOllamaContent
+using System.Text;
+// using System.Xml.Linq; // We'll simplify XMP and might not need direct XDocument manipulation for now
+using DaminionOllamaInteractionLib.Ollama;
 
 namespace DaminionOllamaWpfApp.Services
 {
@@ -22,130 +24,131 @@ namespace DaminionOllamaWpfApp.Services
             {
                 Console.WriteLine($"[ImageMetadataWriter] Attempting to write metadata to: {imagePath}");
 
-                // Create a new MagickImage object from the file path
                 using (MagickImage image = new MagickImage(imagePath))
                 {
+                    bool changesMadeToImage = false;
+
                     // --- IPTC Profile ---
-                    IIptcProfile iptcProfile = image.GetIptcProfile();
-                    if (iptcProfile == null)
+                    IIptcProfile? iptcProfile = image.GetIptcProfile(); // Gets existing or returns null
+                    bool iptcProfileWasNewlyCreated = false;
+
+                    // Create a new profile only if there's actual content to write and no profile exists
+                    if (iptcProfile == null &&
+                        (!string.IsNullOrWhiteSpace(ollamaContent.Description) || ollamaContent.Keywords.Any() || ollamaContent.Categories.Any()))
                     {
                         Console.WriteLine("[ImageMetadataWriter] No IPTC profile found, creating a new one.");
                         iptcProfile = new IptcProfile();
+                        iptcProfileWasNewlyCreated = true;
                     }
 
-                    // Description (Caption/Abstract - IPTC 2:120)
-                    if (!string.IsNullOrWhiteSpace(ollamaContent.Description))
+                    if (iptcProfile != null)
                     {
-                        iptcProfile.SetValue(IptcTag.Caption, ollamaContent.Description);
-                        Console.WriteLine($"[ImageMetadataWriter] Set IPTC Caption: {ollamaContent.Description.Substring(0, Math.Min(ollamaContent.Description.Length, 50))}...");
-                    }
+                        bool currentIptcProfileChanged = false;
+                        if (!string.IsNullOrWhiteSpace(ollamaContent.Description))
+                        {
+                            iptcProfile.SetValue(IptcTag.Caption, ollamaContent.Description);
+                            Console.WriteLine($"[ImageMetadataWriter] Set IPTC Caption.");
+                            currentIptcProfileChanged = true;
+                        }
 
-                    // Keywords (IPTC 2:025 - repeatable)
-                    if (ollamaContent.Keywords.Any())
-                    {
-                        // Remove existing keywords if you want to replace them completely
-                        // Or just add new ones. For this example, let's replace.
-                        var existingKeywords = iptcProfile.GetValues(IptcTag.Keyword)?.ToList();
-                        if (existingKeywords != null)
+                        if (ollamaContent.Keywords.Any())
                         {
-                            foreach (var val in existingKeywords)
+                            iptcProfile.RemoveValue(IptcTag.Keyword);
+                            foreach (string keyword in ollamaContent.Keywords.Where(k => !string.IsNullOrWhiteSpace(k)))
                             {
-                                iptcProfile.RemoveValue(IptcTag.Keyword, val.Value);
+                                iptcProfile.SetValue(IptcTag.Keyword, keyword);
                             }
+                            Console.WriteLine($"[ImageMetadataWriter] Set IPTC Keywords.");
+                            currentIptcProfileChanged = true;
                         }
-                        // Add new keywords
-                        foreach (string keyword in ollamaContent.Keywords)
-                        {
-                            if (!string.IsNullOrWhiteSpace(keyword))
-                            {
-                                iptcProfile.SetValue(IptcTag.Keyword, keyword); // Magick.NET handles multiple values for the same tag
-                            }
-                        }
-                        Console.WriteLine($"[ImageMetadataWriter] Set IPTC Keywords: {string.Join(", ", ollamaContent.Keywords)}");
-                    }
 
-                    // Categories (IPTC 2:015 - Category, also repeatable)
-                    // You might also consider Supplemental Categories (IPTC 2:020)
-                    if (ollamaContent.Categories.Any())
-                    {
-                        var existingCategories = iptcProfile.GetValues(IptcTag.Category)?.ToList();
-                        if (existingCategories != null)
+                        if (ollamaContent.Categories.Any())
                         {
-                            foreach (var val in existingCategories)
-                            {
-                                iptcProfile.RemoveValue(IptcTag.Category, val.Value);
-                            }
-                        }
-                        foreach (string category in ollamaContent.Categories)
-                        {
-                            if (!string.IsNullOrWhiteSpace(category))
+                            iptcProfile.RemoveValue(IptcTag.Category);
+                            foreach (string category in ollamaContent.Categories.Where(c => !string.IsNullOrWhiteSpace(c)))
                             {
                                 iptcProfile.SetValue(IptcTag.Category, category);
                             }
+                            Console.WriteLine($"[ImageMetadataWriter] Set IPTC Categories.");
+                            currentIptcProfileChanged = true;
                         }
-                        Console.WriteLine($"[ImageMetadataWriter] Set IPTC Categories: {string.Join(", ", ollamaContent.Categories)}");
+
+                        if (currentIptcProfileChanged || iptcProfileWasNewlyCreated)
+                        {
+                            image.SetProfile(iptcProfile);
+                            changesMadeToImage = true;
+                        }
                     }
 
-                    image.SetProfile(iptcProfile); // Apply the IPTC profile changes
-
-                    // --- XMP Profile (Optional but Recommended for modern compatibility) ---
-                    // XMP is more complex due to its XML structure and namespaces.
-                    // Magick.NET allows getting the XMP profile as an IXmpProfile object,
-                    // which often wraps an XML document or a similar structure.
-                    // You'd typically use specific XMP schemas like Dublin Core (dc:) for general metadata.
-
-                    IXmpProfile? xmpProfile = image.GetXmpProfile();
-                    if (xmpProfile == null)
-                    {
-                        Console.WriteLine("[ImageMetadataWriter] No XMP profile found, creating a new one.");
-                        xmpProfile = new XmpProfile(); // Create new XMP profile
-                    }
-
+                    // --- Simplified XMP Profile Handling ---
+                    // We will only try to add a new XMP profile with a description if one doesn't exist
+                    // and if there's a description to add.
+                    // Modifying existing complex XMP is deferred.
                     if (!string.IsNullOrWhiteSpace(ollamaContent.Description))
                     {
-                        // Standard XMP tag for description is dc:description
-                        // The SetValue method for XMP usually takes namespace, path, value.
-                        // You might need to explore the xmpProfile object's methods.
-                        // This is a simplified example; direct XMP manipulation can be intricate.
-                        // A common way is to set it as an RDF description.
-                        // Example: xmpProfile.SetValue("http://purl.org/dc/elements/1.1/", "description", ollamaContent.Description);
-                        // For Magick.NET, often it's easier if it can map IPTC to XMP automatically or has simpler setters.
-                        // For now, we'll focus on IPTC as it's more straightforward with direct tag enums.
-                        // Let's add a placeholder indicating XMP description was intended:
-                        xmpProfile.CreateTraverser().SetValue("http://purl.org/dc/elements/1.1/", "dc:description", ollamaContent.Description);
-                        Console.WriteLine($"[ImageMetadataWriter] Set XMP dc:description (conceptual).");
+                        IXmpProfile? xmpProfile = image.GetXmpProfile();
+                        if (xmpProfile == null)
+                        {
+                            Console.WriteLine("[ImageMetadataWriter] No XMP profile found. Attempting to create a new one for description.");
+                            // Create a minimal XMP packet string that includes dc:description
+                            // Ensure namespaces are correctly defined and used.
+                            string minimalXmpPacket = $@"<?xpacket begin="""" id=""W5M0MpCehiHzreSzNTczkc9d""?>
+<x:xmpmeta xmlns:x=""adobe:ns:meta/"" x:xmptk=""ImageMagick"">
+  <rdf:RDF xmlns:rdf=""http://www.w3.org/1999/02/22-rdf-syntax-ns#"">
+    <rdf:Description rdf:about="""" xmlns:dc=""http://purl.org/dc/elements/1.1/"">
+      <dc:description>
+        <rdf:Alt>
+          <rdf:li xml:lang=""x-default"">{System.Security.SecurityElement.Escape(ollamaContent.Description)}</rdf:li>
+        </rdf:Alt>
+      </dc:description>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end=""w""?>";
+                            try
+                            {
+                                xmpProfile = new XmpProfile(minimalXmpPacket); // Create from string
+                                image.SetProfile(xmpProfile); // Use SetProfile to add it
+                                changesMadeToImage = true;
+                                Console.WriteLine("[ImageMetadataWriter] Added new XMP profile with dc:description.");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.Error.WriteLine($"[ImageMetadataWriter] Error creating or setting new XMP profile: {ex.Message}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("[ImageMetadataWriter] Existing XMP profile found. Advanced modification of existing XMP is not implemented in this simplified version.");
+                            // If you wanted to *modify* existing XMP, you would use:
+                            // byte[]? xmpData = xmpProfile.ToByteArray(); // Corrected from GetData()
+                            // if (xmpData != null) { /* Parse with XDocument, modify, create new XmpProfile(modifiedBytes), image.SetProfile() */ }
+                        }
                     }
 
-                    if (ollamaContent.Keywords.Any())
+
+                    if (changesMadeToImage)
                     {
-                        // XMP dc:subject is often used for keywords (as a Bag - an unordered list)
-                        // xmpProfile.CreateTraverser().SetValue("http://purl.org/dc/elements/1.1/", "dc:subject", string.Join(";", ollamaContent.Keywords)); // Simple, but ideally a bag
-                        Console.WriteLine($"[ImageMetadataWriter] Set XMP dc:subject for keywords (conceptual).");
+                        Console.WriteLine($"[ImageMetadataWriter] Writing changes to {imagePath}");
+                        image.Write(imagePath);
+                        Console.WriteLine($"[ImageMetadataWriter] Successfully wrote metadata changes to {imagePath}");
+                        return true;
                     }
-
-                    if (xmpProfile.ToByteArray().Length > 0) // Check if XMP profile has content
+                    else
                     {
-                        image.SetProfile(xmpProfile);
+                        Console.WriteLine($"[ImageMetadataWriter] No new metadata changes to write to {imagePath}");
+                        return true;
                     }
-
-
-                    // Save the changes back to the original file
-                    // WARNING: This overwrites the original file. Consider making a backup or saving to a new file first.
-                    image.Write(imagePath);
-                    Console.WriteLine($"[ImageMetadataWriter] Successfully wrote metadata to {imagePath}");
-                    return true;
                 }
             }
             catch (MagickException magickEx)
             {
-                Console.Error.WriteLine($"[ImageMetadataWriter] Magick.NET error writing metadata to {imagePath}: {magickEx.Message}");
-                Console.Error.WriteLine($"[ImageMetadataWriter] Magick.NET StackTrace: {magickEx.StackTrace}");
+                Console.Error.WriteLine($"[ImageMetadataWriter] Magick.NET error writing metadata to {imagePath}: {magickEx.Message}\n{magickEx.StackTrace}");
                 return false;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[ImageMetadataWriter] General error writing metadata to {imagePath}: {ex.Message}");
-                Console.Error.WriteLine($"[ImageMetadataWriter] StackTrace: {ex.StackTrace}");
+                Console.Error.WriteLine($"[ImageMetadataWriter] General error writing metadata to {imagePath}: {ex.Message}\n{ex.StackTrace}");
                 return false;
             }
         }
