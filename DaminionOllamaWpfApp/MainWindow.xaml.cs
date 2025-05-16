@@ -1,20 +1,19 @@
-﻿// MainWindow.xaml.cs
+﻿// DaminionOllamaWpfApp/MainWindow.xaml.cs
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json; // <--- Added for JsonException
+using System.Text.Json; // For JsonException (though less likely to be caught here now)
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Win32; // For OpenFileDialog
 
-// These are for your class library types:
 using DaminionOllamaInteractionLib;
-using DaminionOllamaInteractionLib.Daminion; // For Daminion DTOs
+using DaminionOllamaInteractionLib.Daminion;
 using DaminionOllamaInteractionLib.Ollama;
-using System.Net.Http;
-using DaminionOllamaWpfApp.Services;  // For Ollama DTOs and Parser
+using DaminionOllamaWpfApp.Services; // Your ImageMetadataEditor namespace
+using System.Net.Http; 
 
 namespace DaminionOllamaWpfApp
 {
@@ -23,7 +22,6 @@ namespace DaminionOllamaWpfApp
         private DaminionApiClient? _daminionClient;
         private OllamaApiClient? _ollamaClient;
 
-        // Store identified Daminion Tag GUIDs
         private string? _descriptionTagGuid;
         private string? _keywordsTagGuid;
         private string? _categoriesTagGuid;
@@ -32,58 +30,61 @@ namespace DaminionOllamaWpfApp
         {
             InitializeComponent();
             _daminionClient = new DaminionApiClient();
-            // _ollamaClient will be initialized when Ollama URL is confirmed or before use.
         }
 
         private void UpdateStatus(string message, bool append = false)
         {
-            if (append)
+            if (Dispatcher.CheckAccess())
             {
-                StatusTextBlock.Text += message + Environment.NewLine;
+                if (append)
+                {
+                    StatusTextBlock.Text += message + Environment.NewLine;
+                }
+                else
+                {
+                    StatusTextBlock.Text = message + Environment.NewLine;
+                }
+                // If StatusTextBlock is inside a ScrollViewer named StatusScrollViewer:
+                // StatusScrollViewer.ScrollToEnd(); 
             }
             else
             {
-                StatusTextBlock.Text = message + Environment.NewLine;
+                Dispatcher.Invoke(() => UpdateStatus(message, append));
             }
-            // Scroll to end if using a TextBox, for TextBlock it's less direct
         }
 
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
         {
-            Console.WriteLine("---- LoginButton_Click: START ----"); // <--- IS THIS LINE IN YOUR CODE?
-
+            Console.WriteLine("---- LoginButton_Click: START ----");
             if (_daminionClient == null)
             {
                 UpdateStatus("Error: Daminion client not initialized.");
-                Console.WriteLine("---- LoginButton_Click: ERROR - _daminionClient is null ----"); // <--- AND THIS?
+                Console.WriteLine("---- LoginButton_Click: ERROR - _daminionClient is null ----");
                 return;
             }
-            Console.WriteLine("---- LoginButton_Click: _daminionClient is NOT null ----"); // <--- AND THIS?
+            Console.WriteLine("---- LoginButton_Click: _daminionClient is NOT null ----");
 
             string daminionUrl = DaminionUrlTextBox.Text;
             string username = UsernameTextBox.Text;
             string password = PasswordBox.Password;
 
-            Console.WriteLine($"---- LoginButton_Click: URL='{daminionUrl}', User='{username}' ----"); // <--- AND THIS?
+            Console.WriteLine($"---- LoginButton_Click: URL='{daminionUrl}', User='{username}' ----");
 
-            if (string.IsNullOrWhiteSpace(daminionUrl) ||
-                string.IsNullOrWhiteSpace(username) /* Password can be empty by design for some systems */)
+            if (string.IsNullOrWhiteSpace(daminionUrl) || string.IsNullOrWhiteSpace(username))
             {
                 UpdateStatus("Please enter Daminion URL and Username. Password may be required.");
-                Console.WriteLine("---- LoginButton_Click: ERROR - URL or Username is empty ----"); // <--- AND THIS?
+                Console.WriteLine("---- LoginButton_Click: ERROR - URL or Username is empty ----");
                 return;
             }
 
-            LoginButton.IsEnabled = false;
-            FetchTagsButton.IsEnabled = false;
-            StartProcessingButton.IsEnabled = false;
+            SetUiInteraction(false); // Disable UI
             UpdateStatus("Logging in to Daminion...");
 
             try
             {
-                Console.WriteLine("---- LoginButton_Click: TRY block entered, BEFORE calling _daminionClient.LoginAsync ----"); // <--- AND THIS?
+                Console.WriteLine("---- LoginButton_Click: TRY block entered, BEFORE calling _daminionClient.LoginAsync ----");
                 bool loginSuccess = await _daminionClient.LoginAsync(daminionUrl, username, password);
-                Console.WriteLine($"---- LoginButton_Click: AFTER calling _daminionClient.LoginAsync, loginSuccess = {loginSuccess} ----"); // <--- AND THIS?
+                Console.WriteLine($"---- LoginButton_Click: AFTER calling _daminionClient.LoginAsync, loginSuccess = {loginSuccess} ----");
 
                 if (loginSuccess)
                 {
@@ -98,37 +99,40 @@ namespace DaminionOllamaWpfApp
             catch (ArgumentException argEx)
             {
                 UpdateStatus($"Login input error: {argEx.Message}");
-                Console.WriteLine($"---- LoginButton_Click: CATCH ArgumentException: {argEx.Message} ----"); // <--- AND THIS?
+                Console.WriteLine($"---- LoginButton_Click: CATCH ArgumentException: {argEx.Message} ----");
             }
             catch (HttpRequestException httpEx)
             {
                 UpdateStatus($"Login network error: {httpEx.Message}. Ensure Daminion server is accessible. Check Debug Output.");
-                Console.WriteLine($"---- LoginButton_Click: CATCH HttpRequestException: {httpEx.Message} ----"); // <--- AND THIS?
+                Console.WriteLine($"---- LoginButton_Click: CATCH HttpRequestException: {httpEx.Message} ----");
                 if (httpEx.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerHttpRequestException: {httpEx.InnerException.Message} ----");
             }
             catch (Exception ex)
             {
                 UpdateStatus($"An unexpected error occurred during login: {ex.Message}. Check Debug Output.");
-                Console.WriteLine($"---- LoginButton_Click: CATCH Exception: {ex.Message} ----"); // <--- AND THIS?
+                Console.WriteLine($"---- LoginButton_Click: CATCH Exception: {ex.Message} ----");
                 if (ex.InnerException != null) Console.WriteLine($"---- LoginButton_Click: InnerException: {ex.InnerException.Message} ----");
                 Console.WriteLine($"---- LoginButton_Click: StackTrace: {ex.StackTrace} ----");
             }
             finally
             {
-                LoginButton.IsEnabled = true;
-                Console.WriteLine("---- LoginButton_Click: FINALLY block executed ----"); // <--- AND THIS?
+                SetUiInteraction(true); // Re-enable relevant parts of UI
+                Console.WriteLine("---- LoginButton_Click: FINALLY block executed ----");
             }
-            Console.WriteLine("---- LoginButton_Click: END ----"); // <--- AND THIS?
+            Console.WriteLine("---- LoginButton_Click: END ----");
         }
+
         private async void FetchTagsButton_Click(object sender, RoutedEventArgs e)
         {
+            Console.WriteLine("---- FetchTagsButton_Click: START ----");
             if (_daminionClient == null || !_daminionClient.IsAuthenticated)
             {
                 UpdateStatus("Please login to Daminion first.");
+                Console.WriteLine("---- FetchTagsButton_Click: ERROR - Not authenticated or client is null ----");
                 return;
             }
 
-            FetchTagsButton.IsEnabled = false;
+            SetUiInteraction(false);
             UpdateStatus("Fetching Daminion tags...");
 
             try
@@ -151,37 +155,35 @@ namespace DaminionOllamaWpfApp
 
                     if (string.IsNullOrEmpty(_descriptionTagGuid) || string.IsNullOrEmpty(_keywordsTagGuid) || string.IsNullOrEmpty(_categoriesTagGuid))
                     {
-                        sb.AppendLine("\nWARNING: One or more target tags (Description, Keywords, Categories) were not found by common names. Please check their GUIDs manually if needed by inspecting Daminion's settings or the full list (if displayed).");
-                        StartProcessingButton.IsEnabled = false;
+                        sb.AppendLine("\nWARNING: One or more target tags (Description, Keywords, Categories) were not found by common names.");
                     }
                     else
                     {
                         sb.AppendLine("\nSuccessfully identified GUIDs for Description, Keywords, and Categories.");
-                        // Enable StartProcessingButton only if Item ID is also present
-                        StartProcessingButton.IsEnabled = !string.IsNullOrWhiteSpace(DaminionItemIdTextBox.Text);
                     }
                     UpdateStatus(sb.ToString());
-                    // You could add a ListBox to display all tags if desired for manual selection.
                 }
                 else
                 {
-                    UpdateStatus("No tags returned from Daminion or an error occurred.");
-                    StartProcessingButton.IsEnabled = false;
+                    UpdateStatus("No tags returned from Daminion or an error occurred during fetching.");
                 }
             }
             catch (Exception ex)
             {
                 UpdateStatus($"Error fetching tags: {ex.Message}");
-                StartProcessingButton.IsEnabled = false;
+                Console.WriteLine($"---- FetchTagsButton_Click: CATCH Exception: {ex.Message} ----");
             }
             finally
             {
-                FetchTagsButton.IsEnabled = true;
+                SetUiInteraction(true);
+                Console.WriteLine("---- FetchTagsButton_Click: FINALLY block executed ----");
             }
+            Console.WriteLine("---- FetchTagsButton_Click: END ----");
         }
 
         private async void TestOllamaButton_Click(object sender, RoutedEventArgs e)
         {
+            Console.WriteLine("---- TestOllamaButton_Click: START ----");
             string ollamaUrl = OllamaUrlTextBox.Text;
             string modelName = OllamaModelTextBox.Text;
             string prompt = OllamaPromptTextBox.Text;
@@ -189,106 +191,141 @@ namespace DaminionOllamaWpfApp
             if (string.IsNullOrWhiteSpace(ollamaUrl) || string.IsNullOrWhiteSpace(modelName) || string.IsNullOrWhiteSpace(prompt))
             {
                 UpdateStatus("Please enter Ollama URL, Model Name, and Prompt.");
+                Console.WriteLine("---- TestOllamaButton_Click: ERROR - Ollama params missing ----");
                 return;
             }
 
-            _ollamaClient = new OllamaApiClient(ollamaUrl);
-
             OpenFileDialog openFileDialog = new OpenFileDialog
             {
-                Title = "Select an Image for Ollama Analysis",
-                Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp;*.gif|All files (*.*)|*.*"
+                Title = "Select Image for Metadata Processing",
+                Filter = "Image Files|*.jpg;*.jpeg;*.tif;*.tiff;*.png|All files (*.*)|*.*"
             };
 
             if (openFileDialog.ShowDialog() == true)
             {
-                TestOllamaButton.IsEnabled = false;
-                UpdateStatus($"Loading image: {openFileDialog.FileName}\nSending to Ollama. This may take some time...", true);
+                string selectedImagePath = openFileDialog.FileName;
+                SetUiInteraction(false);
+                UpdateStatus($"Processing file: {selectedImagePath}");
+                Console.WriteLine($"[MainWindow] Selected image: {selectedImagePath}");
+
+                ImageMetadataEditor? editor = null;
 
                 try
                 {
-                    byte[] imageBytes = await File.ReadAllBytesAsync(openFileDialog.FileName);
+                    // 1. Read existing metadata
+                    UpdateStatus("Reading existing metadata...", true);
+                    Console.WriteLine("[MainWindow] Reading existing metadata...");
+                    editor = new ImageMetadataEditor(selectedImagePath);
+                    editor.Read();
+
+                    var sbExisting = new StringBuilder("--- Existing Metadata ---\n");
+                    sbExisting.AppendLine($"Description: {editor.Description ?? "N/A"}");
+                    sbExisting.AppendLine($"Keywords: {(editor.Keywords.Any() ? string.Join("; ", editor.Keywords) : "N/A")}");
+                    sbExisting.AppendLine($"Categories: {(editor.Categories.Any() ? string.Join("; ", editor.Categories) : "N/A")}");
+                    sbExisting.AppendLine($"EXIF ImgDesc: {editor.ExifImageDescription ?? "N/A"}");
+                    UpdateStatus(sbExisting.ToString(), true);
+
+                    // 2. Send image to Ollama
+                    UpdateStatus("Sending image to Ollama for analysis...", true);
+                    Console.WriteLine("[MainWindow] Sending image to Ollama...");
+                    _ollamaClient = new OllamaApiClient(ollamaUrl);
+                    byte[] imageBytes = await File.ReadAllBytesAsync(selectedImagePath);
                     OllamaGenerateResponse? ollamaApiResponse = await _ollamaClient.AnalyzeImageAsync(modelName, prompt, imageBytes);
 
-                    var sb = new StringBuilder();
-                    if (ollamaApiResponse != null && !string.IsNullOrEmpty(ollamaApiResponse.Response))
+                    if (ollamaApiResponse == null || !ollamaApiResponse.Done || string.IsNullOrEmpty(ollamaApiResponse.Response))
                     {
-                        sb.AppendLine($"Ollama Model: {ollamaApiResponse.Model}, Done: {ollamaApiResponse.Done}");
-                        ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response);
-                        sb.AppendLine("--- PARSED CONTENT ---");
-                        sb.AppendLine($"Description: {(string.IsNullOrWhiteSpace(parsedContent.Description) ? "N/A" : parsedContent.Description)}");
-                        sb.AppendLine($"Categories: {(parsedContent.Categories.Any() ? string.Join("; ", parsedContent.Categories) : "None")}");
-                        sb.AppendLine($"Keywords: {(parsedContent.Keywords.Any() ? string.Join("; ", parsedContent.Keywords) : "None")}");
-                        sb.AppendLine($"Successfully Parsed Flag: {parsedContent.SuccessfullyParsed}");
-                        sb.AppendLine("--- RAW OLLAMA RESPONSE (first 500 chars) ---");
-                        sb.AppendLine(ollamaApiResponse.Response.Substring(0, Math.Min(ollamaApiResponse.Response.Length, 500)));
-
-                        // ... inside TestOllamaButton_Click, after:
-                        // ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response);
-                        // ... and after displaying the parsed content to your StatusTextBlock ...
-
-                        if (parsedContent.SuccessfullyParsed && !string.IsNullOrEmpty(openFileDialog.FileName)) // openFileDialog.FileName should hold the path of the image processed
-                        {
-                            UpdateStatus("Attempting to write metadata to image file...", true);
-                            Console.WriteLine($"[MainWindow] Attempting to write metadata to: {openFileDialog.FileName}"); // For debug
-
-                            bool metadataWritten = ImageMetadataWriter.WriteMetadataToImage(openFileDialog.FileName, parsedContent);
-
-                            if (metadataWritten)
-                            {
-                                UpdateStatus($"Successfully wrote metadata to: {openFileDialog.FileName}", true);
-                                Console.WriteLine($"[MainWindow] Successfully wrote metadata to: {openFileDialog.FileName}"); // For debug
-                            }
-                            else
-                            {
-                                UpdateStatus($"Failed to write metadata to: {openFileDialog.FileName}. Check Debug Output for errors from ImageMetadataWriter.", true);
-                                Console.Error.WriteLine($"[MainWindow] Failed to write metadata to: {openFileDialog.FileName}"); // For debug
-                            }
-                        }
-                        else if (string.IsNullOrEmpty(openFileDialog.FileName))
-                        {
-                            UpdateStatus("Cannot write metadata: image file path is missing.", true);
-                            Console.Error.WriteLine("[MainWindow] Cannot write metadata: image file path is missing."); // For debug
-                        }
-                        else
-                        {
-                            UpdateStatus("Skipping metadata writing as Ollama content was not successfully parsed or is empty.", true);
-                            Console.WriteLine("[MainWindow] Skipping metadata writing (Ollama content not successfully parsed or empty)."); // For debug
-                        }
+                        string errorMsg = $"Ollama analysis failed or returned empty/incomplete response. Ollama response: '{ollamaApiResponse?.Response ?? "Null API response."}'";
+                        UpdateStatus(errorMsg, true);
+                        Console.Error.WriteLine($"[MainWindow] {errorMsg}");
+                        return;
                     }
-                    else if (ollamaApiResponse != null)
+                    UpdateStatus("Ollama analysis successful.", true);
+                    Console.WriteLine("[MainWindow] Ollama analysis successful.");
+
+                    // 3. Parse Ollama's response
+                    Console.WriteLine("[MainWindow] Parsing Ollama response...");
+                    ParsedOllamaContent parsedOllamaData = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response);
+                    if (!parsedOllamaData.SuccessfullyParsed && string.IsNullOrEmpty(parsedOllamaData.Description))
                     {
-                        sb.AppendLine($"Ollama analysis returned a response object, but the main content was empty or indicated failure.");
-                        sb.AppendLine($"Raw Object: Model={ollamaApiResponse.Model}, Done={ollamaApiResponse.Done}, Response='{ollamaApiResponse.Response}'");
+                        parsedOllamaData.Description = $"Ollama (parsing might have issues or content was minimal): {ollamaApiResponse.Response.Substring(0, Math.Min(ollamaApiResponse.Response.Length, 200))}";
+                        UpdateStatus("Warning: Ollama response parsing might have had issues or content was minimal.", true);
+                        Console.WriteLine("[MainWindow] Warning: Ollama response parsing issues or minimal content.");
                     }
-                    else
-                    {
-                        sb.AppendLine("Ollama analysis returned a null response object. Check console for errors.");
-                    }
-                    UpdateStatus(sb.ToString(), true);
+
+                    var sbOllama = new StringBuilder("--- Ollama Suggested Metadata ---\n");
+                    sbOllama.AppendLine($"Description: {parsedOllamaData.Description ?? "N/A"}");
+                    sbOllama.AppendLine($"Keywords: {(parsedOllamaData.Keywords.Any() ? string.Join("; ", parsedOllamaData.Keywords) : "N/A")}");
+                    sbOllama.AppendLine($"Categories: {(parsedOllamaData.Categories.Any() ? string.Join("; ", parsedOllamaData.Categories) : "N/A")}");
+                    UpdateStatus(sbOllama.ToString(), true);
+
+                    // 4. Write new metadata to file
+                    UpdateStatus("Writing Ollama metadata to image file...", true);
+                    Console.WriteLine("[MainWindow] Populating editor with Ollama data and saving...");
+                    editor.Description = parsedOllamaData.Description;
+                    editor.Keywords = new List<string>(parsedOllamaData.Keywords);
+                    editor.Categories = new List<string>(parsedOllamaData.Categories);
+                    // editor.ExifImageDescription = parsedOllamaData.Description; // Optional
+
+                    editor.Save();
+                    UpdateStatus("Metadata write attempt complete (via editor.Save()).", true);
+                    Console.WriteLine("[MainWindow] editor.Save() called.");
+
+                    // 5. Read to confirm write
+                    UpdateStatus("Re-reading metadata to confirm changes...", true);
+                    Console.WriteLine("[MainWindow] Re-reading metadata...");
+                    editor.Read(); // Re-read from the modified file
+
+                    var sbConfirmed = new StringBuilder("--- Confirmed Metadata (after write) ---\n");
+                    sbConfirmed.AppendLine($"Description: {editor.Description ?? "N/A"}");
+                    sbConfirmed.AppendLine($"Keywords: {(editor.Keywords.Any() ? string.Join("; ", editor.Keywords) : "N/A")}");
+                    sbConfirmed.AppendLine($"Categories: {(editor.Categories.Any() ? string.Join("; ", editor.Categories) : "N/A")}");
+                    sbConfirmed.AppendLine($"EXIF ImgDesc: {editor.ExifImageDescription ?? "N/A"}");
+                    UpdateStatus(sbConfirmed.ToString(), true);
+                    UpdateStatus("Process complete for file: " + selectedImagePath, true);
+                    Console.WriteLine("[MainWindow] Metadata processing workflow complete for file.");
                 }
-                catch (ArgumentNullException argEx) { UpdateStatus($"Input error for Ollama: {argEx.Message}", true); }
-                catch (HttpRequestException httpEx) { UpdateStatus($"Ollama network error: {httpEx.Message}. Ensure Ollama server ({ollamaUrl}) is running and accessible.", true); }
-                catch (JsonException jsonEx) { UpdateStatus($"Ollama response parsing error: {jsonEx.Message}. The response from Ollama was not valid JSON.", true); }
-                catch (Exception ex) { UpdateStatus($"An error occurred during Ollama test: {ex.Message}", true); }
-                finally { TestOllamaButton.IsEnabled = true; }
+                catch (ArgumentNullException argEx) { UpdateStatus($"Input error: {argEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH ArgumentNull: {argEx}"); }
+                catch (HttpRequestException httpEx) { UpdateStatus($"Ollama network error: {httpEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH HttpRequest: {httpEx}"); }
+                catch (System.Text.Json.JsonException jsonEx) { UpdateStatus($"Ollama/JSON parsing error: {jsonEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH JsonException: {jsonEx}"); }
+                catch (ImageMagick.MagickException magickEx) { UpdateStatus($"Image metadata processing error (Magick.NET): {magickEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH MagickException: {magickEx.Message} \nStackTrace: {magickEx.StackTrace}"); }
+                catch (Exception ex) { UpdateStatus($"An unexpected error occurred: {ex.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH General Exception: {ex.Message} \nStackTrace: {ex.StackTrace}"); }
+                finally
+                {
+                    SetUiInteraction(true);
+                    editor?.Dispose();
+                    Console.WriteLine("---- TestOllamaButton_Click: FINALLY block executed ----");
+                }
             }
-            else { UpdateStatus("Ollama test cancelled: No image selected.", true); }
+            else
+            {
+                UpdateStatus("Image selection cancelled.", true);
+                Console.WriteLine("---- TestOllamaButton_Click: Image selection cancelled ----");
+            }
+            Console.WriteLine("---- TestOllamaButton_Click: END ----");
         }
 
         private async void StartProcessingButton_Click(object sender, RoutedEventArgs e)
         {
+            Console.WriteLine("---- StartProcessingButton_Click: START ----");
+            // This method is for the Daminion API workflow, which is currently shelved.
+            // We can re-enable and adapt it later.
             if (_daminionClient == null || !_daminionClient.IsAuthenticated)
             {
-                UpdateStatus("Error: Please log in to Daminion first."); return;
+                UpdateStatus("Error: Please log in to Daminion first.");
+                Console.WriteLine("---- StartProcessingButton_Click: ERROR - Not authenticated or client null ----");
+                return;
             }
             if (string.IsNullOrEmpty(_descriptionTagGuid) || string.IsNullOrEmpty(_keywordsTagGuid) || string.IsNullOrEmpty(_categoriesTagGuid))
             {
-                UpdateStatus("Error: Daminion tag GUIDs (Description, Keywords, Categories) are missing. Please fetch tags first."); return;
+                UpdateStatus("Error: Daminion tag GUIDs are missing. Please fetch tags first.");
+                Console.WriteLine("---- StartProcessingButton_Click: ERROR - Tag GUIDs missing ----");
+                return;
             }
             if (string.IsNullOrWhiteSpace(DaminionItemIdTextBox.Text) || !long.TryParse(DaminionItemIdTextBox.Text, out long itemId))
             {
-                UpdateStatus("Error: Please enter a valid Daminion Media Item ID."); return;
+                UpdateStatus("Error: Please enter a valid Daminion Media Item ID.");
+                Console.WriteLine("---- StartProcessingButton_Click: ERROR - Invalid Item ID ----");
+                return;
             }
 
             string ollamaUrl = OllamaUrlTextBox.Text;
@@ -296,96 +333,94 @@ namespace DaminionOllamaWpfApp
             string ollamaPrompt = OllamaPromptTextBox.Text;
             if (string.IsNullOrWhiteSpace(ollamaUrl) || string.IsNullOrWhiteSpace(ollamaModel) || string.IsNullOrWhiteSpace(ollamaPrompt))
             {
-                UpdateStatus("Error: Please ensure Ollama URL, Model, and Prompt are set."); return;
+                UpdateStatus("Error: Please ensure Ollama URL, Model, and Prompt are set.");
+                Console.WriteLine("---- StartProcessingButton_Click: ERROR - Ollama params missing ----");
+                return;
             }
 
-            // Disable buttons during processing
             SetUiInteraction(false);
             var processLog = new StringBuilder();
-            UpdateStatus($"Starting processing for Daminion Item ID: {itemId}...");
+            UpdateStatus($"Starting Daminion item processing for ID: {itemId}...");
+            Console.WriteLine($"[MainWindow] StartProcessing Daminion Item ID: {itemId}");
 
             try
             {
-                // 1. Get absolute path for the Daminion item
                 processLog.AppendLine("Fetching image path from Daminion...");
                 DaminionPathResult pathResult = await _daminionClient.GetAbsolutePathsAsync(new List<long> { itemId });
 
-                if (!pathResult.Success || pathResult.Paths == null || !pathResult.Paths.TryGetValue(itemId.ToString(), out string? imagePath) || string.IsNullOrEmpty(imagePath))
+                string? imagePath = null; // Declare here to be accessible
+                if (pathResult.Success && pathResult.Paths != null && pathResult.Paths.TryGetValue(itemId.ToString(), out imagePath))
                 {
-                    processLog.AppendLine($"Failed to get image path for item {itemId}. Error: {pathResult.ErrorMessage ?? "Unknown error."}");
-                    UpdateStatus(processLog.ToString(), true); return;
+                    if (string.IsNullOrEmpty(imagePath))
+                    {
+                        processLog.AppendLine($"Image path for item {itemId} is empty or null from Daminion.");
+                        UpdateStatus(processLog.ToString(), true); SetUiInteraction(true); return;
+                    }
+                    processLog.AppendLine($"Image path received: {imagePath}");
                 }
-                processLog.AppendLine($"Image path received: {imagePath}");
+                else
+                {
+                    processLog.AppendLine($"Failed to get image path for item {itemId}. Error: {pathResult?.ErrorMessage ?? "Path result indicated failure or paths dictionary was null."}");
+                    UpdateStatus(processLog.ToString(), true); SetUiInteraction(true); return;
+                }
 
-                // 2. Read image file
                 byte[] imageBytes;
                 try
                 {
                     processLog.AppendLine("Reading image file...");
+                    if (imagePath == null) throw new InvalidOperationException("Image path became null unexpectedly."); // Should be caught by above logic
                     imageBytes = await File.ReadAllBytesAsync(imagePath);
                     processLog.AppendLine($"Image file read successfully ({imageBytes.Length} bytes).");
                 }
                 catch (Exception ex)
                 {
-                    processLog.AppendLine($"Failed to read image file at '{imagePath}': {ex.Message}. Ensure the path is accessible.");
-                    UpdateStatus(processLog.ToString(), true); return;
+                    processLog.AppendLine($"Failed to read image file at '{imagePath}': {ex.Message}. Ensure path is accessible.");
+                    UpdateStatus(processLog.ToString(), true); SetUiInteraction(true); return;
                 }
 
-                // 3. Send image to Ollama
                 processLog.AppendLine("Sending image to Ollama for analysis...");
                 _ollamaClient = new OllamaApiClient(ollamaUrl);
                 OllamaGenerateResponse? ollamaApiResponse = await _ollamaClient.AnalyzeImageAsync(ollamaModel, ollamaPrompt, imageBytes);
 
-                if (ollamaApiResponse == null || string.IsNullOrEmpty(ollamaApiResponse.Response) || !ollamaApiResponse.Done)
+                if (ollamaApiResponse == null || !ollamaApiResponse.Done || string.IsNullOrEmpty(ollamaApiResponse.Response))
                 {
-                    processLog.AppendLine($"Ollama analysis failed or returned empty/incomplete response. Response text: '{ollamaApiResponse?.Response ?? "Null response object."}'");
-                    // Decide if to proceed with "Ollama Null" or stop
-                    // For now, let's try to update with a placeholder if parsing fails but response object exists
-                    if (ollamaApiResponse == null) { UpdateStatus(processLog.ToString(), true); return; }
+                    processLog.AppendLine($"Ollama analysis failed or returned empty/incomplete. Response: '{ollamaApiResponse?.Response ?? "Null API response."}'");
+                    if (ollamaApiResponse == null) { UpdateStatus(processLog.ToString(), true); SetUiInteraction(true); return; }
                 }
                 else { processLog.AppendLine("Ollama analysis successful."); }
 
-
-                // 4. Parse Ollama's response
                 processLog.AppendLine("Parsing Ollama response...");
-                ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response ?? string.Empty);
-                if (!parsedContent.SuccessfullyParsed && !string.IsNullOrEmpty(ollamaApiResponse.Response))
+                ParsedOllamaContent parsedOllamaData = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response ?? string.Empty);
+                if (!parsedOllamaData.SuccessfullyParsed && !string.IsNullOrEmpty(ollamaApiResponse.Response))
                 {
-                    parsedContent.Description = $"Ollama (unparsed): {ollamaApiResponse.Response.Substring(0, Math.Min(ollamaApiResponse.Response.Length, 200))}";
+                    parsedOllamaData.Description = $"Ollama (unparsed): {ollamaApiResponse.Response.Substring(0, Math.Min(ollamaApiResponse.Response.Length, 200))}";
                 }
-                else if (!parsedContent.SuccessfullyParsed && string.IsNullOrEmpty(ollamaApiResponse.Response))
+                else if (!parsedOllamaData.SuccessfullyParsed && string.IsNullOrEmpty(ollamaApiResponse.Response))
                 {
-                    parsedContent.Description = "Ollama: No content generated.";
+                    parsedOllamaData.Description = "Ollama: No content generated.";
                 }
 
+                processLog.AppendLine($"Parsed Description (snippet): {parsedOllamaData.Description?.Substring(0, Math.Min(parsedOllamaData.Description.Length, 100))}...");
+                processLog.AppendLine($"Parsed Categories: {(parsedOllamaData.Categories.Any() ? string.Join("; ", parsedOllamaData.Categories) : "N/A")}");
+                processLog.AppendLine($"Parsed Keywords: {(parsedOllamaData.Keywords.Any() ? string.Join("; ", parsedOllamaData.Keywords) : "N/A")}");
 
-                processLog.AppendLine($"Parsed Description: {(string.IsNullOrEmpty(parsedContent.Description) ? "N/A" : parsedContent.Description.Substring(0, Math.Min(parsedContent.Description.Length, 100)) + "...")}");
-                processLog.AppendLine($"Parsed Categories: {(parsedContent.Categories.Any() ? string.Join("; ", parsedContent.Categories) : "N/A")}");
-                processLog.AppendLine($"Parsed Keywords: {(parsedContent.Keywords.Any() ? string.Join("; ", parsedContent.Keywords) : "N/A")}");
-
-                // 5. Update Daminion with the new metadata
                 processLog.AppendLine("Preparing to update Daminion metadata...");
                 var operations = new List<DaminionUpdateOperation>();
-
-                // Description (Tag GUID stored in _descriptionTagGuid)
-                operations.Add(new DaminionUpdateOperation { Guid = _descriptionTagGuid!, Value = parsedContent.Description, Id = 0, Remove = false });
-
-                // Categories (Tag GUID stored in _categoriesTagGuid)
-                // Daminion's batchChange "value" is a string. If categories/keywords are multi-value,
-                // Daminion might accept them semi-colon separated or require one operation per value.
-                // Assuming semi-colon separated for now.
-                if (parsedContent.Categories.Any())
-                    operations.Add(new DaminionUpdateOperation { Guid = _categoriesTagGuid!, Value = string.Join("; ", parsedContent.Categories), Id = 0, Remove = false });
-                else // If no categories, explicitly set to empty or a placeholder
-                    operations.Add(new DaminionUpdateOperation { Guid = _categoriesTagGuid!, Value = (parsedContent.SuccessfullyParsed ? "" : "Ollama: No categories generated"), Id = 0, Remove = false });
+                if (!string.IsNullOrWhiteSpace(parsedOllamaData.Description))
+                    operations.Add(new DaminionUpdateOperation { Guid = _descriptionTagGuid!, Value = parsedOllamaData.Description, Id = 0, Remove = false });
+                else
+                    operations.Add(new DaminionUpdateOperation { Guid = _descriptionTagGuid!, Value = (parsedOllamaData.SuccessfullyParsed ? "" : "Ollama: No description generated"), Id = 0, Remove = false });
 
 
-                // Keywords (Tag GUID stored in _keywordsTagGuid)
-                if (parsedContent.Keywords.Any())
-                    operations.Add(new DaminionUpdateOperation { Guid = _keywordsTagGuid!, Value = string.Join("; ", parsedContent.Keywords), Id = 0, Remove = false });
-                else // If no keywords, explicitly set to empty or a placeholder
-                    operations.Add(new DaminionUpdateOperation { Guid = _keywordsTagGuid!, Value = (parsedContent.SuccessfullyParsed ? "" : "Ollama: No keywords generated"), Id = 0, Remove = false });
+                if (parsedOllamaData.Categories.Any())
+                    operations.Add(new DaminionUpdateOperation { Guid = _categoriesTagGuid!, Value = string.Join("; ", parsedOllamaData.Categories), Id = 0, Remove = false });
+                else
+                    operations.Add(new DaminionUpdateOperation { Guid = _categoriesTagGuid!, Value = (parsedOllamaData.SuccessfullyParsed ? "" : "Ollama: No categories generated"), Id = 0, Remove = false });
 
+                if (parsedOllamaData.Keywords.Any())
+                    operations.Add(new DaminionUpdateOperation { Guid = _keywordsTagGuid!, Value = string.Join("; ", parsedOllamaData.Keywords), Id = 0, Remove = false });
+                else
+                    operations.Add(new DaminionUpdateOperation { Guid = _keywordsTagGuid!, Value = (parsedOllamaData.SuccessfullyParsed ? "" : "Ollama: No keywords generated"), Id = 0, Remove = false });
 
                 if (operations.Any())
                 {
@@ -408,24 +443,32 @@ namespace DaminionOllamaWpfApp
             }
             catch (Exception ex)
             {
-                processLog.AppendLine($"An critical error occurred during processing: {ex.Message}\n{ex.StackTrace}");
+                processLog.AppendLine($"An critical error occurred during Daminion processing: {ex.Message}\n{ex.StackTrace}");
                 UpdateStatus(processLog.ToString(), true);
             }
             finally
             {
-                SetUiInteraction(true); // Re-enable UI
+                SetUiInteraction(true);
+                Console.WriteLine("---- StartProcessingButton_Click: FINALLY block executed ----");
             }
+            Console.WriteLine("---- StartProcessingButton_Click: END ----");
         }
+
 
         private void SetUiInteraction(bool enable)
         {
             LoginButton.IsEnabled = enable;
             FetchTagsButton.IsEnabled = enable && (_daminionClient?.IsAuthenticated ?? false);
             TestOllamaButton.IsEnabled = enable;
-            StartProcessingButton.IsEnabled = enable && (_daminionClient?.IsAuthenticated ?? false) &&
-                                            !string.IsNullOrEmpty(_descriptionTagGuid) &&
-                                            !string.IsNullOrEmpty(DaminionItemIdTextBox.Text);
-            // Consider disabling TextBoxes too
+
+            bool canStartProcessing = enable &&
+                                    (_daminionClient?.IsAuthenticated ?? false) &&
+                                    !string.IsNullOrEmpty(_descriptionTagGuid) && // Check all required GUIDs
+                                    !string.IsNullOrEmpty(_keywordsTagGuid) &&
+                                    !string.IsNullOrEmpty(_categoriesTagGuid) &&
+                                    !string.IsNullOrWhiteSpace(DaminionItemIdTextBox.Text);
+            StartProcessingButton.IsEnabled = canStartProcessing;
+
             DaminionUrlTextBox.IsEnabled = enable;
             UsernameTextBox.IsEnabled = enable;
             PasswordBox.IsEnabled = enable;

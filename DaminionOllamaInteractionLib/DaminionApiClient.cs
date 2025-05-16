@@ -80,7 +80,8 @@ namespace DaminionOllamaInteractionLib
                 {
                     if (response.Headers.TryGetValues("Set-Cookie", out IEnumerable<string>? cookieValues))
                     {
-                        _authenticationCookie = cookieValues.FirstOrDefault(c => c.StartsWith("AspNet.ApplicationCookie=", StringComparison.OrdinalIgnoreCase));
+
+                        _authenticationCookie = cookieValues.FirstOrDefault(c => c.StartsWith(".AspNet.ApplicationCookie=", StringComparison.OrdinalIgnoreCase));
                         if (!string.IsNullOrEmpty(_authenticationCookie))
                         {
                             _authenticationCookie = _authenticationCookie.Split(';')[0];
