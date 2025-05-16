@@ -12,12 +12,18 @@ using DaminionOllamaInteractionLib.Daminion; // For Daminion DTOs
 
 namespace DaminionOllamaInteractionLib
 {
+    /// <summary>
+    /// 
+    /// </summary>
     public class DaminionApiClient : IDisposable
     {
         private readonly HttpClient _httpClient;
         private string? _apiBaseUrl;
         private string? _authenticationCookie;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DaminionApiClient"/> class.
+        /// </summary>
         public DaminionApiClient()
         {
             _httpClient = new HttpClient();
@@ -135,6 +141,10 @@ namespace DaminionOllamaInteractionLib
             }
         }
 
+        /// <summary>
+        /// Asynchronously retrieves the list of tags from the Daminion server.
+        /// </summary>
+        /// <returns></returns>
         public async Task<List<DaminionTag>?> GetTagsAsync()
         {
             Console.WriteLine("[DaminionApiClient] Attempting GetTagsAsync...");
@@ -197,6 +207,11 @@ namespace DaminionOllamaInteractionLib
             }
         }
 
+        /// <summary>
+        /// Asynchronously retrieves the absolute paths of media items from the Daminion server.
+        /// </summary>
+        /// <param name="itemIds"></param>
+        /// <returns></returns>
         public async Task<DaminionPathResult> GetAbsolutePathsAsync(List<long> itemIds)
         {
             Console.WriteLine($"[DaminionApiClient] Attempting GetAbsolutePathsAsync for {itemIds?.Count} items...");
@@ -268,6 +283,12 @@ namespace DaminionOllamaInteractionLib
             }
         }
 
+        /// <summary>
+        /// Asynchronously updates the metadata of items in Daminion.
+        /// </summary>
+        /// <param name="itemIds"></param>
+        /// <param name="operations"></param>
+        /// <returns></returns>
         public async Task<DaminionBatchChangeResponse?> UpdateItemMetadataAsync(List<long> itemIds, List<DaminionUpdateOperation> operations)
         {
             Console.WriteLine($"[DaminionApiClient] Attempting UpdateItemMetadataAsync for {itemIds?.Count} items with {operations?.Count} operations...");
@@ -361,6 +382,9 @@ namespace DaminionOllamaInteractionLib
         }
     }
 
+    /// <summary>
+    /// Represents the request payload for logging in to Daminion.
+    /// </summary>
     internal class LoginRequest
     {
         [JsonPropertyName("usernameOrEmailAddress")]

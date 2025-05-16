@@ -4,6 +4,9 @@ using System.Collections.Generic;     // Required for List
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
+    /// <summary>
+    /// Represents a request to generate text using the Ollama API.
+    /// </summary>
     public class OllamaGenerateRequest
     {
         [JsonPropertyName("model")]

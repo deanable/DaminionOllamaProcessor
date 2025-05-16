@@ -6,8 +6,16 @@ using System.Text.RegularExpressions;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
+    /// <summary>
+    /// This class is responsible for parsing the response from the Ollama API.
+    /// </summary>
     public static class OllamaResponseParser // Must be public and static
     {
+        /// <summary>
+        /// Parses the response from the Ollama API and extracts categories, keywords, and description.
+        /// </summary>
+        /// <param name="llavaResponseText"></param>
+        /// <returns></returns>
         public static ParsedOllamaContent ParseLlavaResponse(string llavaResponseText)
         {
             var parsedContent = new ParsedOllamaContent { RawResponse = llavaResponseText };

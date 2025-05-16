@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
+    /// <summary>
+    /// Represents the parsed content from an Ollama response.
+    /// </summary>
     public class ParsedOllamaContent // Must be public
     {
         public string Description { get; set; } = string.Empty;

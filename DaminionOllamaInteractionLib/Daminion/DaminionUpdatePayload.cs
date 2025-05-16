@@ -4,6 +4,9 @@ using System.Text.Json.Serialization;
 
 namespace DaminionOllamaInteractionLib.Daminion
 {
+    /// <summary>
+    /// This class is used to create a batch change request for Daminion.
+    /// </summary>
     public class DaminionBatchChangeRequest // Must be public
     {
         [JsonPropertyName("ids")]
@@ -13,6 +16,9 @@ namespace DaminionOllamaInteractionLib.Daminion
         public List<DaminionUpdateOperation> Data { get; set; } = new List<DaminionUpdateOperation>();
     }
 
+    /// <summary>
+    /// This class is used to create a batch change request for Daminion.
+    /// </summary>
     public class DaminionUpdateOperation // Must be public
     {
         [JsonPropertyName("guid")]
@@ -28,6 +34,9 @@ namespace DaminionOllamaInteractionLib.Daminion
         public bool Remove { get; set; } = false;
     }
 
+    /// <summary>
+    /// This class is used to create a batch change response for Daminion.
+    /// </summary>
     public class DaminionBatchChangeResponse // Must be public
     {
         [JsonPropertyName("success")]

@@ -4,6 +4,9 @@ using System.Text.Json.Serialization;
 
 namespace DaminionOllamaInteractionLib.Daminion // <--- Check this namespace
 {
+    /// <summary>
+    /// Represents the response from the Daminion API for getting tags.
+    /// </summary>
     public class DaminionGetTagsResponse // <--- Must be public
     {
         [JsonPropertyName("data")]
@@ -19,6 +22,9 @@ namespace DaminionOllamaInteractionLib.Daminion // <--- Check this namespace
         public bool Success { get; set; }
     }
 
+    /// <summary>
+    /// Represents a tag in Daminion.
+    /// </summary>
     public class DaminionTag // <--- Must be public
     {
         [JsonPropertyName("id")]
@@ -42,6 +48,10 @@ namespace DaminionOllamaInteractionLib.Daminion // <--- Check this namespace
         [JsonPropertyName("dataType")]
         public string DataType { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Returns a string representation of the DaminionTag object.
+        /// </summary>
+        /// <returns></returns>
         public override string ToString()
         {
             return $"{Name} (ID: {Id}, GUID: {Guid}, Type: {DataType}, Indexed: {Indexed})";

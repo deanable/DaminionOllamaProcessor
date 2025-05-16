@@ -32,6 +32,11 @@ namespace DaminionOllamaWpfApp
             _daminionClient = new DaminionApiClient();
         }
 
+        /// <summary>
+        /// Updates the status text block with a message.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="append"></param>
         private void UpdateStatus(string message, bool append = false)
         {
             if (Dispatcher.CheckAccess())

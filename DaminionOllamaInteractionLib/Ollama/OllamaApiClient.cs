@@ -9,11 +9,19 @@ using System.Threading.Tasks;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
+    /// <summary>
+    /// Client for interacting with the Ollama API.
+    /// </summary>
     public class OllamaApiClient : IDisposable
     {
         private readonly HttpClient _httpClient;
         private string _apiBaseUrl;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="OllamaApiClient"/> class.
+        /// </summary>
+        /// <param name="ollamaServerUrl"></param>
+        /// <exception cref="ArgumentException"></exception>
         public OllamaApiClient(string ollamaServerUrl)
         {
             if (string.IsNullOrWhiteSpace(ollamaServerUrl))
@@ -27,6 +35,14 @@ namespace DaminionOllamaInteractionLib.Ollama
             Console.WriteLine($"[OllamaApiClient] Initialized with base URL: {_apiBaseUrl}");
         }
 
+        /// <summary>
+        /// Sends a request to the Ollama API to analyze an image with a given prompt.
+        /// </summary>
+        /// <param name="modelName"></param>
+        /// <param name="prompt"></param>
+        /// <param name="imageBytes"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException"></exception>
         public async Task<OllamaGenerateResponse?> AnalyzeImageAsync(string modelName, string prompt, byte[] imageBytes)
         {
             if (string.IsNullOrWhiteSpace(modelName))
