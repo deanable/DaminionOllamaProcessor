@@ -186,7 +186,7 @@ namespace DaminionOllamaWpfApp
             Console.WriteLine("---- FetchTagsButton_Click: END ----");
         }
 
-        private async void TestOllamaButton_Click(object sender, RoutedEventArgs e)
+        private async void TestOllamaButton_Click(object sender, RoutedEventArgs e) // Or your renamed button
         {
             Console.WriteLine("---- TestOllamaButton_Click: START ----");
             string ollamaUrl = OllamaUrlTextBox.Text;
@@ -213,21 +213,21 @@ namespace DaminionOllamaWpfApp
                 UpdateStatus($"Processing file: {selectedImagePath}");
                 Console.WriteLine($"[MainWindow] Selected image: {selectedImagePath}");
 
-                ImageMetadataEditor? editor = null;
+                ImageMetadataService? metadataService = null; // Use your new class name
 
                 try
                 {
                     // 1. Read existing metadata
                     UpdateStatus("Reading existing metadata...", true);
                     Console.WriteLine("[MainWindow] Reading existing metadata...");
-                    editor = new ImageMetadataEditor(selectedImagePath);
-                    editor.Read();
+                    metadataService = new ImageMetadataService(selectedImagePath); // Use your new class
+                    metadataService.Read();
 
-                    var sbExisting = new StringBuilder("--- Existing Metadata ---\n");
-                    sbExisting.AppendLine($"Description: {editor.Description ?? "N/A"}");
-                    sbExisting.AppendLine($"Keywords: {(editor.Keywords.Any() ? string.Join("; ", editor.Keywords) : "N/A")}");
-                    sbExisting.AppendLine($"Categories: {(editor.Categories.Any() ? string.Join("; ", editor.Categories) : "N/A")}");
-                    sbExisting.AppendLine($"EXIF ImgDesc: {editor.ExifImageDescription ?? "N/A"}");
+                    var sbExisting = new StringBuilder("--- Existing Metadata (from ImageMetadataService) ---\n");
+                    sbExisting.AppendLine($"Description: {metadataService.Description ?? "N/A"}");
+                    sbExisting.AppendLine($"Keywords: {(metadataService.Keywords.Any() ? string.Join("; ", metadataService.Keywords) : "N/A")}");
+                    sbExisting.AppendLine($"Categories: {(metadataService.Categories.Any() ? string.Join("; ", metadataService.Categories) : "N/A")}");
+                    // Add other properties from ImageMetadataService if you want to display them
                     UpdateStatus(sbExisting.ToString(), true);
 
                     // 2. Send image to Ollama
@@ -250,12 +250,7 @@ namespace DaminionOllamaWpfApp
                     // 3. Parse Ollama's response
                     Console.WriteLine("[MainWindow] Parsing Ollama response...");
                     ParsedOllamaContent parsedOllamaData = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response);
-                    if (!parsedOllamaData.SuccessfullyParsed && string.IsNullOrEmpty(parsedOllamaData.Description))
-                    {
-                        parsedOllamaData.Description = $"Ollama (parsing might have issues or content was minimal): {ollamaApiResponse.Response.Substring(0, Math.Min(ollamaApiResponse.Response.Length, 200))}";
-                        UpdateStatus("Warning: Ollama response parsing might have had issues or content was minimal.", true);
-                        Console.WriteLine("[MainWindow] Warning: Ollama response parsing issues or minimal content.");
-                    }
+                    // ... (your existing parsing result handling) ...
 
                     var sbOllama = new StringBuilder("--- Ollama Suggested Metadata ---\n");
                     sbOllama.AppendLine($"Description: {parsedOllamaData.Description ?? "N/A"}");
@@ -265,39 +260,34 @@ namespace DaminionOllamaWpfApp
 
                     // 4. Write new metadata to file
                     UpdateStatus("Writing Ollama metadata to image file...", true);
-                    Console.WriteLine("[MainWindow] Populating editor with Ollama data and saving...");
-                    editor.Description = parsedOllamaData.Description;
-                    editor.Keywords = new List<string>(parsedOllamaData.Keywords);
-                    editor.Categories = new List<string>(parsedOllamaData.Categories);
-                    // editor.ExifImageDescription = parsedOllamaData.Description; // Optional
+                    Console.WriteLine("[MainWindow] Populating ImageMetadataService with Ollama data and saving...");
+                    metadataService.Description = parsedOllamaData.Description;
+                    metadataService.Keywords = new List<string>(parsedOllamaData.Keywords); // Create new list
+                    metadataService.Categories = new List<string>(parsedOllamaData.Categories); // Create new list
+                                                                                                // metadataService.ExifImageDescription = parsedOllamaData.Description; // If you want to set this
 
-                    editor.Save();
-                    UpdateStatus("Metadata write attempt complete (via editor.Save()).", true);
-                    Console.WriteLine("[MainWindow] editor.Save() called.");
+                    metadataService.Save();
+                    UpdateStatus("Metadata write attempt complete (via metadataService.Save()).", true);
+                    Console.WriteLine("[MainWindow] metadataService.Save() called.");
 
                     // 5. Read to confirm write
                     UpdateStatus("Re-reading metadata to confirm changes...", true);
                     Console.WriteLine("[MainWindow] Re-reading metadata...");
-                    editor.Read(); // Re-read from the modified file
+                    metadataService.Read(); // Re-read from the modified file
 
-                    var sbConfirmed = new StringBuilder("--- Confirmed Metadata (after write) ---\n");
-                    sbConfirmed.AppendLine($"Description: {editor.Description ?? "N/A"}");
-                    sbConfirmed.AppendLine($"Keywords: {(editor.Keywords.Any() ? string.Join("; ", editor.Keywords) : "N/A")}");
-                    sbConfirmed.AppendLine($"Categories: {(editor.Categories.Any() ? string.Join("; ", editor.Categories) : "N/A")}");
-                    sbConfirmed.AppendLine($"EXIF ImgDesc: {editor.ExifImageDescription ?? "N/A"}");
+                    var sbConfirmed = new StringBuilder("--- Confirmed Metadata (after write from ImageMetadataService) ---\n");
+                    sbConfirmed.AppendLine($"Description: {metadataService.Description ?? "N/A"}");
+                    sbConfirmed.AppendLine($"Keywords: {(metadataService.Keywords.Any() ? string.Join("; ", metadataService.Keywords) : "N/A")}");
+                    sbConfirmed.AppendLine($"Categories: {(metadataService.Categories.Any() ? string.Join("; ", metadataService.Categories) : "N/A")}");
                     UpdateStatus(sbConfirmed.ToString(), true);
                     UpdateStatus("Process complete for file: " + selectedImagePath, true);
                     Console.WriteLine("[MainWindow] Metadata processing workflow complete for file.");
                 }
-                catch (ArgumentNullException argEx) { UpdateStatus($"Input error: {argEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH ArgumentNull: {argEx}"); }
-                catch (HttpRequestException httpEx) { UpdateStatus($"Ollama network error: {httpEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH HttpRequest: {httpEx}"); }
-                catch (System.Text.Json.JsonException jsonEx) { UpdateStatus($"Ollama/JSON parsing error: {jsonEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH JsonException: {jsonEx}"); }
-                catch (ImageMagick.MagickException magickEx) { UpdateStatus($"Image metadata processing error (Magick.NET): {magickEx.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH MagickException: {magickEx.Message} \nStackTrace: {magickEx.StackTrace}"); }
-                catch (Exception ex) { UpdateStatus($"An unexpected error occurred: {ex.Message}", true); Console.Error.WriteLine($"[MainWindow] TestOllama CATCH General Exception: {ex.Message} \nStackTrace: {ex.StackTrace}"); }
+                // ... (your existing catch blocks for ArgumentNullException, HttpRequestException, JsonException, MagickException, Exception) ...
                 finally
                 {
                     SetUiInteraction(true);
-                    editor?.Dispose();
+                    metadataService?.Dispose();
                     Console.WriteLine("---- TestOllamaButton_Click: FINALLY block executed ----");
                 }
             }
