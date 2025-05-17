@@ -449,7 +449,14 @@ namespace DaminionOllamaWpfApp
             Console.WriteLine("---- StartProcessingButton_Click: END ----");
         }
 
-
+        private void OpenBatchWindowButton_Click(object sender, RoutedEventArgs e)
+        {
+            BatchProcessWindow batchWindow = new BatchProcessWindow();
+            // You might want to pass the authenticated _daminionClient or API URLs if the batch window needs them immediately.
+            // For now, let's keep it simple. The BatchProcessWindow can handle its own Daminion login if needed for Daminion batches.
+            batchWindow.Owner = this; // Optional: sets the owner window
+            batchWindow.Show();
+        }
         private void SetUiInteraction(bool enable)
         {
             LoginButton.IsEnabled = enable;
