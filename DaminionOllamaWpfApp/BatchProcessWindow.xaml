@@ -16,7 +16,7 @@
         </Grid.RowDefinitions>
 
         <TabControl x:Name="BatchModeTabControl" Grid.Row="0">
-            <TabItem Header="Local Folder Batch">
+            <TabItem x:Name="LocalFolderTab" Header="Local Folder Batch">
                 <Grid Margin="5">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

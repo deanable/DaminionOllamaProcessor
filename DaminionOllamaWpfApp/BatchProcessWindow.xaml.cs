@@ -86,9 +86,9 @@ namespace DaminionOllamaWpfApp
             // For this example, I'll assume they might come from MainWindow's TextBoxes
             // This is a simplification; you'd ideally have dedicated input fields in BatchProcessWindow
             // or pass these settings when creating BatchProcessWindow.
-            string ollamaUrl = Application.Current.MainWindow is MainWindow mw ? mw.OllamaUrlTextBox.Text : "http://localhost:11434";
-            string modelName = Application.Current.MainWindow is MainWindow mw2 ? mw2.OllamaModelTextBox.Text : "llava";
-            string prompt = Application.Current.MainWindow is MainWindow mw3 ? mw3.OllamaPromptTextBox.Text : "Describe this image in detail and provide relevant categories and keywords.";
+            string ollamaUrl = System.Windows.Application.Current.MainWindow is MainWindow mw ? mw.OllamaUrlTextBox.Text : "http://localhost:11434";
+            string modelName = System.Windows.Application.Current.MainWindow is MainWindow mw2 ? mw2.OllamaModelTextBox.Text : "llava";
+            string prompt = System.Windows.Application.Current.MainWindow is MainWindow mw3 ? mw3.OllamaPromptTextBox.Text : "Describe this image in detail and provide relevant categories and keywords.";
 
             if (BatchModeTabControl.SelectedItem == LocalFolderTab) // Assuming x:Name="LocalFolderTab" on the TabItem
             {

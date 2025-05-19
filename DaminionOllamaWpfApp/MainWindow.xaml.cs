@@ -200,13 +200,13 @@ namespace DaminionOllamaWpfApp
                 return;
             }
 
-            OpenFileDialog openFileDialog = new OpenFileDialog
+            System.Windows.Forms.OpenFileDialog openFileDialog = new System.Windows.Forms.OpenFileDialog
             {
                 Title = "Select Image for Metadata Processing",
                 Filter = "Image Files|*.jpg;*.jpeg;*.tif;*.tiff;*.png|All files (*.*)|*.*"
             };
 
-            if (openFileDialog.ShowDialog() == true)
+            if (openFileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 string selectedImagePath = openFileDialog.FileName;
                 SetUiInteraction(false);
