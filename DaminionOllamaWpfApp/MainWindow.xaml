@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="Daminion Ollama Processor - v0.1" Height="783" Width="800"
         FontFamily="Segoe UI">
-    <Grid Margin="15">
+    <Grid Margin="15,15,15,15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -48,10 +48,10 @@
         <TextBox Grid.Row="6" Grid.Column="1" x:Name="OllamaUrlTextBox" Margin="0,5" Padding="5" Text="http://100.126.126.50:11434"/>
 
         <TextBlock Grid.Row="7" Grid.Column="0" Text="Ollama Model Name:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <TextBox Grid.Row="7" Grid.Column="1" x:Name="OllamaModelTextBox" Margin="0,5" Padding="5" Text="llava:13b-v1.6"/>
+        <TextBox Grid.Row="7" Grid.Column="1" x:Name="OllamaModelTextBox" Margin="0,5" Padding="5" Text="qwen2.5vl:7b"/>
 
         <TextBlock Grid.Row="8" Grid.Column="0" Text="Ollama Prompt:" VerticalAlignment="Top" Margin="0,5,10,0"/>
-        <TextBox Grid.Row="8" Grid.Column="1" x:Name="OllamaPromptTextBox" Margin="0,5" Padding="5" Text="Describe this image in detail. Provide suitable categories and keywords." AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="80" VerticalScrollBarVisibility="Auto"/>
+        <TextBox Grid.Row="8" Grid.Column="1" x:Name="OllamaPromptTextBox" Margin="0,5" Padding="5" Text="Describe this image in detail. Provide suitable description, categories and keywords. Output format: Description: ..., Categories:..., Keywords:..." AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="80" VerticalScrollBarVisibility="Auto"/>
 
         <Button Grid.Row="9" Grid.Column="0" Grid.ColumnSpan="2" x:Name="TestOllamaButton" Content="Select Local Image &amp; Test Ollama" Margin="0,10" Padding="10,5" Click="TestOllamaButton_Click" HorizontalAlignment="Stretch"/>
 
@@ -64,9 +64,9 @@
 
         <Button Grid.Row="13" Grid.Column="0" Grid.ColumnSpan="2" x:Name="OpenBatchWindowButton" Content="Open Batch Processor..." Margin="0,5,0,10" Padding="10,5" Click="OpenBatchWindowButton_Click" HorizontalAlignment="Stretch"/>
 
-        <TextBlock Grid.Row="14" Grid.Column="0" Grid.ColumnSpan="2" Text="Status / Log:" FontWeight="Bold" Margin="10,10,-10,171"/>
-        <ScrollViewer Grid.Row="14" Grid.Column="0" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto" MaxHeight="200" Margin="0,48,0,0">
-            <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" Text="Ready. Please configure and log in to Daminion." Margin="0,0,0,10" MinHeight="50" Background="LightGray" Padding="5" Height="157"/>
+        <TextBlock Grid.Row="14" Grid.Column="0" Grid.ColumnSpan="2" Text="Status / Log:" FontWeight="Bold" Margin="10,10,-10,160"/>
+        <ScrollViewer Grid.Row="14" Grid.Column="0" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto" MaxHeight="200" Margin="0,34,0,10">
+            <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" Text="Ready. Please configure and log in to Daminion." Margin="0,0,0,10" MinHeight="50" Background="LightGray" Padding="5" Height="126" ScrollViewer.CanContentScroll="True"/>
         </ScrollViewer>
     </Grid>
 </Window>
