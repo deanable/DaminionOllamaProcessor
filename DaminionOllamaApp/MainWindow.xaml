@@ -1,0 +1,64 @@
+﻿<Window x:Class="DaminionOllamaApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DaminionOllamaApp"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Menu Grid.Row="0">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
+                <Separator />
+                <MenuItem Header="E_xit" Command="{Binding ExitCommand}" />
+            </MenuItem>
+        </Menu>
+
+        <TabControl Grid.Row="1" Margin="5">
+            <TabItem Header="Local File Tagger">
+                <Grid Margin="5" DataContext="{Binding LocalFileTaggerVM}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,10">
+                        <Button Content="Add Files..." Command="{Binding AddFilesCommand}" Width="100" Margin="0,0,5,0" />
+                        <Button Content="Start Queue" Command="{Binding StartQueueCommand}" Width="100" Margin="0,0,5,0" />
+                        <Button Content="Stop Queue" Command="{Binding StopQueueCommand}" Width="100" Margin="0,0,15,0" />
+                        <Button Content="Remove Selected" Command="{Binding RemoveSelectedFileCommand}" Width="120" Margin="0,0,5,0" />
+                        <Button Content="Clear Processed" Command="{Binding ClearProcessedFilesCommand}" Width="110" Margin="0,0,5,0" />
+                        <Button Content="Clear All" Command="{Binding ClearAllFilesCommand}" Width="80" />
+                    </StackPanel>
+
+                    <ListView Grid.Row="1" ItemsSource="{Binding FilesToProcess}" SelectionMode="Single"
+          SelectedItem="{Binding SelectedFile}">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="File Name" Width="300" DisplayMemberBinding="{Binding FileName}" />
+                                <GridViewColumn Header="Status" Width="150" DisplayMemberBinding="{Binding Status}" />
+                                <GridViewColumn Header="Details" Width="300" DisplayMemberBinding="{Binding StatusMessage}" />
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                    
+                    <TextBox Grid.Row="2" Text="{Binding CurrentOperationStatus}"
+                         IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                         MinHeight="60" MaxHeight="150" Margin="0,10,0,0" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Daminion Tools (Future)">
+                <TextBlock Text="Daminion integration tools will be here." Margin="10" VerticalAlignment="Center" HorizontalAlignment="Center" />
+            </TabItem>
+
+        </TabControl>
+    </Grid>
+</Window>

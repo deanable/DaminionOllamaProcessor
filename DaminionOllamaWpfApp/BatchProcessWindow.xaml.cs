@@ -12,7 +12,7 @@ using System.Windows.Forms; // You'll need to add a reference to System.Windows.
 
 // You will need these later for the actual batch processing logic
 using DaminionOllamaInteractionLib.Ollama; // For ParsedOllamaContent
-using DaminionOllamaWpfApp.Services;       // For ImageMetadataService
+using DaminionOllamaInteractionLib.Services;       // For ImageMetadataService
 using System.Threading.Tasks;              // For Task
 using System.Threading;                    // For CancellationTokenSource
 using System.Linq;                         // For LINQ operations like .Any()

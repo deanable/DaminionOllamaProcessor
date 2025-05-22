@@ -5,7 +5,7 @@ VisualStudioVersion = 17.13.35931.197
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DaminionOllamaInteractionLib", "DaminionOllamaInteractionLib\DaminionOllamaInteractionLib.csproj", "{8D73EA54-88AC-4F14-88A0-9468CD8C1862}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DaminionOllamaWpfApp", "DaminionOllamaWpfApp\DaminionOllamaWpfApp.csproj", "{8FBB97D6-224B-4467-973C-F773AB91A3ED}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DaminionOllamaApp", "DaminionOllamaApp\DaminionOllamaApp.csproj", "{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +17,10 @@ Global
 		{8D73EA54-88AC-4F14-88A0-9468CD8C1862}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D73EA54-88AC-4F14-88A0-9468CD8C1862}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8D73EA54-88AC-4F14-88A0-9468CD8C1862}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8FBB97D6-224B-4467-973C-F773AB91A3ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8FBB97D6-224B-4467-973C-F773AB91A3ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8FBB97D6-224B-4467-973C-F773AB91A3ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8FBB97D6-224B-4467-973C-F773AB91A3ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

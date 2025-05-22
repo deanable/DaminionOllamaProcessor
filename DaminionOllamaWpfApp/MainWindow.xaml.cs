@@ -12,7 +12,7 @@ using Microsoft.Win32; // For OpenFileDialog
 using DaminionOllamaInteractionLib;
 using DaminionOllamaInteractionLib.Daminion;
 using DaminionOllamaInteractionLib.Ollama;
-using DaminionOllamaWpfApp.Services; // Your ImageMetadataEditor namespace
+using DaminionOllamaInteractionLib.Services; // Your ImageMetadataEditor namespace
 using System.Net.Http; 
 
 namespace DaminionOllamaWpfApp
