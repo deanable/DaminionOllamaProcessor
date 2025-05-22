@@ -1,12 +1,15 @@
-﻿using System;
+﻿// DaminionOllamaWpfApp/Services/ImageMetadataService.cs
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using ImageMagick;
 using System.Xml.Linq;
+using DaminionOllamaInteractionLib.Ollama;
 
 namespace DaminionOllamaInteractionLib.Services
 {
-    public class ImageMetadataEditor : IDisposable
+    public class ImageMetadataService : IDisposable
     {
         private readonly string _filePath;
         private MagickImage? _image;
@@ -18,7 +21,12 @@ namespace DaminionOllamaInteractionLib.Services
         private static readonly XNamespace DcNS = "http://purl.org/dc/elements/1.1/";
         private static readonly XNamespace XmpMetaNS = "adobe:ns:meta/";
 
-        public ImageMetadataEditor(string filePath)
+        public string? Description { get; set; }
+        public List<string> Keywords { get; set; } = new();
+        public List<string> Categories { get; set; } = new();
+        public string? ExifImageDescription { get; set; }
+
+        public ImageMetadataService(string filePath)
         {
             _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
         }
@@ -71,10 +79,13 @@ namespace DaminionOllamaInteractionLib.Services
             _image.Write(_filePath);
         }
 
-        public string? Description { get; set; }
-        public List<string> Keywords { get; set; } = new();
-        public List<string> Categories { get; set; } = new();
-        public string? ExifImageDescription { get; set; }
+        public void PopulateFromOllamaContent(ParsedOllamaContent content)
+        {
+            Description = content.Description;
+            Keywords = new List<string>(content.Keywords);
+            Categories = new List<string>(content.Categories);
+            ExifImageDescription = content.Description;
+        }
 
         private void PopulateMainProperties()
         {
@@ -109,7 +120,6 @@ namespace DaminionOllamaInteractionLib.Services
             if (tagIdentifier == ExifTag.ImageDescription)
                 return _exifProfile.GetValue(ExifTag<string>.ImageDescription)?.Value;
 
-            Console.WriteLine($"EXIF tag {tagIdentifier} not supported.");
             return null;
         }
 
@@ -280,6 +290,6 @@ namespace DaminionOllamaInteractionLib.Services
                 _image?.Dispose();
             _disposed = true;
         }
-        ~ImageMetadataEditor() => Dispose(false);
+        ~ImageMetadataService() => Dispose(false);
     }
 }
