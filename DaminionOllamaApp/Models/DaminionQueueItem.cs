@@ -1,25 +1,33 @@
-﻿// DaminionOllamaApp/Models/FileQueueItem.cs
+﻿// DaminionOllamaApp/Models/DaminionQueueItem.cs
 using System.ComponentModel;
-using System.IO; // Required for Path
+using System.IO;
 
 namespace DaminionOllamaApp.Models
 {
-    public enum ProcessingStatus
-    {
-        Unprocessed,
-        Queued,
-        Processing,
-        Processed,
-        Error,
-        Cancelled
-    }
+    // We can reuse the ProcessingStatus enum from FileQueueItem.cs
+    // If it's not accessible due to namespace/file structure, you might need to move it
+    // to a more common location or redeclare it here. For now, assume it's accessible.
 
-    public class FileQueueItem : INotifyPropertyChanged
+    public class DaminionQueueItem : INotifyPropertyChanged
     {
+        private long _daminionItemId;
         private string _filePath = string.Empty;
-        private string _fileName = string.Empty;
+        private string _fileName = string.Empty; // Can be Daminion item name or file name
         private ProcessingStatus _status = ProcessingStatus.Unprocessed;
         private string _statusMessage = string.Empty;
+
+        public long DaminionItemId
+        {
+            get => _daminionItemId;
+            set
+            {
+                if (_daminionItemId != value)
+                {
+                    _daminionItemId = value;
+                    OnPropertyChanged(nameof(DaminionItemId));
+                }
+            }
+        }
 
         public string FilePath
         {
@@ -29,16 +37,19 @@ namespace DaminionOllamaApp.Models
                 if (_filePath != value)
                 {
                     _filePath = value;
-                    FileName = Path.GetFileName(_filePath); // Automatically update FileName
+                    if (string.IsNullOrEmpty(_fileName) && !string.IsNullOrEmpty(_filePath))
+                    {
+                        FileName = Path.GetFileName(_filePath);
+                    }
                     OnPropertyChanged(nameof(FilePath));
                 }
             }
         }
 
-        public string FileName // Read-only from the perspective of a direct set, updated by FilePath
+        public string FileName // Could be Daminion item's title or filename
         {
             get => _fileName;
-            private set // Private setter so it's only changed when FilePath changes
+            set
             {
                 if (_fileName != value)
                 {
@@ -61,7 +72,7 @@ namespace DaminionOllamaApp.Models
             }
         }
 
-        public string StatusMessage // Used for more details, especially for errors
+        public string StatusMessage
         {
             get => _statusMessage;
             set
@@ -81,27 +92,12 @@ namespace DaminionOllamaApp.Models
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
-        // Constructor
-        public FileQueueItem(string filePath)
+        public DaminionQueueItem(long daminionId, string initialName = "Loading...")
         {
-            FilePath = filePath; // This will also set FileName
+            DaminionItemId = daminionId;
+            FileName = initialName; // Initially set to item ID or a placeholder
             Status = ProcessingStatus.Unprocessed;
-            StatusMessage = string.Empty; // Initialize status message
+            StatusMessage = "Awaiting path information.";
         }
-
-        // --- NEW CONSTRUCTOR ---
-        public FileQueueItem(string filePath, string fileName)
-        {
-            _filePath = filePath; // Set backing field directly
-            FileName = fileName;  // Use the private setter for FileName
-            Status = ProcessingStatus.Unprocessed;
-            StatusMessage = string.Empty;
-            OnPropertyChanged(nameof(FilePath)); // Notify that FilePath was set
-        }
-        // --- END NEW CONSTRUCTOR ---
-
-
-        // Parameterless constructor for XAML design-time instantiation if needed (though typically not for item models)
-        public FileQueueItem() { }
     }
 }

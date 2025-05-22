@@ -145,13 +145,17 @@ namespace DaminionOllamaInteractionLib
         /// Asynchronously retrieves the list of tags from the Daminion server.
         /// </summary>
         /// <returns></returns>
-        public async Task<List<DaminionTag>?> GetTagsAsync()
+        // Inside DaminionApiClient class in DaminionOllamaInteractionLib project
+
+        // Ensure the return type is Task<DaminionGetTagsResponse?>
+        public async Task<DaminionGetTagsResponse?> GetTagsAsync()
         {
             Console.WriteLine("[DaminionApiClient] Attempting GetTagsAsync...");
             if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
             {
                 Console.Error.WriteLine("[DaminionApiClient] GetTags Error: Client is not authenticated or API base URL is not set.");
-                return null;
+                // Return the response object with error details
+                return new DaminionGetTagsResponse { Success = false, Error = "Not authenticated or API base URL not set." };
             }
 
             string tagsUrl = $"{_apiBaseUrl}/api/settings/getTags";
@@ -172,41 +176,51 @@ namespace DaminionOllamaInteractionLib
                     {
                         getTagsResponse = JsonSerializer.Deserialize<DaminionGetTagsResponse>(responseBody);
                     }
-                    catch (System.Text.Json.JsonException jsonEx)
+                    catch (JsonException jsonEx)
                     {
                         Console.Error.WriteLine($"[DaminionApiClient] Error deserializing GetTags response: {jsonEx.Message}. Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
-                        return null;
+                        // Return the response object with error details
+                        return new DaminionGetTagsResponse { Success = false, Error = $"JSON Deserialization error: {jsonEx.Message}" };
                     }
 
-                    if (getTagsResponse != null && getTagsResponse.Success)
+                    // Return the entire DaminionGetTagsResponse object
+                    if (getTagsResponse != null) // Check if deserialization was successful
                     {
-                        Console.WriteLine($"[DaminionApiClient] Successfully fetched {getTagsResponse.Data?.Count ?? 0} tags.");
-                        return getTagsResponse.Data;
+                        if (getTagsResponse.Success)
+                        {
+                            Console.WriteLine($"[DaminionApiClient] Successfully fetched {getTagsResponse.Data?.Count ?? 0} tags.");
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine($"[DaminionApiClient] GetTags API call reported failure or bad data. Success: {getTagsResponse.Success}, Error: {getTagsResponse.Error}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        }
+                        return getTagsResponse;
                     }
                     else
                     {
-                        Console.Error.WriteLine($"[DaminionApiClient] GetTags API call reported failure or bad data. Success: {getTagsResponse?.Success}, Error: {getTagsResponse?.Error}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
-                        return null;
+                        // Should not happen if deserialization didn't throw, but as a fallback
+                        Console.Error.WriteLine($"[DaminionApiClient] GetTags deserialization resulted in null object. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return new DaminionGetTagsResponse { Success = false, Error = "Deserialization resulted in null object." };
                     }
                 }
                 else
                 {
                     Console.Error.WriteLine($"[DaminionApiClient] GetTags HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
-                    return null;
+                    // Return the response object with error details
+                    return new DaminionGetTagsResponse { Success = false, Error = $"HTTP Error: {response.StatusCode}" };
                 }
             }
             catch (HttpRequestException ex)
             {
                 Console.Error.WriteLine($"[DaminionApiClient] HTTP request error during GetTags: {ex.Message}");
-                throw;
+                return new DaminionGetTagsResponse { Success = false, Error = $"HTTP Request Exception: {ex.Message}" };
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[DaminionApiClient] An unexpected error occurred during GetTags: {ex.Message}");
-                return null;
+                return new DaminionGetTagsResponse { Success = false, Error = $"Unexpected Exception: {ex.Message}" };
             }
         }
-
         /// <summary>
         /// Asynchronously retrieves the absolute paths of media items from the Daminion server.
         /// </summary>
@@ -380,6 +394,101 @@ namespace DaminionOllamaInteractionLib
             _httpClient?.Dispose();
             GC.SuppressFinalize(this);
         }
+
+        // Inside DaminionApiClient class
+
+        /// <summary>
+        /// Asynchronously retrieves the values for a specified indexed tag from the Daminion server.
+        /// </summary>
+        /// <param name="indexedTagId">ID of the tag whose values should be found. [cite: 23]</param>
+        /// <param name="pageSize">Page size (positive integer, max 2,147,483,647). [cite: 24]</param>
+        /// <param name="pageIndex">Page serial number (0 to 2,147,483,647). [cite: 25]</param>
+        /// <param name="parentValueId">Limits search level. 0 for root, -2 for thorough search, or specific parent tag value ID. [cite: 26]</param>
+        /// <param name="filter">Case-insensitive search string to filter values. [cite: 27]</param>
+        /// <returns>A DaminionGetTagValuesResponse containing the tag values or an error.</returns>
+        public async Task<DaminionGetTagValuesResponse?> GetTagValuesAsync(
+            long indexedTagId,
+            int pageSize = 100, // Default page size
+            int pageIndex = 0,
+            long parentValueId = 0, // Default to root level [cite: 26]
+            string filter = "")
+        {
+            Console.WriteLine($"[DaminionApiClient] Attempting GetTagValuesAsync for tag ID: {indexedTagId}...");
+            if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
+            {
+                Console.Error.WriteLine("[DaminionApiClient] GetTagValues Error: Client is not authenticated or API base URL is not set.");
+                return new DaminionGetTagValuesResponse { Success = false, Error = "Client not authenticated." };
+            }
+
+            // Construct the query parameters
+            var queryParams = new Dictionary<string, string>
+    {
+        { "indexedTagId", indexedTagId.ToString() },
+        { "pageSize", pageSize.ToString() },
+        { "pageIndex", pageIndex.ToString() },
+        { "parentValueId", parentValueId.ToString() }
+    };
+            if (!string.IsNullOrEmpty(filter))
+            {
+                queryParams.Add("filter", filter);
+            }
+
+            string queryString = await new FormUrlEncodedContent(queryParams).ReadAsStringAsync();
+            string getTagValuesUrl = $"{_apiBaseUrl}/api/indexedTagValues/getIndexedTagValues?{queryString}";
+    Console.WriteLine($"[DaminionApiClient] GetTagValues URL: {getTagValuesUrl}");
+
+            try
+            {
+                _httpClient.DefaultRequestHeaders.Accept.Clear();
+                _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = await _httpClient.GetAsync(getTagValuesUrl);
+                string responseBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[DaminionApiClient] GetTagValues Response Status Code: {response.StatusCode}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    DaminionGetTagValuesResponse? getValuesResponse = null;
+                    try
+                    {
+                        getValuesResponse = JsonSerializer.Deserialize<DaminionGetTagValuesResponse>(responseBody);
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Console.Error.WriteLine($"[DaminionApiClient] Error deserializing GetTagValues response: {jsonEx.Message}. Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return new DaminionGetTagValuesResponse { Success = false, Error = $"JSON Deserialization error: {jsonEx.Message}" };
+                    }
+
+                    if (getValuesResponse != null && getValuesResponse.Success)
+                    {
+                        Console.WriteLine($"[DaminionApiClient] Successfully fetched {getValuesResponse.Values?.Count ?? 0} tag values for tag ID {indexedTagId}.");
+                        return getValuesResponse;
+                    }
+                    else
+                    {
+                        string errorMsg = getValuesResponse?.Error ?? "API call reported failure or bad data.";
+                        Console.Error.WriteLine($"[DaminionApiClient] GetTagValues API call failed or returned unsuccessful. Success: {getValuesResponse?.Success}, Error: {errorMsg}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return new DaminionGetTagValuesResponse { Success = false, Error = errorMsg, Values = getValuesResponse?.Values /* preserve values if any */ };
+                    }
+                }
+                else
+                {
+                    Console.Error.WriteLine($"[DaminionApiClient] GetTagValues HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    return new DaminionGetTagValuesResponse { Success = false, Error = $"HTTP Error: {response.StatusCode}" };
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.Error.WriteLine($"[DaminionApiClient] HTTP request error during GetTagValues: {ex.Message}");
+                return new DaminionGetTagValuesResponse { Success = false, Error = $"HTTP Request Exception: {ex.Message}" };
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[DaminionApiClient] An unexpected error occurred during GetTagValues: {ex.Message}");
+                return new DaminionGetTagValuesResponse { Success = false, Error = $"Unexpected Exception: {ex.Message}" };
+            }
+        }
+
     }
 
     /// <summary>

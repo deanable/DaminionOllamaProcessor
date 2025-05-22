@@ -15,13 +15,14 @@ namespace DaminionOllamaApp.ViewModels
         // This property will hold the ViewModel for the "Local File Tagger" tab
         public LocalFileTaggerViewModel LocalFileTaggerVM { get; }
 
+        // ... other properties ...
+        public DaminionCollectionTaggerViewModel DaminionCollectionTaggerVM { get; } // Add this
+
         public MainViewModel()
         {
-            OpenSettingsCommand = new RelayCommand(param => OpenSettingsWindow());
-            ExitCommand = new RelayCommand(param => ExitApplication());
-
-            // Initialize the ViewModel for the LocalFileTagger tab
+            // ... existing commands ...
             LocalFileTaggerVM = new LocalFileTaggerViewModel();
+            DaminionCollectionTaggerVM = new DaminionCollectionTaggerViewModel(); // Initialize here
         }
 
         private void OpenSettingsWindow()

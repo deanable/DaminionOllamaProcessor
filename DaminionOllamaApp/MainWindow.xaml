@@ -54,7 +54,54 @@
                          MinHeight="60" MaxHeight="150" Margin="0,10,0,0" />
                 </Grid>
             </TabItem>
+            <TabItem Header="Daminion Collection Tagger">
+                <Grid Margin="5" DataContext="{Binding DaminionCollectionTaggerVM}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
+                    <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Login to Daminion" Command="{Binding LoginCommand}" Width="150" Margin="0,0,10,0" IsEnabled="{Binding CanLoginFlag}" />
+                            <TextBlock Text="{Binding DaminionStatus}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Label Content="Select Collection:" VerticalAlignment="Center" IsEnabled="{Binding IsLoggedIn}" />
+                            <ComboBox ItemsSource="{Binding Collections}"
+                              SelectedItem="{Binding SelectedCollection}"
+                              DisplayMemberPath="Name"
+                              MinWidth="200" Margin="5,0,10,0"
+                              IsEnabled="{Binding IsLoggedIn}" />
+                            <Button Content="Load Items" Command="{Binding LoadItemsFromCollectionCommand}" Width="100" IsEnabled="{Binding IsLoggedIn}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,10">
+                        <Button Content="Start Daminion Queue" Command="{Binding StartDaminionQueueCommand}" Width="160" Margin="0,0,5,0" />
+                        <Button Content="Stop Daminion Queue" Command="{Binding StopDaminionQueueCommand}" Width="160" />
+                    </StackPanel>
+
+                    <ListView Grid.Row="2" ItemsSource="{Binding DaminionFilesToProcess}" SelectionMode="Single">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Daminion ID" Width="100" DisplayMemberBinding="{Binding DaminionItemId}" />
+                                <GridViewColumn Header="Item Name" Width="250" DisplayMemberBinding="{Binding FileName}" />
+                                <GridViewColumn Header="File Path" Width="250" DisplayMemberBinding="{Binding FilePath}" />
+                                <GridViewColumn Header="Status" Width="120" DisplayMemberBinding="{Binding Status}" />
+                                <GridViewColumn Header="Details" Width="200" DisplayMemberBinding="{Binding StatusMessage}" />
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <TextBox Grid.Row="3" Text="{Binding DaminionStatus}"
+                     IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                     MinHeight="40" MaxHeight="100" Margin="0,10,0,0" />
+                </Grid>
+            </TabItem>
             <TabItem Header="Daminion Tools (Future)">
                 <TextBlock Text="Daminion integration tools will be here." Margin="10" VerticalAlignment="Center" HorizontalAlignment="Center" />
             </TabItem>
