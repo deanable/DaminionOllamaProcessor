@@ -8,7 +8,8 @@ using System.Text;
 using System.Text.Json; // Required for JsonSerializer and JsonException
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using DaminionOllamaInteractionLib.Daminion; // For Daminion DTOs
+using DaminionOllamaInteractionLib.Daminion;
+using DaminionOllamaInteractionLib.Ollama; // For Daminion DTOs
 
 namespace DaminionOllamaInteractionLib
 {
@@ -29,6 +30,103 @@ namespace DaminionOllamaInteractionLib
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(60);
             Console.WriteLine("[DaminionApiClient] Initialized.");
+        }
+
+
+        // Add these methods inside the OllamaApiClient class
+
+        /// <summary>
+        /// Checks if the Ollama server is running and reachable.
+        /// </summary>
+        /// <returns>True if the server responds positively, false otherwise.</returns>
+        public async Task<bool> CheckConnectionAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_apiBaseUrl))
+            {
+                Console.Error.WriteLine("[OllamaApiClient] CheckConnection Error: API base URL is not set.");
+                return false;
+            }
+
+            // Ollama's root endpoint typically returns "Ollama is running" with a 200 OK.
+            string healthCheckUrl = _apiBaseUrl; // Or a specific health check endpoint like /api/ps or similar if available
+            Console.WriteLine($"[OllamaApiClient] Checking Ollama connection at: {healthCheckUrl}");
+
+            try
+            {
+                // Use a shorter timeout for a simple connection check
+                using (var tempHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) })
+                {
+                    HttpResponseMessage response = await tempHttpClient.GetAsync(healthCheckUrl);
+                    Console.WriteLine($"[OllamaApiClient] Connection check response status: {response.StatusCode}");
+                    //string responseBody = await response.Content.ReadAsStringAsync();
+                    //Console.WriteLine($"[OllamaApiClient] Connection check response body: {responseBody}");
+                    return response.IsSuccessStatusCode; // Or check for specific content if needed
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OllamaApiClient] Error checking Ollama connection: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Lists local models available on the Ollama server using the /api/tags endpoint.
+        /// </summary>
+        /// <returns>An OllamaListTagsResponse containing the list of models, or null if an error occurs.</returns>
+        public async Task<OllamaListTagsResponse?> ListLocalModelsAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_apiBaseUrl))
+            {
+                Console.Error.WriteLine("[OllamaApiClient] ListLocalModels Error: API base URL is not set.");
+                return null;
+            }
+
+            string listModelsUrl = $"{_apiBaseUrl}/api/tags";
+            Console.WriteLine($"[OllamaApiClient] Listing Ollama models from: {listModelsUrl}");
+
+            try
+            {
+                // _httpClient is the class member HttpClient, already configured
+                HttpResponseMessage response = await _httpClient.GetAsync(listModelsUrl);
+                string responseBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[OllamaApiClient] ListLocalModels Response Status Code: {response.StatusCode}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    OllamaListTagsResponse? listResponse = null;
+                    try
+                    {
+                        listResponse = JsonSerializer.Deserialize<OllamaListTagsResponse>(responseBody,
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); // Ollama sometimes uses snake_case
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Console.Error.WriteLine($"[OllamaApiClient] Error deserializing ListLocalModels response: {jsonEx.Message}. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return null; // Or a response object indicating failure
+                    }
+
+                    if (listResponse != null)
+                    {
+                        Console.WriteLine($"[OllamaApiClient] Successfully fetched {listResponse.Models?.Count ?? 0} local models.");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"[OllamaApiClient] ListLocalModels deserialization resulted in null object. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    }
+                    return listResponse;
+                }
+                else
+                {
+                    Console.Error.WriteLine($"[OllamaApiClient] ListLocalModels HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    return null; // Or a response object indicating failure
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OllamaApiClient] An unexpected error occurred during ListLocalModels: {ex.Message}");
+                return null; // Or a response object indicating failure
+            }
         }
 
         public bool IsAuthenticated => !string.IsNullOrEmpty(_authenticationCookie);

@@ -1,11 +1,13 @@
 ﻿// DaminionOllamaInteractionLib/Ollama/OllamaApiClient.cs
 using System;
-using System.Collections.Generic;
+using System.Collections.Generic; // For List in OllamaModelInfo if used directly
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json; // Required for JsonException and JsonSerializer
+using System.Text.Json; // For JsonSerializer
 using System.Threading.Tasks;
+// Ensure this using statement correctly points to where your Ollama DTOs are:
+using DaminionOllamaInteractionLib.Ollama;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
@@ -143,6 +145,104 @@ namespace DaminionOllamaInteractionLib.Ollama
                 }
                 Console.Error.WriteLine($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
                 return new OllamaGenerateResponse { Model = modelName, Response = $"Error: An unexpected error occurred. {ex.Message}", Done = false };
+            }
+        }
+
+        // These methods go INSIDE the OllamaApiClient class
+
+        /// <summary>
+        /// Checks if the Ollama server is running and reachable.
+        /// </summary>
+        /// <returns>True if the server responds positively, false otherwise.</returns>
+        public async Task<bool> CheckConnectionAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_apiBaseUrl))
+            {
+                Console.Error.WriteLine("[OllamaApiClient] CheckConnection Error: API base URL is not set.");
+                return false;
+            }
+
+            string healthCheckUrl = _apiBaseUrl;
+            Console.WriteLine($"[OllamaApiClient] Checking Ollama connection at: {healthCheckUrl}");
+
+            try
+            {
+                // Use a temporary HttpClient for a quick check with a shorter timeout
+                // Or, if _httpClient is already initialized with a suitable default timeout, you could use it.
+                // Creating a new one here ensures a specific short timeout for this check.
+                using (var tempHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) }) // Increased timeout slightly
+                {
+                    HttpResponseMessage response = await tempHttpClient.GetAsync(healthCheckUrl);
+                    Console.WriteLine($"[OllamaApiClient] Connection check response status: {response.StatusCode}");
+                    // Optional: Check response body if needed, e.g., response.Content.ReadAsStringAsync();
+                    return response.IsSuccessStatusCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OllamaApiClient] Error checking Ollama connection to '{healthCheckUrl}': {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Lists local models available on the Ollama server using the /api/tags endpoint.
+        /// </summary>
+        /// <returns>An OllamaListTagsResponse containing the list of models, or null if an error occurs.</returns>
+        public async Task<OllamaListTagsResponse?> ListLocalModelsAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_apiBaseUrl))
+            {
+                Console.Error.WriteLine("[OllamaApiClient] ListLocalModels Error: API base URL is not set.");
+                return null;
+            }
+
+            string listModelsUrl = $"{_apiBaseUrl}/api/tags";
+            Console.WriteLine($"[OllamaApiClient] Listing Ollama models from: {listModelsUrl}");
+
+            try
+            {
+                // Use the class member _httpClient, assuming its timeout is appropriate for this call.
+                // If not, you might consider adjusting _httpClient.Timeout or using a temporary client like in CheckConnectionAsync.
+                HttpResponseMessage response = await _httpClient.GetAsync(listModelsUrl);
+                string responseBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[OllamaApiClient] ListLocalModels Response Status Code: {response.StatusCode}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    OllamaListTagsResponse? listResponse = null;
+                    try
+                    {
+                        // Ensure System.Text.Json.JsonSerializer is used. Add 'using System.Text.Json;' if missing.
+                        listResponse = System.Text.Json.JsonSerializer.Deserialize<OllamaListTagsResponse>(responseBody,
+                            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    }
+                    catch (System.Text.Json.JsonException jsonEx)
+                    {
+                        Console.Error.WriteLine($"[OllamaApiClient] Error deserializing ListLocalModels response: {jsonEx.Message}. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return null;
+                    }
+
+                    if (listResponse != null)
+                    {
+                        Console.WriteLine($"[OllamaApiClient] Successfully fetched {listResponse.Models?.Count ?? 0} local models.");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"[OllamaApiClient] ListLocalModels deserialization resulted in null object. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    }
+                    return listResponse;
+                }
+                else
+                {
+                    Console.Error.WriteLine($"[OllamaApiClient] ListLocalModels HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    return null;
+                }
+            }
+            catch (Exception ex) // Catch general exceptions including HttpRequestException, TaskCanceledException (timeout)
+            {
+                Console.Error.WriteLine($"[OllamaApiClient] An unexpected error occurred during ListLocalModels from '{listModelsUrl}': {ex.Message}");
+                return null;
             }
         }
 

@@ -3,72 +3,108 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:DaminionOllamaApp.Views"
+        xmlns:local="clr-namespace:DaminionOllamaApp.Views" 
         xmlns:viewModels="clr-namespace:DaminionOllamaApp.ViewModels"
+        xmlns:converters="clr-namespace:DaminionOllamaApp.Converters"
         mc:Ignorable="d"
-        Title="Settings" Width="600" Height="Auto"
+        Title="Settings" Width="650" Height="Auto"
         SizeToContent="Height"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        MaxHeight="700">
     <Window.DataContext>
         <viewModels:SettingsViewModel />
     </Window.DataContext>
-    <Grid Margin="15">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Window.Resources>
+        <converters:CountToBooleanConverter x:Key="CountToBoolConverter" />
+    </Window.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <GroupBox Header="Daminion API Settings" Grid.Row="0" Margin="0,0,0,10" Padding="10">
-            <StackPanel>
-                <Label Content="Daminion Server URL:" />
-                <TextBox Text="{Binding Settings.DaminionServerUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" />
-                <Label Content="Username:" />
-                <TextBox Text="{Binding Settings.DaminionUsername, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" />
-                <Label Content="Password:" />
-                <PasswordBox x:Name="DaminionPasswordBox" PasswordChanged="DaminionPasswordBox_PasswordChanged" Margin="0,0,0,5" />
+            <GroupBox Header="Daminion API Settings" Grid.Row="0" Margin="0,0,0,5" Padding="5">
+                <StackPanel>
+                    <Label Content="Daminion Server URL:" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.DaminionServerUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" />
+                    <Label Content="Username:" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.DaminionUsername, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" />
+                    <Label Content="Password:" Padding="0,0,0,1"/>
+                    <PasswordBox x:Name="DaminionPasswordBox" PasswordChanged="DaminionPasswordBox_PasswordChanged" Margin="0,0,0,3" />
+                    <Button Content="Test Daminion Connection" 
+                            Command="{Binding TestDaminionConnectionCommand}" 
+                            HorizontalAlignment="Left" 
+                            Margin="0,8,0,0" Padding="5,2"/>
+                    <TextBlock Text="{Binding DaminionConnectionTestStatus}" Margin="0,3,0,3" TextWrapping="Wrap" Foreground="Gray" MinHeight="16"/>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Ollama API Settings" Grid.Row="1" Margin="0,5,0,5" Padding="5">
+                <StackPanel>
+                    <Label Content="Ollama Server URL:" Padding="0,0,0,1"/>
+                    <Grid Margin="0,0,0,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Text="{Binding Settings.OllamaServerUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="Verify &amp; Load Models" 
+                                Command="{Binding VerifyOllamaConnectionCommand}" 
+                                MinWidth="140" Padding="5,2"/>
+                    </Grid>
+                    <TextBlock Text="{Binding OllamaConnectionStatus}" Margin="0,3,0,3" TextWrapping="Wrap" Foreground="Gray" MinHeight="16"/>
+
+                    <Label Content="Select Ollama Model:" Margin="0,8,0,0" Padding="0,0,0,1"/>
+                    <ComboBox ItemsSource="{Binding OllamaModels}" 
+                              SelectedItem="{Binding SelectedOllamaModelName}"
+                              IsEnabled="{Binding OllamaModels.Count, Converter={StaticResource CountToBoolConverter}}" 
+                              Margin="0,0,0,3">
+                        <ComboBox.Style>
+                            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                                <Style.Triggers>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="ToolTip" Value="Verify connection to load models, or no models found."/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ComboBox.Style>
+                    </ComboBox>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Ollama Prompt" Grid.Row="2" Margin="0,5,0,5" Padding="5">
+                <TextBox Text="{Binding Settings.OllamaPrompt, UpdateSourceTrigger=PropertyChanged}"
+                         AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                         MinHeight="70" MaxHeight="120" FontFamily="Consolas" Height="44"/>
+            </GroupBox>
+
+            <GroupBox Header="Daminion Target Tag GUIDs" Grid.Row="3" Margin="0,5,0,5" Padding="5">
+                <StackPanel>
+                    <Button Content="Discover Standard GUIDs" 
+                            Command="{Binding DiscoverTagGuidsCommand}" 
+                            HorizontalAlignment="Left" 
+                            Margin="0,0,0,3" Padding="5,2"/>
+                    <TextBlock Text="{Binding DiscoveryStatusMessage}" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8" MinHeight="20" VerticalAlignment="Top"/>
+
+                    <Label Content="Description Tag GUID:" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.DaminionDescriptionTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" FontFamily="Consolas"/>
+                    <Label Content="Keywords Tag GUID:" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.DaminionKeywordsTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" FontFamily="Consolas"/>
+                    <Label Content="Categories Tag GUID:" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.DaminionCategoriesTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" FontFamily="Consolas"/>
+                    <Label Content="Flag Tag GUID (Optional):" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.DaminionFlagTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" FontFamily="Consolas"/>
+                </StackPanel>
+            </GroupBox>
+
+            <StackPanel Orientation="Horizontal" Grid.Row="4" HorizontalAlignment="Right" Margin="0,10,0,0">
+                <Button Content="Save" Command="{Binding SaveCommand}" Width="75" Margin="0,0,10,0" IsDefault="True" />
+                <Button Content="Close" Command="{Binding CloseCommand}" Width="75" IsCancel="True" />
             </StackPanel>
-        </GroupBox>
-
-        <GroupBox Header="Ollama API Settings" Grid.Row="1" Margin="0,10,0,10" Padding="10">
-            <StackPanel>
-                <Label Content="Ollama Server URL:" />
-                <TextBox Text="{Binding Settings.OllamaServerUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" />
-                <Label Content="Model Name (e.g., llava, llava:13b):" />
-                <TextBox Text="{Binding Settings.OllamaModelName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" />
-            </StackPanel>
-        </GroupBox>
-
-        <GroupBox Header="Ollama Prompt" Grid.Row="2" Margin="0,10,0,10" Padding="10">
-            <TextBox Text="{Binding Settings.OllamaPrompt, UpdateSourceTrigger=PropertyChanged}"
-                     AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                     MinHeight="100" MaxHeight="150" FontFamily="Consolas"/>
-        </GroupBox>
-
-        <GroupBox Header="Daminion Target Tag GUIDs" Grid.Row="3" Margin="0,10,0,10" Padding="10">
-            <StackPanel>
-                <Button Content="Discover Standard GUIDs" 
-                        Command="{Binding DiscoverTagGuidsCommand}" 
-                        HorizontalAlignment="Left" 
-                        Margin="0,0,0,10" Padding="5"/>
-                <TextBlock Text="{Binding DiscoveryStatusMessage}" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,10" MinHeight="30" VerticalAlignment="Top"/>
-
-                <Label Content="Description Tag GUID:" />
-                <TextBox Text="{Binding Settings.DaminionDescriptionTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
-                <Label Content="Keywords Tag GUID:" />
-                <TextBox Text="{Binding Settings.DaminionKeywordsTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
-                <Label Content="Categories Tag GUID:" />
-                <TextBox Text="{Binding Settings.DaminionCategoriesTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
-                <Label Content="Flag Tag GUID (Optional - for changing flags):" />
-                <TextBox Text="{Binding Settings.DaminionFlagTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
-            </StackPanel>
-        </GroupBox>
-
-        <StackPanel Orientation="Horizontal" Grid.Row="4" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Content="Save" Command="{Binding SaveCommand}" Width="75" Margin="0,0,10,0" IsDefault="True" />
-            <Button Content="Close" Command="{Binding CloseCommand}" Width="75" IsCancel="True" />
-        </StackPanel>
-    </Grid>
+        </Grid>
+    </ScrollViewer>
 </Window>
