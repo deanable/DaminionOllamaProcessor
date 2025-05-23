@@ -6,7 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Daminion-Llama.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Daminion-Llama.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DaminionOllamaInteractionLib\DaminionOllamaInteractionLib.csproj" />
