@@ -4,6 +4,9 @@ using System.Text.Json.Serialization;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
+    /// <summary>
+    /// Represents the details of an Ollama model.
+    /// </summary>
     public class OllamaModelDetails
     {
         [JsonPropertyName("format")]
@@ -22,6 +25,9 @@ namespace DaminionOllamaInteractionLib.Ollama
         public string? QuantizationLevel { get; set; }
     }
 
+    /// <summary>
+    /// Represents the information of an Ollama model.
+    /// </summary>
     public class OllamaModelInfo
     {
         [JsonPropertyName("name")]
@@ -43,6 +49,9 @@ namespace DaminionOllamaInteractionLib.Ollama
         public OllamaModelDetails? Details { get; set; }
     }
 
+    /// <summary>
+    /// Represents the response from the Ollama API for listing tags.
+    /// </summary>
     public class OllamaListTagsResponse
     {
         [JsonPropertyName("models")]

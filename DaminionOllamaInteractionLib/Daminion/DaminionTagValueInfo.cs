@@ -4,6 +4,9 @@ using System.Text.Json.Serialization; // Ensure this using directive is present
 
 namespace DaminionOllamaInteractionLib.Daminion
 {
+    /// <summary>
+    /// Represents a tag value in Daminion.
+    /// </summary>
     public class DaminionTagValue
     {
         [JsonPropertyName("text")]
@@ -28,6 +31,9 @@ namespace DaminionOllamaInteractionLib.Daminion
         public bool HasChilds { get; set; }
     }
 
+    /// <summary>
+    /// Represents the response from the Daminion API for getting tag values.
+    /// </summary>
     public class DaminionGetTagValuesResponse
     {
         [JsonPropertyName("values")]

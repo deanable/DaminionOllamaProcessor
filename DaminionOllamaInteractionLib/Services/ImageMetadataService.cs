@@ -9,6 +9,9 @@ using DaminionOllamaInteractionLib.Ollama;
 
 namespace DaminionOllamaInteractionLib.Services
 {
+    /// <summary>
+    /// Service for reading and writing image metadata using ImageMagick.
+    /// </summary>
     public class ImageMetadataService : IDisposable
     {
         private readonly string _filePath;
@@ -26,11 +29,19 @@ namespace DaminionOllamaInteractionLib.Services
         public List<string> Categories { get; set; } = new();
         public string? ExifImageDescription { get; set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ImageMetadataService"/> class.
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <exception cref="ArgumentNullException"></exception>
         public ImageMetadataService(string filePath)
         {
             _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
         }
 
+        /// <summary>
+        /// Reads the image metadata from the specified file.
+        /// </summary>
         public void Read()
         {
             _image?.Dispose();
@@ -43,6 +54,10 @@ namespace DaminionOllamaInteractionLib.Services
             PopulateMainProperties();
         }
 
+        /// <summary>
+        /// Saves the image metadata to the specified file.
+        /// </summary>
+        /// <exception cref="InvalidOperationException"></exception>
         public void Save()
         {
             if (_image == null)
@@ -79,6 +94,10 @@ namespace DaminionOllamaInteractionLib.Services
             _image.Write(_filePath);
         }
 
+        /// <summary>
+        /// Populates the metadata properties from the parsed Ollama content.
+        /// </summary>
+        /// <param name="content"></param>
         public void PopulateFromOllamaContent(ParsedOllamaContent content)
         {
             Description = content.Description;
@@ -87,6 +106,9 @@ namespace DaminionOllamaInteractionLib.Services
             ExifImageDescription = content.Description;
         }
 
+        /// <summary>
+        /// Populates the main properties from the XMP, IPTC, and EXIF profiles.
+        /// </summary>
         private void PopulateMainProperties()
         {
             Description = GetXmpSimpleString(DcNS + "description")
@@ -103,6 +125,9 @@ namespace DaminionOllamaInteractionLib.Services
             Categories = GetXmpBag(DcNS + "type");
         }
 
+        /// <summary>
+        /// Updates the main properties in the XMP, IPTC, and EXIF profiles.
+        /// </summary>
         private void UpdateMainProperties()
         {
             SetXmpSimpleString(DcNS + "description", Description);
@@ -113,6 +138,11 @@ namespace DaminionOllamaInteractionLib.Services
             SetXmpBag(DcNS + "type", Categories);
         }
 
+        /// <summary>
+        /// Gets the EXIF string value for the specified tag identifier.
+        /// </summary>
+        /// <param name="tagIdentifier"></param>
+        /// <returns></returns>
         private string? GetExifStringValue(ExifTag tagIdentifier)
         {
             if (_exifProfile == null) return null;
@@ -123,6 +153,11 @@ namespace DaminionOllamaInteractionLib.Services
             return null;
         }
 
+        /// <summary>
+        /// Sets the EXIF string value for the specified tag identifier.
+        /// </summary>
+        /// <param name="tagIdentifier"></param>
+        /// <param name="value"></param>
         private void SetExifStringValue(ExifTag tagIdentifier, string? value)
         {
             if (tagIdentifier != ExifTag.ImageDescription) return;
@@ -135,11 +170,21 @@ namespace DaminionOllamaInteractionLib.Services
                 _exifProfile.SetValue(ExifTag<string>.ImageDescription, value);
         }
 
+        /// <summary>
+        /// Gets the IPTC single value for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <returns></returns>
         private string? GetIptcSingleValue(IptcTag tag)
         {
             return _iptcProfile?.Values.FirstOrDefault(v => v.Tag == tag)?.Value;
         }
 
+        /// <summary>
+        ///     Gets the IPTC multiple values for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <returns></returns>
         private List<string> GetIptcMultipleValues(IptcTag tag)
         {
             return _iptcProfile?.Values
@@ -148,6 +193,11 @@ namespace DaminionOllamaInteractionLib.Services
                        .ToList() ?? new List<string>();
         }
 
+        /// <summary>
+        /// Sets the IPTC single value for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <param name="value"></param>
         private void SetIptcSingleValue(IptcTag tag, string? value)
         {
             if (string.IsNullOrEmpty(value)) return;
@@ -157,6 +207,11 @@ namespace DaminionOllamaInteractionLib.Services
             _iptcProfile.SetValue(tag, value);
         }
 
+        /// <summary>
+        /// Sets the IPTC multiple values for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <param name="values"></param>
         private void SetIptcMultipleValues(IptcTag tag, List<string> values)
         {
             if (values == null || values.All(string.IsNullOrWhiteSpace)) return;
@@ -168,12 +223,21 @@ namespace DaminionOllamaInteractionLib.Services
                 _iptcProfile.SetValue(tag, val);
         }
 
+        /// <summary>
+        ///     Tries to get the XMP document from the profile.
+        /// </summary>
+        /// <param name="profile"></param>
+        /// <returns></returns>
         private XDocument? TryGetXmpDocument(IXmpProfile? profile)
         {
             try { return profile?.ToXDocument(); }
             catch (Exception ex) { Console.WriteLine($"Failed to parse XMP: {ex.Message}"); return null; }
         }
 
+        /// <summary>
+        /// Creates a new XMP document if it doesn't exist.
+        /// </summary>
+        /// <returns></returns>
         private XDocument GetOrCreateXmpDocument()
         {
             var xdoc = TryGetXmpDocument(_xmpProfile);
@@ -194,12 +258,21 @@ namespace DaminionOllamaInteractionLib.Services
             return newDoc;
         }
 
+        /// <summary>
+        /// Updates the XMP profile from the XDocument.
+        /// </summary>
+        /// <param name="xdoc"></param>
         private void UpdateXmpProfileFromDocument(XDocument xdoc)
         {
             try { _xmpProfile = XmpProfile.FromXDocument(xdoc); }
             catch (Exception ex) { Console.WriteLine($"Failed to update XMP profile: {ex.Message}"); }
         }
 
+        /// <summary>
+        /// Gets or creates the RDF description element in the XMP document.
+        /// </summary>
+        /// <param name="xdoc"></param>
+        /// <returns></returns>
         private static XElement GetOrCreateRdfDescription(XDocument xdoc)
         {
             var root = xdoc.Root ?? new XElement(XmpMetaNS + "xmpmeta");
@@ -217,6 +290,11 @@ namespace DaminionOllamaInteractionLib.Services
             return desc;
         }
 
+        /// <summary>
+        /// Gets the XMP simple string value for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <returns></returns>
         private string? GetXmpSimpleString(XName tag)
         {
             var xdoc = TryGetXmpDocument(_xmpProfile ?? _image?.GetXmpProfile());
@@ -234,6 +312,11 @@ namespace DaminionOllamaInteractionLib.Services
             return null;
         }
 
+        /// <summary>
+        /// Sets the XMP simple string value for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <param name="value"></param>
         private void SetXmpSimpleString(XName tag, string? value)
         {
             var xdoc = GetOrCreateXmpDocument();
@@ -258,6 +341,11 @@ namespace DaminionOllamaInteractionLib.Services
             UpdateXmpProfileFromDocument(xdoc);
         }
 
+        /// <summary>
+        /// Gets the XMP bag (multiple values) for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <returns></returns>
         private List<string> GetXmpBag(XName tag)
         {
             var xdoc = TryGetXmpDocument(_xmpProfile ?? _image?.GetXmpProfile());
@@ -266,6 +354,11 @@ namespace DaminionOllamaInteractionLib.Services
             return bag?.Elements(RdfNS + "li").Select(li => li.Value).ToList() ?? new List<string>();
         }
 
+        /// <summary>
+        /// Sets the XMP bag (multiple values) for the specified tag.
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <param name="values"></param>
         private void SetXmpBag(XName tag, List<string> values)
         {
             if (values == null || values.All(string.IsNullOrWhiteSpace)) return;

@@ -10,8 +10,17 @@ using DaminionOllamaInteractionLib.Ollama;
 
 namespace DaminionOllamaInteractionLib.Services
 {
+    /// <summary>
+    /// Handles writing metadata to images using ImageMagick.
+    /// </summary>
     public static class ImageMetadataWriter
     {
+        /// <summary>
+        /// Writes metadata to an image file.
+        /// </summary>
+        /// <param name="imagePath"></param>
+        /// <param name="ollamaContent"></param>
+        /// <returns></returns>
         public static bool WriteMetadataToImage(string imagePath, ParsedOllamaContent ollamaContent)
         {
             if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath) || ollamaContent == null)

@@ -14,7 +14,7 @@ using DaminionOllamaInteractionLib.Ollama; // For Daminion DTOs
 namespace DaminionOllamaInteractionLib
 {
     /// <summary>
-    /// 
+    /// Represents a client for interacting with the Daminion API.
     /// </summary>
     public class DaminionApiClient : IDisposable
     {
@@ -31,9 +31,6 @@ namespace DaminionOllamaInteractionLib
             _httpClient.Timeout = TimeSpan.FromSeconds(60);
             Console.WriteLine("[DaminionApiClient] Initialized.");
         }
-
-
-        // Add these methods inside the OllamaApiClient class
 
         /// <summary>
         /// Checks if the Ollama server is running and reachable.
