@@ -20,10 +20,12 @@ namespace DaminionOllamaApp.ViewModels
 
         public MainViewModel()
         {
-            // ... existing commands ...
+            OpenSettingsCommand = new RelayCommand(param => OpenSettingsWindow()); // Ensure this line exists
+            ExitCommand = new RelayCommand(param => ExitApplication());
             LocalFileTaggerVM = new LocalFileTaggerViewModel();
-            DaminionCollectionTaggerVM = new DaminionCollectionTaggerViewModel(); // Initialize here
+            DaminionCollectionTaggerVM = new DaminionCollectionTaggerViewModel();
         }
+
 
         private void OpenSettingsWindow()
         {

@@ -6,7 +6,8 @@
         xmlns:local="clr-namespace:DaminionOllamaApp.Views"
         xmlns:viewModels="clr-namespace:DaminionOllamaApp.ViewModels"
         mc:Ignorable="d"
-        Title="Settings" Height="500" Width="600"
+        Title="Settings" Width="600" Height="Auto"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
     <Window.DataContext>
         <viewModels:SettingsViewModel />
@@ -16,7 +17,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -46,6 +47,24 @@
                      MinHeight="100" MaxHeight="150" FontFamily="Consolas"/>
         </GroupBox>
 
+        <GroupBox Header="Daminion Target Tag GUIDs" Grid.Row="3" Margin="0,10,0,10" Padding="10">
+            <StackPanel>
+                <Button Content="Discover Standard GUIDs" 
+                        Command="{Binding DiscoverTagGuidsCommand}" 
+                        HorizontalAlignment="Left" 
+                        Margin="0,0,0,10" Padding="5"/>
+                <TextBlock Text="{Binding DiscoveryStatusMessage}" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,10" MinHeight="30" VerticalAlignment="Top"/>
+
+                <Label Content="Description Tag GUID:" />
+                <TextBox Text="{Binding Settings.DaminionDescriptionTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
+                <Label Content="Keywords Tag GUID:" />
+                <TextBox Text="{Binding Settings.DaminionKeywordsTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
+                <Label Content="Categories Tag GUID:" />
+                <TextBox Text="{Binding Settings.DaminionCategoriesTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
+                <Label Content="Flag Tag GUID (Optional - for changing flags):" />
+                <TextBox Text="{Binding Settings.DaminionFlagTagGuid, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,5" FontFamily="Consolas"/>
+            </StackPanel>
+        </GroupBox>
 
         <StackPanel Orientation="Horizontal" Grid.Row="4" HorizontalAlignment="Right" Margin="0,15,0,0">
             <Button Content="Save" Command="{Binding SaveCommand}" Width="75" Margin="0,0,10,0" IsDefault="True" />

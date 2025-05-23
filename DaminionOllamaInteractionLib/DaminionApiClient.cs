@@ -298,6 +298,101 @@ namespace DaminionOllamaInteractionLib
         }
 
         /// <summary>
+        /// Searches for media items in Daminion based on a queryLine and operators (f parameter).
+        /// Corresponds to Daminion API endpoint GET /api/mediaItems/get.
+        /// </summary>
+        /// <param name="queryLine">Search conditions separated by a semicolon[cite: 69]. Optional[cite: 70].</param>
+        /// <param name="f_operators">Logical operators separated by a semicolon (the 'f' parameter)[cite: 71]. Optional[cite: 72].</param>
+        /// <param name="pageSize">Page size. Can take positive integer values from 0 to 1000[cite: 73]. Optional, defaults to 0 if not specified[cite: 74].</param>
+        /// <param name="pageIndex">The serial number of the requested page[cite: 75]. Optional, defaults to 0 if not specified[cite: 76].</param>
+        /// <returns>A DaminionSearchMediaItemsResponse containing the media items or an error.</returns>
+        public async Task<DaminionSearchMediaItemsResponse?> SearchMediaItemsAsync(
+            string? queryLine = null, // Made queryLine nullable as it's optional
+            string? f_operators = null,
+            int pageSize = 100, // Defaulting to a reasonable page size
+            int pageIndex = 0)
+        {
+            Console.WriteLine($"[DaminionApiClient] Attempting SearchMediaItemsAsync with queryLine: '{queryLine}' and f_operators: '{f_operators}'");
+            if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
+            {
+                Console.Error.WriteLine("[DaminionApiClient] SearchMediaItems Error: Client is not authenticated or API base URL is not set.");
+                return new DaminionSearchMediaItemsResponse { Success = false, Error = "Client not authenticated." };
+            }
+
+            var queryParams = new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(queryLine))
+            {
+                queryParams.Add("queryLine", queryLine); // [cite: 69]
+            }
+            if (!string.IsNullOrEmpty(f_operators))
+            {
+                queryParams.Add("f", f_operators); // [cite: 71]
+            }
+            // API doc says page size 0-1000[cite: 73].
+            // If not specified, page size is 0[cite: 74], which might mean "all" or "default", be cautious.
+            // For robust pagination, always specify a positive page size if you expect many results.
+            queryParams.Add("size", pageSize.ToString()); // [cite: 73]
+            queryParams.Add("index", pageIndex.ToString()); // [cite: 75]
+                                                            // sortTag and sort parameters are also available if needed [cite: 77, 79]
+
+            string queryString = await new FormUrlEncodedContent(queryParams).ReadAsStringAsync();
+            string searchUrl = $"{_apiBaseUrl}/api/mediaItems/get?{queryString}"; // [cite: 69]
+            Console.WriteLine($"[DaminionApiClient] SearchMediaItems URL: {searchUrl}");
+
+            try
+            {
+                _httpClient.DefaultRequestHeaders.Accept.Clear();
+                _httpClient.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = await _httpClient.GetAsync(searchUrl);
+                string responseBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[DaminionApiClient] SearchMediaItems Response Status Code: {response.StatusCode}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    DaminionSearchMediaItemsResponse? searchResponse = null;
+                    try
+                    {
+                        searchResponse = System.Text.Json.JsonSerializer.Deserialize<DaminionSearchMediaItemsResponse>(responseBody);
+                    }
+                    catch (System.Text.Json.JsonException jsonEx)
+                    {
+                        Console.Error.WriteLine($"[DaminionApiClient] Error deserializing SearchMediaItems response: {jsonEx.Message}. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return new DaminionSearchMediaItemsResponse { Success = false, Error = $"JSON Deserialization error: {jsonEx.Message}" };
+                    }
+
+                    if (searchResponse != null && searchResponse.Success) // [cite: 83]
+                    {
+                        Console.WriteLine($"[DaminionApiClient] Successfully fetched {searchResponse.MediaItems?.Count ?? 0} media items.");
+                        return searchResponse; // [cite: 83]
+                    }
+                    else
+                    {
+                        string errorMsg = searchResponse?.Error ?? "API call reported failure or bad data."; // [cite: 82]
+                        Console.Error.WriteLine($"[DaminionApiClient] SearchMediaItems API call failed or returned unsuccessful. Success: {searchResponse?.Success}, Error: {errorMsg}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        return new DaminionSearchMediaItemsResponse { Success = false, Error = errorMsg, MediaItems = searchResponse?.MediaItems };
+                    }
+                }
+                else
+                {
+                    Console.Error.WriteLine($"[DaminionApiClient] SearchMediaItems HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    return new DaminionSearchMediaItemsResponse { Success = false, Error = $"HTTP Error: {response.StatusCode}" };
+                }
+            }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                Console.Error.WriteLine($"[DaminionApiClient] HTTP request error during SearchMediaItems: {ex.Message}");
+                return new DaminionSearchMediaItemsResponse { Success = false, Error = $"HTTP Request Exception: {ex.Message}" };
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[DaminionApiClient] An unexpected error occurred during SearchMediaItems: {ex.Message}");
+                return new DaminionSearchMediaItemsResponse { Success = false, Error = $"Unexpected Exception: {ex.Message}" };
+            }
+        }
+
+
+        /// <summary>
         /// Asynchronously updates the metadata of items in Daminion.
         /// </summary>
         /// <param name="itemIds"></param>
