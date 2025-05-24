@@ -1,6 +1,7 @@
 ﻿// DaminionOllamaApp/Models/FileQueueItem.cs
 using System.ComponentModel;
 using System.IO; // Required for Path
+using System.Runtime.CompilerServices; // Required for CallerMemberName
 
 namespace DaminionOllamaApp.Models
 {
@@ -20,88 +21,101 @@ namespace DaminionOllamaApp.Models
         private string _fileName = string.Empty;
         private ProcessingStatus _status = ProcessingStatus.Unprocessed;
         private string _statusMessage = string.Empty;
+        private long? _daminionItemId; // <-- NEW PROPERTY
+
+        public long? DaminionItemId // <-- NEW PROPERTY
+        {
+            get => _daminionItemId;
+            set { SetProperty(ref _daminionItemId, value); }
+        }
 
         public string FilePath
         {
             get => _filePath;
             set
             {
-                if (_filePath != value)
+                if (SetProperty(ref _filePath, value))
                 {
-                    _filePath = value;
-                    FileName = Path.GetFileName(_filePath); // Automatically update FileName
-                    OnPropertyChanged(nameof(FilePath));
+                    // Only update FileName from FilePath if FileName wasn't explicitly set by a constructor that takes fileName
+                    if (string.IsNullOrEmpty(_fileName) && !string.IsNullOrEmpty(_filePath))
+                    {
+                        FileName = Path.GetFileName(_filePath); // FileName setter will call OnPropertyChanged
+                    }
                 }
             }
         }
 
-        public string FileName // Read-only from the perspective of a direct set, updated by FilePath
+        public string FileName
         {
             get => _fileName;
-            private set // Private setter so it's only changed when FilePath changes
-            {
-                if (_fileName != value)
-                {
-                    _fileName = value;
-                    OnPropertyChanged(nameof(FileName));
-                }
-            }
+            // Allow public set for cases where filename might be different from Path.GetFileName (e.g. Daminion title)
+            set { SetProperty(ref _fileName, value); }
         }
 
         public ProcessingStatus Status
         {
             get => _status;
-            set
-            {
-                if (_status != value)
-                {
-                    _status = value;
-                    OnPropertyChanged(nameof(Status));
-                }
-            }
+            set { SetProperty(ref _status, value); }
         }
 
-        public string StatusMessage // Used for more details, especially for errors
+        public string StatusMessage
         {
             get => _statusMessage;
-            set
+            set { SetProperty(ref _statusMessage, value); }
+        }
+
+        // --- NEW READ-ONLY PROPERTY ---
+        public string DisplayIdentifier
+        {
+            get
             {
-                if (_statusMessage != value)
+                if (DaminionItemId.HasValue)
                 {
-                    _statusMessage = value;
-                    OnPropertyChanged(nameof(StatusMessage));
+                    return $"Daminion ID: {DaminionItemId.Value}";
                 }
+                return FilePath; // Or Path.GetFileName(FilePath) if you prefer just the name as fallback
             }
         }
+        // --- END NEW READ-ONLY PROPERTY ---
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged(string propertyName)
+        protected virtual bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = "")
+        {
+            if (EqualityComparer<T>.Default.Equals(storage, value)) return false;
+            storage = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = "")
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
-        // Constructor
+        // Constructor for local files
         public FileQueueItem(string filePath)
         {
-            FilePath = filePath; // This will also set FileName
-            Status = ProcessingStatus.Unprocessed;
-            StatusMessage = string.Empty; // Initialize status message
-        }
-
-        // --- NEW CONSTRUCTOR ---
-        public FileQueueItem(string filePath, string fileName)
-        {
-            _filePath = filePath; // Set backing field directly
-            FileName = fileName;  // Use the private setter for FileName
+            FilePath = filePath; // Sets _filePath and calls OnPropertyChanged for FilePath
+                                 // FileName is set by FilePath setter if _fileName is empty
+            if (string.IsNullOrEmpty(_fileName) && !string.IsNullOrEmpty(filePath)) // Explicitly ensure FileName is set if not already
+            {
+                FileName = Path.GetFileName(filePath);
+            }
             Status = ProcessingStatus.Unprocessed;
             StatusMessage = string.Empty;
-            OnPropertyChanged(nameof(FilePath)); // Notify that FilePath was set
         }
-        // --- END NEW CONSTRUCTOR ---
 
+        // Constructor for Daminion items (includes Daminion ID and allows specific initial name)
+        public FileQueueItem(string filePath, string initialFileName, long daminionId)
+        {
+            DaminionItemId = daminionId;
+            FilePath = filePath; // Sets _filePath and calls OnPropertyChanged for FilePath
+            FileName = initialFileName; // Explicitly set FileName
+            Status = ProcessingStatus.Unprocessed;
+            StatusMessage = string.Empty;
+        }
 
-        // Parameterless constructor for XAML design-time instantiation if needed (though typically not for item models)
-        public FileQueueItem() { }
+        public FileQueueItem() { } // Parameterless for XAML design-time if needed/used
     }
 }

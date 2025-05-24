@@ -18,12 +18,19 @@ namespace DaminionOllamaApp.ViewModels
         // ... other properties ...
         public DaminionCollectionTaggerViewModel DaminionCollectionTaggerVM { get; } // Add this
 
+        // --- ADD NEW PROPERTY for MetadataTidyUpViewModel ---
+        public MetadataTidyUpViewModel MetadataTidyUpVM { get; }
+
         public MainViewModel()
         {
-            OpenSettingsCommand = new RelayCommand(param => OpenSettingsWindow()); // Ensure this line exists
+            OpenSettingsCommand = new RelayCommand(param => OpenSettingsWindow());
             ExitCommand = new RelayCommand(param => ExitApplication());
+
             LocalFileTaggerVM = new LocalFileTaggerViewModel();
             DaminionCollectionTaggerVM = new DaminionCollectionTaggerViewModel();
+
+            // --- INITIALIZE NEW ViewModel ---
+            MetadataTidyUpVM = new MetadataTidyUpViewModel();
         }
 
 
