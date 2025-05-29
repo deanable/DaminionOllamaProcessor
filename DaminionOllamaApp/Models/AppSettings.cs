@@ -127,6 +127,55 @@ namespace DaminionOllamaApp.Models
             set { if (_daminionFlagTagGuid != value) { _daminionFlagTagGuid = value; OnPropertyChanged(nameof(DaminionFlagTagGuid)); } }
         }
 
+        // DaminionOllamaApp/Models/AppSettings.cs
+        // ... (existing properties for DaminionServerUrl, Daminion Tag GUIDs, etc.) ...
+
+        // --- NEW PROPERTIES FOR POST-OLLAMA FLAG MANAGEMENT ---
+        private bool _automaticallyUpdateFlagAfterOllama = false;
+        private string _flagValueIdToClearAfterOllama = string.Empty; // e.g., ID for "Unflagged" or "ReadyForOllama"
+        private string _flagValueIdToSetAfterOllama = string.Empty;   // e.g., ID for "OllamaProcessed"
+
+        public bool AutomaticallyUpdateFlagAfterOllama
+        {
+            get => _automaticallyUpdateFlagAfterOllama;
+            set
+            {
+                if (_automaticallyUpdateFlagAfterOllama != value)
+                {
+                    _automaticallyUpdateFlagAfterOllama = value;
+                    OnPropertyChanged(nameof(AutomaticallyUpdateFlagAfterOllama));
+                }
+            }
+        }
+
+        public string FlagValueIdToClearAfterOllama // Stores the Daminion Tag Value ID
+        {
+            get => _flagValueIdToClearAfterOllama;
+            set
+            {
+                if (_flagValueIdToClearAfterOllama != value)
+                {
+                    _flagValueIdToClearAfterOllama = value;
+                    OnPropertyChanged(nameof(FlagValueIdToClearAfterOllama));
+                }
+            }
+        }
+
+        public string FlagValueIdToSetAfterOllama // Stores the Daminion Tag Value ID
+        {
+            get => _flagValueIdToSetAfterOllama;
+            set
+            {
+                if (_flagValueIdToSetAfterOllama != value)
+                {
+                    _flagValueIdToSetAfterOllama = value;
+                    OnPropertyChanged(nameof(FlagValueIdToSetAfterOllama));
+                }
+            }
+        }
+        // --- END NEW POST-OLLAMA FLAG MANAGEMENT PROPERTIES ---
+
+        // ... (existing PropertyChanged event and OnPropertyChanged method) ...
 
     }
 }

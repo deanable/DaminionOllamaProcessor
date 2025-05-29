@@ -10,7 +10,7 @@
         Title="Settings" Width="650" Height="Auto"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        MaxHeight="700">
+        MaxHeight="750">
     <Window.DataContext>
         <viewModels:SettingsViewModel />
     </Window.DataContext>
@@ -20,6 +20,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="10">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -79,7 +80,7 @@
             <GroupBox Header="Ollama Prompt" Grid.Row="2" Margin="0,5,0,5" Padding="5">
                 <TextBox Text="{Binding Settings.OllamaPrompt, UpdateSourceTrigger=PropertyChanged}"
                          AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                         MinHeight="70" MaxHeight="120" FontFamily="Consolas" Height="44"/>
+                         MinHeight="70" MaxHeight="120" FontFamily="Consolas"/>
             </GroupBox>
 
             <GroupBox Header="Daminion Target Tag GUIDs" Grid.Row="3" Margin="0,5,0,5" Padding="5">
@@ -101,7 +102,31 @@
                 </StackPanel>
             </GroupBox>
 
-            <StackPanel Orientation="Horizontal" Grid.Row="4" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <GroupBox Header="Post-Ollama Processing Daminion Flag Options" Grid.Row="4" Margin="0,5,0,5" Padding="5">
+                <StackPanel>
+                    <CheckBox Content="Automatically update Daminion flag after successful Ollama processing"
+                              IsChecked="{Binding Settings.AutomaticallyUpdateFlagAfterOllama}" Margin="0,0,0,5"/>
+                    <Grid IsEnabled="{Binding Settings.AutomaticallyUpdateFlagAfterOllama}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Flag Value ID to Clear (e.g., 'Unflagged' ID):" VerticalAlignment="Center" Margin="20,0,5,0"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Settings.FlagValueIdToClearAfterOllama, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" FontFamily="Consolas"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Flag Value ID to Set (e.g., 'Processed' ID):" VerticalAlignment="Center" Margin="20,0,5,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Settings.FlagValueIdToSetAfterOllama, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" FontFamily="Consolas"/>
+                    </Grid>
+                    <TextBlock Text="Note: 'Flag Tag GUID' must be set in 'Daminion Target Tag GUIDs' section for this to work." FontStyle="Italic" FontSize="10" Margin="20,5,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </GroupBox>
+
+            <StackPanel Orientation="Horizontal" Grid.Row="5" HorizontalAlignment="Right" Margin="0,10,0,0">
                 <Button Content="Save" Command="{Binding SaveCommand}" Width="75" Margin="0,0,10,0" IsDefault="True" />
                 <Button Content="Close" Command="{Binding CloseCommand}" Width="75" IsCancel="True" />
             </StackPanel>

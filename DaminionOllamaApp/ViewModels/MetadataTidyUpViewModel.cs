@@ -13,6 +13,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -22,33 +23,27 @@ namespace DaminionOllamaApp.ViewModels
 {
     public class MetadataTidyUpViewModel : INotifyPropertyChanged
     {
-        // --- Fields ---
         private readonly SettingsService _settingsService;
         private AppSettings _currentSettings;
         private DaminionApiClient? _daminionClient;
-        private readonly ImageMetadataService _imageMetadataService; // Used for reading/writing local file metadata
 
         private ObservableCollection<FileQueueItem> _filesToProcess;
         private string _currentOperationStatus = "Select processing mode and add files.";
         private bool _isCleaningQueue;
         private CancellationTokenSource? _cleanupCts;
 
-        // Mode Management
-        private bool _isLocalFilesMode = true; // Default to local files mode
-
-        // Daminion Specific Fields
+        private bool _isLocalFilesMode = true;
+        private bool _isDaminionCatalogMode;
         private bool _isDaminionLoggedIn;
         private string _daminionLoginStatus = "Not logged in.";
         private ObservableCollection<QueryTypeDisplayItem> _daminionQueryTypes;
         private QueryTypeDisplayItem? _selectedDaminionQueryType;
         private bool _isLoadingDaminionItems;
 
-        // Cleanup Options
         private bool _splitCategories = true;
         private bool _trimDescriptionPrefix = true;
         private string _descriptionPrefixToTrim = "Okay, here's a detailed description of the image, broken down as requested:";
 
-        // --- Properties ---
         public ObservableCollection<FileQueueItem> FilesToProcess
         {
             get => _filesToProcess;
@@ -64,16 +59,9 @@ namespace DaminionOllamaApp.ViewModels
         public bool IsCleaningQueue
         {
             get => _isCleaningQueue;
-            set
-            {
-                if (SetProperty(ref _isCleaningQueue, value))
-                {
-                    UpdateCommandStates();
-                }
-            }
+            set { if (SetProperty(ref _isCleaningQueue, value)) UpdateCommandStates(); }
         }
 
-        // Mode Management Properties
         public bool IsLocalFilesMode
         {
             get => _isLocalFilesMode;
@@ -81,15 +69,14 @@ namespace DaminionOllamaApp.ViewModels
             {
                 if (SetProperty(ref _isLocalFilesMode, value))
                 {
-                    if (_isLocalFilesMode) IsDaminionCatalogMode = false; // Ensure exclusivity
-                    FilesToProcess.Clear(); // Clear list when mode changes
+                    if (_isLocalFilesMode) IsDaminionCatalogMode = false;
+                    Application.Current.Dispatcher.Invoke(() => FilesToProcess.Clear());
                     CurrentOperationStatus = "Local files mode selected. Add files to tidy up.";
                     UpdateCommandStates();
                 }
             }
         }
 
-        private bool _isDaminionCatalogMode;
         public bool IsDaminionCatalogMode
         {
             get => _isDaminionCatalogMode;
@@ -97,15 +84,14 @@ namespace DaminionOllamaApp.ViewModels
             {
                 if (SetProperty(ref _isDaminionCatalogMode, value))
                 {
-                    if (_isDaminionCatalogMode) IsLocalFilesMode = false; // Ensure exclusivity
-                    FilesToProcess.Clear(); // Clear list when mode changes
+                    if (_isDaminionCatalogMode) IsLocalFilesMode = false;
+                    Application.Current.Dispatcher.Invoke(() => FilesToProcess.Clear());
                     CurrentOperationStatus = "Daminion catalog mode selected. Login and select a query.";
                     UpdateCommandStates();
                 }
             }
         }
 
-        // Daminion Specific Properties
         public bool IsDaminionLoggedIn
         {
             get => _isDaminionLoggedIn;
@@ -143,8 +129,6 @@ namespace DaminionOllamaApp.ViewModels
             set { SetProperty(ref _isLoadingDaminionItems, value); UpdateCommandStates(); }
         }
 
-
-        // Cleanup Option Properties
         public bool SplitCategories
         {
             get => _splitCategories;
@@ -163,19 +147,16 @@ namespace DaminionOllamaApp.ViewModels
             set { SetProperty(ref _descriptionPrefixToTrim, value); }
         }
 
-        // --- Commands ---
-        public ICommand AddFilesCommand { get; } // For local files
+        public ICommand AddFilesCommand { get; }
         public ICommand DaminionLoginCommand { get; }
         public ICommand LoadDaminionItemsCommand { get; }
         public ICommand StartCleanupCommand { get; }
         public ICommand StopCleanupCommand { get; }
 
-        // --- Constructor ---
         public MetadataTidyUpViewModel()
         {
             _settingsService = new SettingsService();
             _currentSettings = _settingsService.LoadSettings();
-            _imageMetadataService = new ImageMetadataService(string.Empty); // Dummy path, will be replaced per file
 
             _filesToProcess = new ObservableCollection<FileQueueItem>();
             _daminionQueryTypes = new ObservableCollection<QueryTypeDisplayItem>
@@ -184,7 +165,7 @@ namespace DaminionOllamaApp.ViewModels
                 new QueryTypeDisplayItem { DisplayName = "Flagged Items", QueryLine = "1,7179;41,2", Operators = "1,any;41,any" },
                 new QueryTypeDisplayItem { DisplayName = "Rejected Items", QueryLine = "1,7179;41,3", Operators = "1,any;41,any" }
             };
-            SelectedDaminionQueryType = DaminionQueryTypes.FirstOrDefault();
+            SelectedDaminionQueryType = _daminionQueryTypes.FirstOrDefault();
 
             AddFilesCommand = new RelayCommand(param => AddLocalFiles(), param => CanAddLocalFiles());
             DaminionLoginCommand = new RelayCommand(async param => await LoginToDaminionAsync(), param => CanLoginToDaminion());
@@ -193,7 +174,6 @@ namespace DaminionOllamaApp.ViewModels
             StopCleanupCommand = new RelayCommand(param => StopCleanup(), param => CanStopCleanup());
         }
 
-        // --- Command Methods & Helpers ---
         private void UpdateCommandStates()
         {
             Application.Current.Dispatcher.Invoke(() =>
@@ -206,8 +186,7 @@ namespace DaminionOllamaApp.ViewModels
             });
         }
 
-        // Local Files Mode
-        private bool CanAddLocalFiles() => IsLocalFilesMode && !IsCleaningQueue;
+        private bool CanAddLocalFiles() => IsLocalFilesMode && !IsCleaningQueue && !IsLoadingDaminionItems;
         private void AddLocalFiles()
         {
             var openFileDialog = new OpenFileDialog
@@ -228,16 +207,15 @@ namespace DaminionOllamaApp.ViewModels
                         filesAddedCount++;
                     }
                 }
-                CurrentOperationStatus = $"{filesAddedCount} local file(s) added to the cleanup queue. {FilesToProcess.Count} total.";
+                CurrentOperationStatus = $"{filesAddedCount} local file(s) added. {FilesToProcess.Count} total.";
                 UpdateCommandStates();
             }
         }
 
-        // Daminion Catalog Mode
         private bool CanLoginToDaminion() => IsDaminionCatalogMode && !IsDaminionLoggedIn && !IsLoadingDaminionItems && !IsCleaningQueue;
         private async Task LoginToDaminionAsync()
         {
-            _currentSettings = _settingsService.LoadSettings(); // Refresh Daminion settings
+            _currentSettings = _settingsService.LoadSettings();
             if (string.IsNullOrWhiteSpace(_currentSettings.DaminionServerUrl) ||
                 string.IsNullOrWhiteSpace(_currentSettings.DaminionUsername))
             {
@@ -246,7 +224,7 @@ namespace DaminionOllamaApp.ViewModels
             }
 
             _daminionClient = new DaminionApiClient();
-            DaminionLoginStatus = $"Logging in to Daminion server {_currentSettings.DaminionServerUrl}...";
+            DaminionLoginStatus = $"Logging in to Daminion: {_currentSettings.DaminionServerUrl}...";
             IsDaminionLoggedIn = false;
 
             try
@@ -256,16 +234,8 @@ namespace DaminionOllamaApp.ViewModels
                     _currentSettings.DaminionUsername,
                     _currentSettings.DaminionPassword);
 
-                if (success)
-                {
-                    IsDaminionLoggedIn = true;
-                    DaminionLoginStatus = "Daminion login successful. Select a query and load items.";
-                }
-                else
-                {
-                    DaminionLoginStatus = "Daminion login failed. Check credentials/URL.";
-                    IsDaminionLoggedIn = false;
-                }
+                IsDaminionLoggedIn = success;
+                DaminionLoginStatus = success ? "Daminion login successful. Select query and load items." : "Daminion login failed.";
             }
             catch (Exception ex)
             {
@@ -280,12 +250,12 @@ namespace DaminionOllamaApp.ViewModels
         {
             if (SelectedDaminionQueryType == null || _daminionClient == null || !_daminionClient.IsAuthenticated)
             {
-                CurrentOperationStatus = "Cannot load items: No query type selected or not logged in to Daminion.";
+                CurrentOperationStatus = "Cannot load: No query type selected or not logged in to Daminion.";
                 return;
             }
 
             IsLoadingDaminionItems = true;
-            CurrentOperationStatus = $"Loading Daminion items for query: '{SelectedDaminionQueryType.DisplayName}'...";
+            CurrentOperationStatus = $"Loading Daminion items for: '{SelectedDaminionQueryType.DisplayName}'...";
             Application.Current.Dispatcher.Invoke(() => FilesToProcess.Clear());
 
             try
@@ -299,70 +269,61 @@ namespace DaminionOllamaApp.ViewModels
                 {
                     if (!searchResult.MediaItems.Any())
                     {
-                        CurrentOperationStatus = $"No Daminion items found for query: '{SelectedDaminionQueryType.DisplayName}'.";
-                        IsLoadingDaminionItems = false;
-                        return;
-                    }
-
-                    CurrentOperationStatus = $"{searchResult.MediaItems.Count} Daminion item(s) found. Fetching paths...";
-                    var itemIds = searchResult.MediaItems.Select(item => item.Id).ToList();
-
-                    if (!itemIds.Any())
-                    {
-                        CurrentOperationStatus = $"No Daminion item IDs found to fetch paths for query: '{SelectedDaminionQueryType.DisplayName}'.";
-                        IsLoadingDaminionItems = false;
-                        return;
-                    }
-
-                    DaminionPathResult pathResult = await _daminionClient.GetAbsolutePathsAsync(itemIds);
-
-                    if (pathResult.Success && pathResult.Paths != null)
-                    {
-                        foreach (var daminionItemFromSearch in searchResult.MediaItems)
-                        {
-                            string displayName = !string.IsNullOrWhiteSpace(daminionItemFromSearch.Name) ? daminionItemFromSearch.Name :
-                                                 (!string.IsNullOrWhiteSpace(daminionItemFromSearch.FileName) ? daminionItemFromSearch.FileName : $"Item {daminionItemFromSearch.Id}");
-
-                            if (pathResult.Paths.TryGetValue(daminionItemFromSearch.Id.ToString(), out string? filePath) && !string.IsNullOrEmpty(filePath))
-                            {
-                                // Using the FileQueueItem constructor that takes DaminionItemId
-                                FilesToProcess.Add(new FileQueueItem(filePath, displayName, daminionItemFromSearch.Id));
-                            }
-                            else
-                            {
-                                var errorItem = new FileQueueItem(string.Empty, displayName, daminionItemFromSearch.Id)
-                                {
-                                    Status = ProcessingStatus.Error,
-                                    StatusMessage = $"Path not found for Daminion item ID {daminionItemFromSearch.Id}."
-                                };
-                                FilesToProcess.Add(errorItem);
-                            }
-                        }
-                        CurrentOperationStatus = $"{FilesToProcess.Count(f => f.Status != ProcessingStatus.Error)} Daminion items loaded with paths. Ready for cleanup.";
+                        CurrentOperationStatus = $"No Daminion items found for: '{SelectedDaminionQueryType.DisplayName}'.";
                     }
                     else
                     {
-                        CurrentOperationStatus = $"Found {searchResult.MediaItems.Count} Daminion items, but failed to get paths: {pathResult.ErrorMessage}";
-                        foreach (var daminionItemFromSearch in searchResult.MediaItems)
+                        CurrentOperationStatus = $"{searchResult.MediaItems.Count} Daminion item(s) found. Fetching paths...";
+                        var itemIds = searchResult.MediaItems.Select(item => item.Id).ToList();
+
+                        if (!itemIds.Any())
                         {
-                            string displayName = !string.IsNullOrWhiteSpace(daminionItemFromSearch.Name) ? daminionItemFromSearch.Name :
-                                                (!string.IsNullOrWhiteSpace(daminionItemFromSearch.FileName) ? daminionItemFromSearch.FileName : $"Item {daminionItemFromSearch.Id}");
-                            FilesToProcess.Add(new FileQueueItem(string.Empty, displayName, daminionItemFromSearch.Id)
+                            CurrentOperationStatus = $"No Daminion item IDs to fetch paths for: '{SelectedDaminionQueryType.DisplayName}'.";
+                        }
+                        else
+                        {
+                            DaminionPathResult pathResult = await _daminionClient.GetAbsolutePathsAsync(itemIds);
+                            if (pathResult.Success && pathResult.Paths != null)
                             {
-                                Status = ProcessingStatus.Error,
-                                StatusMessage = $"Failed to retrieve file path. API Error: {pathResult.ErrorMessage}"
-                            });
+                                foreach (var daminionItemFromSearch in searchResult.MediaItems)
+                                {
+                                    string displayName = !string.IsNullOrWhiteSpace(daminionItemFromSearch.Name) ? daminionItemFromSearch.Name :
+                                                         (!string.IsNullOrWhiteSpace(daminionItemFromSearch.FileName) ? daminionItemFromSearch.FileName : $"Item {daminionItemFromSearch.Id}");
+
+                                    if (pathResult.Paths.TryGetValue(daminionItemFromSearch.Id.ToString(), out string? filePath) && !string.IsNullOrEmpty(filePath))
+                                    {
+                                        FilesToProcess.Add(new FileQueueItem(filePath, displayName, daminionItemFromSearch.Id));
+                                    }
+                                    else
+                                    {
+                                        FilesToProcess.Add(new FileQueueItem(string.Empty, displayName, daminionItemFromSearch.Id)
+                                        { Status = ProcessingStatus.Error, StatusMessage = $"Path not found for Daminion ID {daminionItemFromSearch.Id}." });
+                                    }
+                                }
+                                CurrentOperationStatus = $"{FilesToProcess.Count(f => f.Status != ProcessingStatus.Error)} Daminion items loaded. Ready for cleanup.";
+                            }
+                            else
+                            {
+                                CurrentOperationStatus = $"Found {searchResult.MediaItems.Count} items, but failed to get paths: {pathResult.ErrorMessage}";
+                                foreach (var daminionItemFromSearch in searchResult.MediaItems)
+                                {
+                                    string displayName = !string.IsNullOrWhiteSpace(daminionItemFromSearch.Name) ? daminionItemFromSearch.Name :
+                                                        (!string.IsNullOrWhiteSpace(daminionItemFromSearch.FileName) ? daminionItemFromSearch.FileName : $"Item {daminionItemFromSearch.Id}");
+                                    FilesToProcess.Add(new FileQueueItem(string.Empty, displayName, daminionItemFromSearch.Id)
+                                    { Status = ProcessingStatus.Error, StatusMessage = $"Path retrieval failed. API Error: {pathResult.ErrorMessage}" });
+                                }
+                            }
                         }
                     }
                 }
                 else
                 {
-                    CurrentOperationStatus = $"Failed to search Daminion items for query '{SelectedDaminionQueryType.DisplayName}': {searchResult?.Error ?? "Unknown API error."}";
+                    CurrentOperationStatus = $"Failed to search Daminion items: {searchResult?.Error ?? "Unknown API error."}";
                 }
             }
             catch (Exception ex)
             {
-                CurrentOperationStatus = $"Error loading Daminion items by query: {ex.Message}";
+                CurrentOperationStatus = $"Error loading Daminion items: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"Error in LoadDaminionItemsByQueryAsync (TidyUpVM): {ex}");
             }
             finally
@@ -371,164 +332,284 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        private bool CanStartCleanup() => FilesToProcess.Any(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) && !string.IsNullOrEmpty(f.FilePath)) && !IsCleaningQueue && !IsLoadingDaminionItems;
 
-        // Combined Cleanup Logic
-        private bool CanStartCleanup() => FilesToProcess.Any(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) && !string.IsNullOrEmpty(f.FilePath)) && !IsCleaningQueue;
+        // =======================================================================================
+        // REFINED StartCleanupAsync METHOD
+        // =======================================================================================
         private async Task StartCleanupAsync()
         {
             IsCleaningQueue = true;
-            _currentSettings = _settingsService.LoadSettings(); // Refresh settings
+            _currentSettings = _settingsService.LoadSettings();
             _cleanupCts = new CancellationTokenSource();
             var token = _cleanupCts.Token;
 
             CurrentOperationStatus = "Starting metadata cleanup...";
-            int cleanedCount = 0;
+            int processedCount = 0;
             int errorCount = 0;
 
             var itemsToClean = FilesToProcess.Where(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) && !string.IsNullOrEmpty(f.FilePath)).ToList();
 
-            foreach (var item in itemsToClean)
+            if (IsDaminionCatalogMode &&
+                (string.IsNullOrWhiteSpace(_currentSettings.DaminionDescriptionTagGuid) ||
+                 string.IsNullOrWhiteSpace(_currentSettings.DaminionKeywordsTagGuid) || // Ensure Keywords GUID is also checked if you plan to update it
+                 string.IsNullOrWhiteSpace(_currentSettings.DaminionCategoriesTagGuid)))
             {
-                if (token.IsCancellationRequested)
+                CurrentOperationStatus = "Error: Key Daminion Tag GUIDs (Description, Keywords, Categories) are not set in AppSettings. Cannot update Daminion catalog.";
+                IsCleaningQueue = false;
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Starting cleanup. SplitCategories: {SplitCategories}, TrimDescriptionPrefix: {TrimDescriptionPrefix}, Prefix: '{DescriptionPrefixToTrim}'");
+
+            try
+            {
+                foreach (var item in itemsToClean)
                 {
-                    item.Status = ProcessingStatus.Cancelled;
-                    item.StatusMessage = "Cleanup cancelled by user.";
-                    break;
-                }
-
-                item.Status = ProcessingStatus.Processing;
-                item.StatusMessage = "Reading metadata...";
-                UpdateOverallStatus($"Cleaning: {item.FileName}");
-
-                bool changesMade = false;
-                try
-                {
-                    // Use a new instance of ImageMetadataService for each file
-                    var metadataService = new ImageMetadataService(item.FilePath);
-                    metadataService.Read();
-
-                    // Apply Description Trim
-                    if (TrimDescriptionPrefix && !string.IsNullOrEmpty(DescriptionPrefixToTrim) && !string.IsNullOrEmpty(metadataService.Description))
+                    if (token.IsCancellationRequested)
                     {
-                        if (metadataService.Description.StartsWith(DescriptionPrefixToTrim, StringComparison.OrdinalIgnoreCase))
+                        item.Status = ProcessingStatus.Cancelled;
+                        item.StatusMessage = "Cleanup cancelled by user.";
+                        break;
+                    }
+
+                    item.Status = ProcessingStatus.Processing;
+                    item.StatusMessage = "";
+                    UpdateOverallStatus($"Tidying: {item.FileName}");
+                    System.Diagnostics.Debug.WriteLine($"Tidying: {item.FileName}");
+
+                    bool changesMadeToLocalFile = false;
+                    ImageMetadataService metadataService = new ImageMetadataService(item.FilePath);
+
+                    try
+                    {
+                        metadataService.Read();
+                        System.Diagnostics.Debug.WriteLine($"  Read metadata. Desc: '{metadataService.Description?.Substring(0, Math.Min(50, metadataService.Description?.Length ?? 0))}', Cats: {string.Join(";", metadataService.Categories ?? new List<string>())}");
+
+                        // 1. Trim Description Prefix
+                        if (TrimDescriptionPrefix && !string.IsNullOrEmpty(metadataService.Description))
                         {
                             string originalDesc = metadataService.Description;
-                            metadataService.Description = originalDesc.Substring(DescriptionPrefixToTrim.Length).TrimStart();
-                            if (originalDesc != metadataService.Description) changesMade = true;
-                            item.StatusMessage = "Description prefix trimmed. ";
-                        }
-                    }
+                            string currentDesc = metadataService.Description;
 
-                    // Apply Category Split
-                    if (SplitCategories && metadataService.Categories != null && metadataService.Categories.Any())
-                    {
-                        var originalCategories = new List<string>(metadataService.Categories);
-                        var newCategories = new List<string>();
-                        foreach (var catString in originalCategories)
-                        {
-                            if (!string.IsNullOrWhiteSpace(catString))
+                            string[] prefixesToTrim = {
+                                DescriptionPrefixToTrim, // User-defined prefix first
+                                "Okay, here’s a detailed description of the image, broken down as requested:",
+                                "Okay, here's a detailed description of the image, broken down as requested:",
+                                "Okay, here’s a detailed description of the image, categorized and with keywords as requested:",
+                                "Here's a detailed description of the image:",
+                                "Here’s a detailed description of the image:"
+                            };
+
+                            foreach (var prefix in prefixesToTrim.Where(p => !string.IsNullOrWhiteSpace(p))) // Only consider non-empty prefixes
                             {
-                                if (catString.Contains(','))
+                                if (currentDesc.TrimStart().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    newCategories.AddRange(catString.Split(',')
+                                    currentDesc = currentDesc.TrimStart().Substring(prefix.Length);
+                                    System.Diagnostics.Debug.WriteLine($"    Trimmed prefix '{prefix}' from description.");
+                                    break;
+                                }
+                            }
+
+                            string followUpPattern = "<br><br>**Description:**";
+                            int followUpIndex = currentDesc.IndexOf(followUpPattern, StringComparison.OrdinalIgnoreCase);
+                            if (followUpIndex != -1)
+                            {
+                                currentDesc = currentDesc.Substring(followUpIndex + followUpPattern.Length);
+                                System.Diagnostics.Debug.WriteLine($"    Trimmed follow-up pattern '{followUpPattern}' from description.");
+                            }
+
+                            currentDesc = currentDesc.Trim();
+                            if (currentDesc != originalDesc.Trim())
+                            {
+                                metadataService.Description = currentDesc;
+                                changesMadeToLocalFile = true;
+                                item.StatusMessage += "Description trimmed. ";
+                                System.Diagnostics.Debug.WriteLine($"    Description changed. New: '{metadataService.Description?.Substring(0, Math.Min(50, metadataService.Description?.Length ?? 0))}'");
+                            }
+                        }
+
+                        // 2. Split and Clean Categories
+                        if (SplitCategories && metadataService.Categories != null && metadataService.Categories.Any())
+                        {
+                            System.Diagnostics.Debug.WriteLine($"    Original categories: [{string.Join("] | [", metadataService.Categories)}]");
+                            var newCategoriesList = new List<string>();
+                            bool anyCategoryStringWasSplit = false;
+
+                            foreach (var catString in metadataService.Categories) // Iterate over each string entry in the list
+                            {
+                                if (string.IsNullOrWhiteSpace(catString)) continue;
+
+                                if (catString.Contains(',')) // This specific string needs splitting
+                                {
+                                    anyCategoryStringWasSplit = true;
+                                    var splitParts = catString.Split(',')
                                         .Select(s => s.Trim())
-                                        .Where(s => !string.IsNullOrWhiteSpace(s)));
-                                    changesMade = true; // Assume change if it contained a comma and was split
+                                        .Select(s => s.Trim('*', ' '))
+                                        .Select(s => s.Trim())      // Trim again after asterisk removal
+                                        .Where(s => !string.IsNullOrWhiteSpace(s) &&
+                                                    !(s.Contains(@"\") || s.Contains(@"/")) && // Filter out path-like strings (your clarification)
+                                                    !Regex.IsMatch(s, @"^\d{4}$") &&
+                                                    s.Length > 1)
+                                        .ToList();
+                                    newCategoriesList.AddRange(splitParts);
                                 }
-                                else
+                                else // This string does not contain a comma, clean it individually
                                 {
-                                    newCategories.Add(catString.Trim());
+                                    string cleanedSingleCat = catString.Trim().Trim('*', ' ').Trim();
+                                    if (!string.IsNullOrWhiteSpace(cleanedSingleCat) &&
+                                        !(cleanedSingleCat.Contains(@"\") || cleanedSingleCat.Contains(@"/")) &&
+                                        !Regex.IsMatch(cleanedSingleCat, @"^\d{4}$") &&
+                                        cleanedSingleCat.Length > 1)
+                                    {
+                                        newCategoriesList.Add(cleanedSingleCat);
+                                    }
+                                    else if (anyCategoryStringWasSplit)
+                                    {
+                                        // If splitting happened elsewhere, and this was a "bad" token even before, it might indicate a change
+                                    }
                                 }
                             }
-                        }
-                        // Update only if there was a meaningful change after splitting and distinctive add
-                        var distinctNewCategories = newCategories.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                        if (!originalCategories.SequenceEqual(distinctNewCategories, StringComparer.OrdinalIgnoreCase) || distinctNewCategories.Count != originalCategories.Count || changesMade) // Simplified check, might need better comparison
-                        {
-                            metadataService.Categories = distinctNewCategories;
-                            changesMade = true; // Ensure it's true if categories changed
-                            item.StatusMessage += "Categories split/tidied. ";
-                        }
-                    }
 
-                    if (changesMade)
-                    {
-                        metadataService.Save();
-                        item.StatusMessage += "Changes saved to local file. ";
-                    }
-                    else
-                    {
-                        item.StatusMessage += "No applicable changes made to local file. ";
-                    }
+                            var distinctCleanedCategories = newCategoriesList
+                                                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                                                            .OrderBy(c => c)
+                                                            .ToList();
 
-                    // If it's a Daminion item, update Daminion server
-                    if (IsDaminionCatalogMode && item.DaminionItemId.HasValue && _daminionClient != null && _daminionClient.IsAuthenticated && changesMade)
-                    {
-                        item.StatusMessage += "Updating Daminion server...";
-                        UpdateOverallStatus($"Updating Daminion for: {item.FileName}");
+                            // Determine if a change actually occurred more reliably
+                            var originalEffectiveCategories = metadataService.Categories
+                               .SelectMany(c => c.Split(',')) // Split all original entries as if they were one big list
+                               .Select(s => s.Trim().Trim('*', ' ').Trim())
+                               .Where(s => !string.IsNullOrWhiteSpace(s) && !(s.Contains(@"\") || s.Contains(@"/")) && !Regex.IsMatch(s, @"^\d{4}$") && s.Length > 1)
+                               .Distinct(StringComparer.OrdinalIgnoreCase)
+                               .OrderBy(c => c)
+                               .ToList();
 
-                        var operations = new List<DaminionUpdateOperation>();
-                        if (!string.IsNullOrWhiteSpace(metadataService.Description))
-                            operations.Add(new DaminionUpdateOperation { Guid = _currentSettings.DaminionDescriptionTagGuid, Value = metadataService.Description, Id = 0, Remove = false });
-
-                        if (metadataService.Keywords != null && metadataService.Keywords.Any()) // Assuming keywords were not directly modified by tidy but should be preserved if re-writing all. Or only add cleaned categories
-                        {
-                            // If you want to clear existing keywords first:
-                            // operations.Add(new DaminionUpdateOperation { Guid = _currentSettings.DaminionKeywordsTagGuid, RemoveAll = true }); // Fictional RemoveAll, check Daminion API
-                            foreach (var keyword in metadataService.Keywords.Where(k => !string.IsNullOrWhiteSpace(k)))
-                                operations.Add(new DaminionUpdateOperation { Guid = _currentSettings.DaminionKeywordsTagGuid, Value = keyword, Id = 0, Remove = false });
-                        }
-                        if (metadataService.Categories != null && metadataService.Categories.Any())
-                        {
-                            // If you want to clear existing categories first:
-                            // operations.Add(new DaminionUpdateOperation { Guid = _currentSettings.DaminionCategoriesTagGuid, RemoveAll = true }); // Fictional
-                            foreach (var category in metadataService.Categories.Where(c => !string.IsNullOrWhiteSpace(c)))
-                                operations.Add(new DaminionUpdateOperation { Guid = _currentSettings.DaminionCategoriesTagGuid, Value = category, Id = 0, Remove = false });
-                        }
-
-                        if (operations.Any())
-                        {
-                            var updateResult = await _daminionClient.UpdateItemMetadataAsync(new List<long> { item.DaminionItemId.Value }, operations);
-                            if (updateResult != null && updateResult.Success)
+                            if (!originalEffectiveCategories.SequenceEqual(distinctCleanedCategories, StringComparer.OrdinalIgnoreCase))
                             {
-                                item.StatusMessage += "Daminion metadata updated.";
+                                metadataService.Categories = distinctCleanedCategories;
+                                changesMadeToLocalFile = true;
+                                item.StatusMessage += "Categories split/cleaned. ";
+                                System.Diagnostics.Debug.WriteLine($"    Categories changed. New: [{string.Join("] | [", metadataService.Categories)}]");
                             }
-                            else
-                            {
-                                item.StatusMessage += $"Daminion server update failed: {updateResult?.Error ?? "Unknown"}.";
-                                item.Status = ProcessingStatus.Error; // Mark as error if Daminion update fails
-                            }
+                        }
+
+                        if (changesMadeToLocalFile)
+                        {
+                            metadataService.Save();
+                            item.StatusMessage += "Local file updated. ";
+                            System.Diagnostics.Debug.WriteLine($"    Local file saved for {item.FileName}");
                         }
                         else
                         {
-                            item.StatusMessage += "No metadata operations to send to Daminion.";
+                            item.StatusMessage = string.IsNullOrWhiteSpace(item.StatusMessage) ? "No applicable tidy-up changes to local file." : item.StatusMessage;
                         }
-                    }
 
-                    if (item.Status != ProcessingStatus.Error) // If not already marked as error
+                        // 3. If Daminion Catalog mode, changes were made, and client is ready -> Update Daminion
+                        if (IsDaminionCatalogMode && item.DaminionItemId.HasValue && changesMadeToLocalFile && _daminionClient != null && _daminionClient.IsAuthenticated)
+                        {
+                            item.StatusMessage += "Updating Daminion...";
+                            UpdateOverallStatus($"Updating Daminion for: {item.FileName}");
+                            System.Diagnostics.Debug.WriteLine($"    Attempting Daminion update for {item.FileName} (ID: {item.DaminionItemId.Value})");
+
+                            var operations = new List<DaminionUpdateOperation>();
+                            if (!string.IsNullOrWhiteSpace(metadataService.Description) && !string.IsNullOrWhiteSpace(_currentSettings.DaminionDescriptionTagGuid))
+                                operations.Add(new DaminionUpdateOperation { Guid = _currentSettings.DaminionDescriptionTagGuid, Value = metadataService.Description, Id = 0, Remove = false });
+
+                            if (metadataService.Categories != null && metadataService.Categories.Any() && !string.IsNullOrWhiteSpace(_currentSettings.DaminionCategoriesTagGuid))
+                            {
+                                // IMPORTANT: This ADDS categories. If you want to REPLACE all existing categories for this item in Daminion,
+                                // you would first need an operation to REMOVE ALL existing categories for this tag from this item.
+                                // The Daminion API doc doesn't explicitly show a "remove all by GUID" for an item.
+                                // It shows remove by ID (of tag value) or by text value (if ID=0 for Remove=true).
+                                // For now, this will APPEND the cleaned categories. This might lead to duplicates if the item is processed multiple times
+                                // or if the original combined string is not also removed.
+                                // We will address "removing the original combined tag value" later if this append behavior is not desired.
+                                System.Diagnostics.Debug.WriteLine($"      Adding to Daminion Categories ({_currentSettings.DaminionCategoriesTagGuid}): [{string.Join(" | ", metadataService.Categories)}]");
+                                foreach (var category in metadataService.Categories.Where(c => !string.IsNullOrWhiteSpace(c)))
+                                    operations.Add(new DaminionUpdateOperation { Guid = _currentSettings.DaminionCategoriesTagGuid, Value = category, Id = 0, Remove = false });
+                            }
+                            // Add similar logic for Keywords if you implement keyword tidying
+
+                            if (operations.Any())
+                            {
+                                var updateResult = await _daminionClient.UpdateItemMetadataAsync(new List<long> { item.DaminionItemId.Value }, operations);
+                                if (updateResult != null && updateResult.Success)
+                                {
+                                    item.StatusMessage += "Daminion metadata updated.";
+                                    System.Diagnostics.Debug.WriteLine($"      Daminion update successful for {item.FileName}.");
+                                }
+                                else
+                                {
+                                    item.StatusMessage += $"Daminion update failed: {updateResult?.Error ?? "Unknown"}.";
+                                    item.Status = ProcessingStatus.Error;
+                                    System.Diagnostics.Debug.WriteLine($"      Daminion update FAILED for {item.FileName}: {updateResult?.Error}");
+                                }
+                            }
+                            else
+                            {
+                                item.StatusMessage += "No metadata operations to send to Daminion.";
+                                System.Diagnostics.Debug.WriteLine($"      No operations to send to Daminion for {item.FileName}.");
+                            }
+                        }
+
+                        item.StatusMessage = item.StatusMessage.Trim();
+                        if (item.Status != ProcessingStatus.Error)
+                        {
+                            item.Status = ProcessingStatus.Processed;
+                            if (string.IsNullOrWhiteSpace(item.StatusMessage) || item.StatusMessage == "Reading metadata.")
+                                item.StatusMessage = changesMadeToLocalFile ? "Cleanup successful." : "No changes applied.";
+                        }
+
+                        if (item.Status == ProcessingStatus.Processed) processedCount++; else errorCount++;
+                    }
+                    catch (OperationCanceledException)
                     {
-                        item.Status = ProcessingStatus.Processed; // Mark as processed if all steps passed or no Daminion update was needed
-                        item.StatusMessage = item.StatusMessage.TrimEnd(' ');
-                        if (item.StatusMessage.EndsWith("...")) item.StatusMessage = "Cleanup successful.";
+                        item.Status = ProcessingStatus.Cancelled; item.StatusMessage = "Cancelled during item processing.";
+                        System.Diagnostics.Debug.WriteLine($"    Item {item.FileName} cancelled.");
+                        throw;
                     }
-
-
-                    if (item.Status == ProcessingStatus.Processed) cleanedCount++; else errorCount++;
+                    catch (Exception ex)
+                    {
+                        item.Status = ProcessingStatus.Error;
+                        item.StatusMessage = $"Error cleaning file {item.FileName}: {ex.Message}";
+                        System.Diagnostics.Debug.WriteLine($"    Error cleaning {item.FileName}: {ex}");
+                        errorCount++; // Increment here as it's an item-specific error
+                    }
+                } // End foreach
+            }
+            catch (OperationCanceledException)
+            {
+                UpdateOverallStatus("Metadata cleanup cancelled by user.");
+                // Update status for any items that were processing but didn't get set to Cancelled
+                foreach (var item in FilesToProcess.Where(i => i.Status == ProcessingStatus.Processing || i.Status == ProcessingStatus.Queued))
+                {
+                    item.Status = ProcessingStatus.Cancelled;
+                    item.StatusMessage = "Queue cancelled.";
                 }
-                catch (OperationCanceledException) { throw; } // Propagate to be caught by outer handler
-                catch (Exception ex)
+            }
+            catch (Exception ex)
+            {
+                UpdateOverallStatus($"An error occurred during metadata cleanup: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error in StartCleanupAsync loop: {ex}");
+                foreach (var item in FilesToProcess.Where(i => i.Status == ProcessingStatus.Processing || i.Status == ProcessingStatus.Queued))
                 {
                     item.Status = ProcessingStatus.Error;
-                    item.StatusMessage = $"Error cleaning file: {ex.Message}";
-                    System.Diagnostics.Debug.WriteLine($"Error cleaning {item.FileName}: {ex}");
-                    errorCount++;
+                    item.StatusMessage = "Queue processing error.";
                 }
-            } // End foreach
+            }
+            finally
+            {
+                IsCleaningQueue = false;
+                _cleanupCts?.Dispose();
+                _cleanupCts = null;
 
-            IsCleaningQueue = false;
-            _cleanupCts?.Dispose();
-            _cleanupCts = null;
-            CurrentOperationStatus = $"Cleanup finished. Processed: {cleanedCount}, Errors: {errorCount}, Cancelled: {FilesToProcess.Count(f => f.Status == ProcessingStatus.Cancelled)}.";
+                processedCount = FilesToProcess.Count(i => i.Status == ProcessingStatus.Processed);
+                errorCount = FilesToProcess.Count(i => i.Status == ProcessingStatus.Error);
+                int cancelledCount = FilesToProcess.Count(i => i.Status == ProcessingStatus.Cancelled);
+                CurrentOperationStatus = $"Cleanup finished. Processed: {processedCount}, Errors: {errorCount}, Cancelled: {cancelledCount}.";
+                System.Diagnostics.Debug.WriteLine(CurrentOperationStatus);
+            }
         }
 
         private void UpdateOverallStatus(string message)
@@ -537,14 +618,12 @@ namespace DaminionOllamaApp.ViewModels
         }
 
         private bool CanStopCleanup() => IsCleaningQueue;
-
         private void StopCleanup()
         {
             _cleanupCts?.Cancel();
             CurrentOperationStatus = "Cleanup stop requested.";
         }
 
-        // --- INotifyPropertyChanged Implementation ---
         public event PropertyChangedEventHandler? PropertyChanged;
         protected virtual bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = "")
         {
