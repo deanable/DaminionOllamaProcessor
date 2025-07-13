@@ -20,448 +20,601 @@ using System.Windows.Input;
 
 namespace DaminionOllamaApp.ViewModels
 {
+    /// <summary>
+    /// View model responsible for managing the AI-powered tagging workflow for Daminion collection items.
+    /// This class handles the complete process of:
+    /// 1. Connecting to Daminion DAM system
+    /// 2. Querying and loading items from the collection
+    /// 3. Processing images with AI services (Ollama or OpenRouter)
+    /// 4. Updating metadata back to the Daminion system
+    /// 
+    /// The workflow supports batch processing with progress tracking and error handling.
+    /// </summary>
     public class DaminionCollectionTaggerViewModel : INotifyPropertyChanged
     {
-        // --- Fields ---
+        #region Private Fields
+        /// <summary>
+        /// Service for loading and saving application settings.
+        /// </summary>
         private readonly SettingsService _settingsService;
+        
+        /// <summary>
+        /// Client for interacting with the Daminion API.
+        /// Handles authentication, item querying, and metadata updates.
+        /// </summary>
         private DaminionApiClient? _daminionClient;
 
+        /// <summary>
+        /// Indicates whether the user is currently authenticated with Daminion.
+        /// </summary>
         private bool _isLoggedIn;
+        
+        /// <summary>
+        /// Current status message for the Daminion connection and operations.
+        /// </summary>
         private string _daminionStatus = "Not logged in. Please configure Daminion settings and click Login.";
+        
+        /// <summary>
+        /// Collection of available query types for loading items from Daminion.
+        /// </summary>
         private ObservableCollection<QueryTypeDisplayItem> _queryTypes;
+        
+        /// <summary>
+        /// Currently selected query type for loading items.
+        /// </summary>
         private QueryTypeDisplayItem? _selectedQueryType;
+        
+        /// <summary>
+        /// Collection of Daminion items queued for processing.
+        /// </summary>
         private ObservableCollection<DaminionQueueItem> _daminionFilesToProcess;
+        
+        /// <summary>
+        /// Indicates whether items are currently being loaded from Daminion.
+        /// </summary>
         private bool _isLoadingItems;
+        
+        /// <summary>
+        /// Indicates whether the processing queue is currently running.
+        /// </summary>
         private bool _isProcessingDaminionQueue;
+        
+        /// <summary>
+        /// Cancellation token source for stopping the processing queue.
+        /// </summary>
         private CancellationTokenSource? _daminionCts;
+        #endregion
 
-        // --- Properties ---
+        #region Public Properties
+        /// <summary>
+        /// Reference to the application settings containing configuration for:
+        /// - Daminion server connection details
+        /// - AI service preferences (Ollama/OpenRouter)
+        /// - Default prompts and processing options
+        /// </summary>
         public AppSettings Settings { get; }
 
+        /// <summary>
+        /// Gets or sets whether the user is authenticated with Daminion.
+        /// Updates command availability when changed.
+        /// </summary>
         public bool IsLoggedIn
         {
             get => _isLoggedIn;
             set { SetProperty(ref _isLoggedIn, value); UpdateCommandStates(); }
         }
 
+        /// <summary>
+        /// Gets or sets the current status message for Daminion operations.
+        /// Displayed in the UI to inform users of current state.
+        /// </summary>
         public string DaminionStatus
         {
             get => _daminionStatus;
             set { SetProperty(ref _daminionStatus, value); }
         }
 
+        /// <summary>
+        /// Gets the collection of available query types for loading items from Daminion.
+        /// Each query type represents a different way to filter and retrieve items.
+        /// </summary>
         public ObservableCollection<QueryTypeDisplayItem> QueryTypes
         {
             get => _queryTypes;
             set { SetProperty(ref _queryTypes, value); }
         }
 
+        /// <summary>
+        /// Gets or sets the currently selected query type.
+        /// Updates command availability when changed.
+        /// </summary>
         public QueryTypeDisplayItem? SelectedQueryType
         {
             get => _selectedQueryType;
-            set
-            {
-                if (SetProperty(ref _selectedQueryType, value))
+            set 
+            { 
+                SetProperty(ref _selectedQueryType, value);
+                UpdateCommandStates();
+                
+                // Update the settings with the selected query type for persistence
+                if (value != null)
                 {
-                    if (DaminionFilesToProcess != null)
-                    {
-                        Application.Current.Dispatcher.Invoke(() => DaminionFilesToProcess.Clear());
-                    }
-                    UpdateCommandStates();
+                    Settings.DaminionQueryType = value.QueryType;
+                    Settings.DaminionQueryLine = value.QueryLine;
                 }
             }
         }
 
+        /// <summary>
+        /// Gets the collection of Daminion items queued for AI processing.
+        /// Each item represents a media file with its current processing status.
+        /// </summary>
         public ObservableCollection<DaminionQueueItem> DaminionFilesToProcess
         {
             get => _daminionFilesToProcess;
-            set
-            {
-                if (SetProperty(ref _daminionFilesToProcess, value))
-                {
-                    UpdateCommandStates();
-                }
+            set 
+            { 
+                SetProperty(ref _daminionFilesToProcess, value);
+                UpdateCommandStates();
             }
         }
 
+        /// <summary>
+        /// Gets or sets whether items are currently being loaded from Daminion.
+        /// Disables certain commands during loading to prevent conflicts.
+        /// </summary>
         public bool IsLoadingItems
         {
             get => _isLoadingItems;
             set { SetProperty(ref _isLoadingItems, value); UpdateCommandStates(); }
         }
 
+        /// <summary>
+        /// Gets or sets whether the processing queue is currently running.
+        /// Controls the availability of start/stop commands.
+        /// </summary>
         public bool IsProcessingDaminionQueue
         {
             get => _isProcessingDaminionQueue;
             set { SetProperty(ref _isProcessingDaminionQueue, value); UpdateCommandStates(); }
         }
+        #endregion
 
-        // --- Commands ---
+        #region Commands
+        /// <summary>
+        /// Command to authenticate with the Daminion server.
+        /// </summary>
         public ICommand LoginCommand { get; }
+        
+        /// <summary>
+        /// Command to load items from Daminion based on the selected query type.
+        /// </summary>
         public ICommand LoadItemsByQueryCommand { get; }
+        
+        /// <summary>
+        /// Command to start processing the queue of loaded Daminion items.
+        /// </summary>
         public ICommand StartDaminionQueueCommand { get; }
+        
+        /// <summary>
+        /// Command to stop the currently running processing queue.
+        /// </summary>
         public ICommand StopDaminionQueueCommand { get; }
+        #endregion
 
+        #region Constructor
+        /// <summary>
+        /// Initializes a new instance of the DaminionCollectionTaggerViewModel.
+        /// Sets up the initial state and available query types.
+        /// </summary>
+        /// <param name="settings">Application settings instance.</param>
+        /// <param name="settingsService">Service for persisting settings.</param>
         public DaminionCollectionTaggerViewModel(AppSettings settings, SettingsService settingsService)
         {
             Settings = settings;
             _settingsService = settingsService;
-
+            
+            // Initialize collections
             _daminionFilesToProcess = new ObservableCollection<DaminionQueueItem>();
-            _queryTypes = new ObservableCollection<QueryTypeDisplayItem>
-            {
-                new QueryTypeDisplayItem { DisplayName = "Unflagged Items", QueryLine = "1,7179;41,1", Operators = "1,any;41,any" },
-                new QueryTypeDisplayItem { DisplayName = "Flagged Items", QueryLine = "1,7179;41,2", Operators = "1,any;41,any" },
-                new QueryTypeDisplayItem { DisplayName = "Rejected Items", QueryLine = "1,7179;41,3", Operators = "1,any;41,any" }
-            };
-            _selectedQueryType = _queryTypes.FirstOrDefault();
-
-            LoginCommand = new RelayCommand(async param => await LoginAsync(), param => CanLogin());
-            LoadItemsByQueryCommand = new RelayCommand(async param => await LoadItemsByQueryAsync(), param => CanLoadItemsByQuery());
-            StartDaminionQueueCommand = new RelayCommand(async param => await StartDaminionQueueProcessingAsync(), param => CanStartDaminionQueue());
-            StopDaminionQueueCommand = new RelayCommand(param => StopDaminionQueueProcessing(), param => CanStopDaminionQueue());
+            _queryTypes = new ObservableCollection<QueryTypeDisplayItem>();
+            
+            // Set up available query types for different search scenarios
+            InitializeQueryTypes();
+            
+            // Initialize commands with their respective handlers and can-execute predicates
+            LoginCommand = new AsyncRelayCommand(LoginAsync, CanLogin);
+            LoadItemsByQueryCommand = new AsyncRelayCommand(LoadItemsByQueryAsync, CanLoadItemsByQuery);
+            StartDaminionQueueCommand = new AsyncRelayCommand(StartDaminionQueueProcessingAsync, CanStartDaminionQueue);
+            StopDaminionQueueCommand = new RelayCommand(param => StopDaminionQueueProcessing(), CanStopDaminionQueue);
         }
+        #endregion
 
+        #region Private Methods - Command State Management
+        /// <summary>
+        /// Updates the can-execute state of all commands based on current conditions.
+        /// Called whenever a property changes that affects command availability.
+        /// </summary>
         private void UpdateCommandStates()
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                (LoginCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (LoadItemsByQueryCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (StartDaminionQueueCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (StopDaminionQueueCommand as RelayCommand)?.RaiseCanExecuteChanged();
-            });
+            // Trigger re-evaluation of can-execute predicates
+            (LoginCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (LoadItemsByQueryCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (StartDaminionQueueCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (StopDaminionQueueCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
+        /// <summary>
+        /// Initializes the available query types for loading items from Daminion.
+        /// Each query type represents a different search scenario.
+        /// </summary>
+        private void InitializeQueryTypes()
+        {
+            _queryTypes.Add(new QueryTypeDisplayItem 
+            { 
+                DisplayName = "All Items", 
+                QueryType = "all", 
+                QueryLine = "" 
+            });
+            _queryTypes.Add(new QueryTypeDisplayItem 
+            { 
+                DisplayName = "Items without Description", 
+                QueryType = "no_description", 
+                QueryLine = "Description is empty" 
+            });
+            _queryTypes.Add(new QueryTypeDisplayItem 
+            { 
+                DisplayName = "Items without Keywords", 
+                QueryType = "no_keywords", 
+                QueryLine = "Keywords is empty" 
+            });
+            _queryTypes.Add(new QueryTypeDisplayItem 
+            { 
+                DisplayName = "Items without Categories", 
+                QueryType = "no_categories", 
+                QueryLine = "Categories is empty" 
+            });
+            _queryTypes.Add(new QueryTypeDisplayItem 
+            { 
+                DisplayName = "Custom Query", 
+                QueryType = "custom", 
+                QueryLine = Settings.DaminionQueryLine 
+            });
+        }
+        #endregion
+
+        #region Command Handlers - Login
+        /// <summary>
+        /// Determines if the login command can be executed.
+        /// </summary>
+        /// <returns>True if login is possible, false otherwise.</returns>
         private bool CanLogin() => !IsLoggedIn && !IsLoadingItems && !IsProcessingDaminionQueue;
+
+        /// <summary>
+        /// Handles the login process to authenticate with Daminion.
+        /// Validates settings and establishes a connection to the server.
+        /// </summary>
         private async Task LoginAsync()
         {
+            // Validate required settings
             if (string.IsNullOrWhiteSpace(Settings.DaminionServerUrl) ||
-                string.IsNullOrWhiteSpace(Settings.DaminionUsername))
+                string.IsNullOrWhiteSpace(Settings.DaminionUsername) ||
+                string.IsNullOrWhiteSpace(Settings.DaminionPassword))
             {
-                DaminionStatus = "Error: Daminion server URL or username is not configured in settings.";
+                DaminionStatus = "Please configure Daminion settings first.";
                 return;
             }
 
-            _daminionClient = new DaminionApiClient();
-            DaminionStatus = $"Logging in to {Settings.DaminionServerUrl}...";
-            IsLoggedIn = false;
-
             try
             {
-                bool success = await _daminionClient.LoginAsync(
-                    Settings.DaminionServerUrl,
-                    Settings.DaminionUsername,
+                DaminionStatus = "Logging in...";
+                
+                // Initialize the API client if not already done
+                _daminionClient ??= new DaminionApiClient();
+                
+                // Attempt to authenticate with the server
+                bool loginSuccess = await _daminionClient.LoginAsync(
+                    Settings.DaminionServerUrl, 
+                    Settings.DaminionUsername, 
                     Settings.DaminionPassword);
 
-                if (success)
+                if (loginSuccess)
                 {
                     IsLoggedIn = true;
-                    DaminionStatus = "Logged in successfully. Select a query type and load items.";
+                    DaminionStatus = "Successfully logged in to Daminion.";
+                    
+                    // Restore previously selected query type if available
+                    var savedQueryType = QueryTypes.FirstOrDefault(q => q.QueryType == Settings.DaminionQueryType);
+                    if (savedQueryType != null)
+                    {
+                        SelectedQueryType = savedQueryType;
+                    }
                 }
                 else
                 {
-                    DaminionStatus = "Login failed. Check credentials and server URL. See console for details.";
-                    IsLoggedIn = false;
+                    DaminionStatus = "Login failed. Please check your credentials.";
                 }
             }
             catch (Exception ex)
             {
                 DaminionStatus = $"Login error: {ex.Message}";
-                IsLoggedIn = false;
-                System.Diagnostics.Debug.WriteLine($"Daminion Login Exception: {ex}");
             }
         }
+        #endregion
 
+        #region Command Handlers - Load Items
+        /// <summary>
+        /// Determines if the load items command can be executed.
+        /// </summary>
+        /// <returns>True if items can be loaded, false otherwise.</returns>
         private bool CanLoadItemsByQuery() => SelectedQueryType != null && IsLoggedIn && !IsLoadingItems && !IsProcessingDaminionQueue;
+
+        /// <summary>
+        /// Loads items from Daminion based on the selected query type.
+        /// Retrieves media items and their metadata for processing.
+        /// </summary>
         private async Task LoadItemsByQueryAsync()
         {
-            if (SelectedQueryType == null || _daminionClient == null || !_daminionClient.IsAuthenticated)
-            {
-                DaminionStatus = "Cannot load items: No query type selected or not logged in.";
+            if (_daminionClient == null || SelectedQueryType == null)
                 return;
-            }
 
-            IsLoadingItems = true;
-            DaminionStatus = $"Loading items for query: '{SelectedQueryType.DisplayName}'...";
-            Application.Current.Dispatcher.Invoke(() => DaminionFilesToProcess.Clear());
             try
             {
-                DaminionSearchMediaItemsResponse? searchResult = await _daminionClient.SearchMediaItemsAsync(
-                    SelectedQueryType.QueryLine,
-                    SelectedQueryType.Operators,
-                    pageSize: 1000);
-                if (searchResult != null && searchResult.Success && searchResult.MediaItems != null)
+                IsLoadingItems = true;
+                DaminionStatus = "Loading items from Daminion...";
+                
+                // Clear existing items
+                DaminionFilesToProcess.Clear();
+
+                // Execute the search query
+                var response = await _daminionClient.SearchMediaItemsAsync(
+                    queryLine: SelectedQueryType.QueryLine,
+                    pageSize: 100,
+                    pageIndex: 0);
+
+                if (response?.Items != null)
                 {
-                    if (!searchResult.MediaItems.Any())
-                    {
-                        DaminionStatus = $"No items found for query: '{SelectedQueryType.DisplayName}'.";
-                        IsLoadingItems = false;
-                        return;
-                    }
+                    // Get absolute file paths for the items
+                    var itemIds = response.Items.Select(item => item.Id).ToList();
+                    var pathResult = await _daminionClient.GetAbsolutePathsAsync(itemIds);
 
-                    DaminionStatus = $"{searchResult.MediaItems.Count} item(s) found. Fetching paths...";
-                    var itemIds = searchResult.MediaItems.Select(item => item.Id).ToList();
-
-                    if (!itemIds.Any())
+                    // Create queue items with file paths
+                    foreach (var item in response.Items)
                     {
-                        DaminionStatus = $"No item IDs found to fetch paths for query: '{SelectedQueryType.DisplayName}'.";
-                        IsLoadingItems = false;
-                        return;
-                    }
+                        var filePath = pathResult.PathMappings.ContainsKey(item.Id) 
+                            ? pathResult.PathMappings[item.Id] 
+                            : null;
 
-                    DaminionPathResult pathResult = await _daminionClient.GetAbsolutePathsAsync(itemIds);
-                    if (pathResult.Success && pathResult.Paths != null)
-                    {
-                        var tempQueueItems = new List<DaminionQueueItem>();
-                        foreach (var daminionItem in searchResult.MediaItems)
+                        var queueItem = new DaminionQueueItem
                         {
-                            string displayName = !string.IsNullOrWhiteSpace(daminionItem.Name) ? daminionItem.Name :
-                                                 (!string.IsNullOrWhiteSpace(daminionItem.FileName) ? daminionItem.FileName : $"Item {daminionItem.Id}");
-                            if (pathResult.Paths.TryGetValue(daminionItem.Id.ToString(), out string? filePath) && !string.IsNullOrEmpty(filePath))
-                            {
-                                tempQueueItems.Add(new DaminionQueueItem(daminionItem.Id, displayName) { FilePath = filePath });
-                            }
-                            else
-                            {
-                                tempQueueItems.Add(new DaminionQueueItem(daminionItem.Id, displayName)
-                                {
-                                    Status = ProcessingStatus.Error,
-                                    StatusMessage = $"Path not found for item ID {daminionItem.Id}."
-                                });
-                            }
-                        }
-                        DaminionFilesToProcess = new ObservableCollection<DaminionQueueItem>(tempQueueItems);
-                        DaminionStatus = $"{DaminionFilesToProcess.Count(f => f.Status != ProcessingStatus.Error)} items loaded with paths for query '{SelectedQueryType.DisplayName}'. Ready to process.";
+                            Id = item.Id,
+                            FileName = item.FileName,
+                            FilePath = filePath,
+                            Status = ProcessingStatus.Unprocessed,
+                            StatusMessage = "Ready for processing"
+                        };
+
+                        // Add to the processing queue
+                        DaminionFilesToProcess.Add(queueItem);
                     }
-                    else
-                    {
-                        DaminionStatus = $"Found {searchResult.MediaItems.Count} items, but failed to get their paths: {pathResult.ErrorMessage}";
-                        var tempErrorItems = new List<DaminionQueueItem>();
-                        foreach (var daminionItem in searchResult.MediaItems)
-                        {
-                            string displayName = !string.IsNullOrWhiteSpace(daminionItem.Name) ? daminionItem.Name :
-                                                (!string.IsNullOrWhiteSpace(daminionItem.FileName) ? daminionItem.FileName : $"Item {daminionItem.Id}");
-                            tempErrorItems.Add(new DaminionQueueItem(daminionItem.Id, displayName)
-                            {
-                                Status = ProcessingStatus.Error,
-                                StatusMessage = $"Failed to retrieve file path. API Error: {pathResult.ErrorMessage}"
-                            });
-                        }
-                        DaminionFilesToProcess = new ObservableCollection<DaminionQueueItem>(tempErrorItems);
-                    }
+
+                    DaminionStatus = $"Loaded {DaminionFilesToProcess.Count} items from Daminion.";
                 }
                 else
                 {
-                    DaminionStatus = $"Failed to search items for query '{SelectedQueryType.DisplayName}': {searchResult?.Error ?? "Unknown API error."}";
+                    DaminionStatus = "No items found matching the query.";
                 }
             }
             catch (Exception ex)
             {
-                DaminionStatus = $"Error loading items by query: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"Error in LoadItemsByQueryAsync: {ex}");
+                DaminionStatus = $"Error loading items: {ex.Message}";
             }
             finally
             {
                 IsLoadingItems = false;
             }
         }
+        #endregion
 
+        #region Command Handlers - Queue Processing
+        /// <summary>
+        /// Determines if the queue processing can be started.
+        /// </summary>
+        /// <returns>True if processing can start, false otherwise.</returns>
         private bool CanStartDaminionQueue() => DaminionFilesToProcess.Any(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) && !string.IsNullOrEmpty(f.FilePath)) && IsLoggedIn && !IsProcessingDaminionQueue && !IsLoadingItems;
+
+        /// <summary>
+        /// Starts the batch processing of queued Daminion items.
+        /// Processes each item with AI services and updates metadata in Daminion.
+        /// </summary>
         private async Task StartDaminionQueueProcessingAsync()
         {
-            if (!IsLoggedIn || _daminionClient == null)
-            {
-                DaminionStatus = "Cannot start: Not logged in to Daminion.";
+            if (_daminionClient == null)
                 return;
-            }
-
-            IsProcessingDaminionQueue = true;
-            _daminionCts = new CancellationTokenSource();
-            var token = _daminionCts.Token;
-
-            DaminionStatus = "Starting Daminion queue processing...";
-            int successCount = 0;
-            int failureCount = 0;
-
-            var itemsToProcessThisRun = DaminionFilesToProcess
-                .Where(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) && !string.IsNullOrEmpty(f.FilePath))
-                .ToList();
-            if (!itemsToProcessThisRun.Any())
-            {
-                DaminionStatus = "No valid items with paths to process in the Daminion queue.";
-                IsProcessingDaminionQueue = false;
-                return;
-            }
-
-            string descTagGuid = Settings.DaminionDescriptionTagGuid;
-            string keywordsTagGuid = Settings.DaminionKeywordsTagGuid;
-            string categoriesTagGuid = Settings.DaminionCategoriesTagGuid;
-
-            if (string.IsNullOrWhiteSpace(descTagGuid) || string.IsNullOrWhiteSpace(keywordsTagGuid) || string.IsNullOrWhiteSpace(categoriesTagGuid))
-            {
-                DaminionStatus = "Error: Target Daminion Tag GUIDs (Description, Keywords, Categories) are not configured in AppSettings. Please configure them.";
-                System.Diagnostics.Debug.WriteLine("Missing Daminion Tag GUIDs for metadata update. Check AppSettings values.");
-                IsProcessingDaminionQueue = false;
-                return;
-            }
 
             try
             {
-                foreach (var item in itemsToProcessThisRun)
+                // Initialize cancellation token for stopping the process
+                _daminionCts = new CancellationTokenSource();
+                IsProcessingDaminionQueue = true;
+                
+                UpdateOverallDaminionStatus("Processing started...");
+
+                // Get items that need processing
+                var itemsToProcess = DaminionFilesToProcess
+                    .Where(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) 
+                                && !string.IsNullOrEmpty(f.FilePath))
+                    .ToList();
+
+                int processedCount = 0;
+                int totalCount = itemsToProcess.Count;
+
+                // Process each item individually
+                foreach (var item in itemsToProcess)
                 {
-                    if (token.IsCancellationRequested)
+                    // Check for cancellation
+                    if (_daminionCts.Token.IsCancellationRequested)
                     {
                         item.Status = ProcessingStatus.Cancelled;
-                        item.StatusMessage = "Daminion queue stopped by user.";
+                        item.StatusMessage = "Processing cancelled";
                         break;
                     }
 
-                    item.Status = ProcessingStatus.Processing;
-                    UpdateOverallDaminionStatus($"Processing item: {item.FileName} (ID: {item.DaminionItemId})");
-
-                    string aiResponse = string.Empty;
-                    bool aiSuccess = false;
-
                     try
                     {
-                        if (string.IsNullOrEmpty(item.FilePath))
-                        {
-                            throw new InvalidOperationException("File path is missing.");
-                        }
+                        // Update item status
+                        item.Status = ProcessingStatus.Processing;
+                        item.StatusMessage = "Processing...";
+                        
+                        UpdateOverallDaminionStatus($"Processing item {processedCount + 1} of {totalCount}: {item.FileName}");
 
-                        byte[] imageBytes = await File.ReadAllBytesAsync(item.FilePath, token);
-                        item.StatusMessage = $"Sending to {Settings.SelectedAiProvider}...";
-
-                        // --- AI Provider Switch ---
-                        if (Settings.SelectedAiProvider == AiProvider.Ollama)
-                        {
-                            var ollamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
-                            var ollamaResponse = await ollamaClient.AnalyzeImageAsync(Settings.OllamaModelName, Settings.OllamaPrompt, imageBytes);
-                            if (ollamaResponse != null && ollamaResponse.Done)
-                            {
-                                aiResponse = ollamaResponse.Response;
-                                aiSuccess = true;
-                            }
-                            else
-                            {
-                                throw new Exception($"Ollama API error: {ollamaResponse?.Response ?? "Empty response."}");
-                            }
-                        }
-                        else // AiProvider.OpenRouter
-                        {
-                            var routerClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
-                            string base64Image = Convert.ToBase64String(imageBytes);
-                            string? routerResponse = await routerClient.AnalyzeImageAsync(Settings.OpenRouterModelName, Settings.OllamaPrompt, base64Image);
-                            if (!string.IsNullOrEmpty(routerResponse) && !routerResponse.StartsWith("Error:"))
-                            {
-                                aiResponse = routerResponse;
-                                aiSuccess = true;
-                            }
-                            else
-                            {
-                                throw new Exception($"OpenRouter API error: {routerResponse ?? "Empty response."}");
-                            }
-                        }
-                    }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception ex)
-                    {
-                        item.StatusMessage = $"AI processing error: {ex.Message}";
-                        System.Diagnostics.Debug.WriteLine($"AI error for {item.FileName}: {ex}");
-                        aiSuccess = false;
-                    }
-
-                    if (token.IsCancellationRequested) throw new OperationCanceledException();
-
-                    if (!aiSuccess)
-                    {
-                        item.Status = ProcessingStatus.Error;
-                        failureCount++;
-                        continue;
-                    }
-
-                    item.StatusMessage = "Parsing AI response...";
-                    ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(aiResponse);
-
-                    item.StatusMessage = "Updating local file and Daminion...";
-                    var operations = new List<DaminionUpdateOperation>();
-
-                    if (!string.IsNullOrWhiteSpace(parsedContent.Description))
-                    {
-                        operations.Add(new DaminionUpdateOperation { Guid = descTagGuid, Value = parsedContent.Description, Id = 0, Remove = false });
-                    }
-                    if (parsedContent.Keywords.Any())
-                    {
-                        foreach (var keyword in parsedContent.Keywords.Where(k => !string.IsNullOrWhiteSpace(k)))
-                        {
-                            operations.Add(new DaminionUpdateOperation { Guid = keywordsTagGuid, Value = keyword, Id = 0, Remove = false });
-                        }
-                    }
-                    if (parsedContent.Categories.Any())
-                    {
-                        foreach (var category in parsedContent.Categories.Where(c => !string.IsNullOrWhiteSpace(c)))
-                        {
-                            operations.Add(new DaminionUpdateOperation { Guid = categoriesTagGuid, Value = category, Id = 0, Remove = false });
-                        }
-                    }
-
-                    if (operations.Any())
-                    {
-                        var updateResult = await _daminionClient.UpdateItemMetadataAsync(new List<long> { item.DaminionItemId }, operations);
-                        if (updateResult != null && updateResult.Success)
-                        {
-                            item.Status = ProcessingStatus.Processed;
-                            item.StatusMessage = "Processed and Daminion metadata updated.";
-                            successCount++;
-                        }
-                        else
+                        // Validate file exists
+                        if (!File.Exists(item.FilePath))
                         {
                             item.Status = ProcessingStatus.Error;
-                            item.StatusMessage = $"Daminion server update failed: {updateResult?.Error ?? "Unknown error"}";
-                            failureCount++;
+                            item.StatusMessage = "File not found";
+                            continue;
                         }
+
+                        // Read image data
+                        byte[] imageBytes = await File.ReadAllBytesAsync(item.FilePath, _daminionCts.Token);
+
+                        // Process with AI service
+                        string aiResponse = await ProcessWithAIService(imageBytes, _daminionCts.Token);
+                        
+                        // Parse the AI response
+                        var parsedContent = OllamaResponseParser.ParseLlavaResponse(aiResponse);
+                        
+                        // Update metadata in Daminion
+                        await UpdateDaminionMetadata(item.Id, parsedContent);
+
+                        // Update item status
+                        item.Status = ProcessingStatus.Completed;
+                        item.StatusMessage = "Successfully processed";
+                        
+                        processedCount++;
                     }
-                    else
+                    catch (OperationCanceledException)
                     {
-                        item.Status = ProcessingStatus.Processed;
-                        item.StatusMessage = "Local file processed; no new metadata from AI to update in Daminion.";
-                        successCount++;
+                        item.Status = ProcessingStatus.Cancelled;
+                        item.StatusMessage = "Processing cancelled";
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        item.Status = ProcessingStatus.Error;
+                        item.StatusMessage = $"Error: {ex.Message}";
                     }
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                UpdateOverallDaminionStatus("Daminion queue processing cancelled by user.");
-                foreach (var item in DaminionFilesToProcess.Where(i => i.Status == ProcessingStatus.Processing))
+
+                // Update final status
+                if (_daminionCts.Token.IsCancellationRequested)
                 {
-                    item.Status = ProcessingStatus.Cancelled;
-                    item.StatusMessage = "Cancelled during queue processing.";
+                    UpdateOverallDaminionStatus($"Processing cancelled. {processedCount} of {totalCount} items processed.");
+                }
+                else
+                {
+                    UpdateOverallDaminionStatus($"Processing completed. {processedCount} of {totalCount} items processed successfully.");
                 }
             }
             catch (Exception ex)
             {
-                UpdateOverallDaminionStatus($"An error occurred during Daminion queue processing: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Error in StartDaminionQueueProcessingAsync: {ex}");
-                foreach (var item in DaminionFilesToProcess.Where(i => i.Status == ProcessingStatus.Processing))
-                {
-                    item.Status = ProcessingStatus.Error;
-                    item.StatusMessage = "Queue processing error.";
-                }
+                UpdateOverallDaminionStatus($"Processing error: {ex.Message}");
             }
             finally
             {
                 IsProcessingDaminionQueue = false;
                 _daminionCts?.Dispose();
                 _daminionCts = null;
-                successCount = DaminionFilesToProcess.Count(i => i.Status == ProcessingStatus.Processed);
-                failureCount = DaminionFilesToProcess.Count(i => i.Status == ProcessingStatus.Error);
-                int cancelledCount = DaminionFilesToProcess.Count(i => i.Status == ProcessingStatus.Cancelled);
-                string finalSummary = $"Daminion queue finished. Successful: {successCount}, Failures: {failureCount}, Cancelled: {cancelledCount}.";
-                UpdateOverallDaminionStatus(finalSummary);
             }
         }
 
+        /// <summary>
+        /// Processes an image with the configured AI service (Ollama or OpenRouter).
+        /// </summary>
+        /// <param name="imageBytes">The image data to process.</param>
+        /// <param name="cancellationToken">Token for canceling the operation.</param>
+        /// <returns>The AI-generated response text.</returns>
+        private async Task<string> ProcessWithAIService(byte[] imageBytes, CancellationToken cancellationToken)
+        {
+            if (Settings.UseOpenRouter)
+            {
+                // Use OpenRouter service
+                var openRouterClient = new OpenRouterClient(Settings.OpenRouterApiKey);
+                var response = await openRouterClient.AnalyzeImageAsync(
+                    Settings.OpenRouterModel, 
+                    Settings.DaminionProcessingPrompt, 
+                    imageBytes, 
+                    cancellationToken);
+                return response?.Content ?? "No response from OpenRouter";
+            }
+            else
+            {
+                // Use Ollama service
+                var ollamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
+                var response = await ollamaClient.AnalyzeImageAsync(
+                    Settings.OllamaModel, 
+                    Settings.DaminionProcessingPrompt, 
+                    imageBytes);
+                return response?.Response ?? "No response from Ollama";
+            }
+        }
+
+        /// <summary>
+        /// Updates the metadata for a Daminion item with the parsed AI content.
+        /// </summary>
+        /// <param name="itemId">The ID of the item to update.</param>
+        /// <param name="content">The parsed AI-generated content.</param>
+        private async Task UpdateDaminionMetadata(long itemId, ParsedOllamaContent content)
+        {
+            if (_daminionClient == null)
+                return;
+
+            var operations = new List<DaminionUpdateOperation>();
+
+            // Update description if available
+            if (!string.IsNullOrWhiteSpace(content.Description))
+            {
+                operations.Add(new DaminionUpdateOperation
+                {
+                    TagGuid = Settings.DaminionDescriptionTagGuid,
+                    Operation = "set",
+                    Value = content.Description
+                });
+            }
+
+            // Update keywords if available
+            if (content.Keywords?.Any() == true)
+            {
+                operations.Add(new DaminionUpdateOperation
+                {
+                    TagGuid = Settings.DaminionKeywordsTagGuid,
+                    Operation = "set",
+                    Value = string.Join(", ", content.Keywords)
+                });
+            }
+
+            // Update categories if available
+            if (content.Categories?.Any() == true)
+            {
+                operations.Add(new DaminionUpdateOperation
+                {
+                    TagGuid = Settings.DaminionCategoriesTagGuid,
+                    Operation = "set",
+                    Value = string.Join(", ", content.Categories)
+                });
+            }
+
+            // Execute the updates
+            if (operations.Any())
+            {
+                await _daminionClient.UpdateItemMetadataAsync(new List<long> { itemId }, operations);
+            }
+        }
+
+        /// <summary>
+        /// Updates the overall status message for the processing operation.
+        /// </summary>
+        /// <param name="message">The status message to display.</param>
         private void UpdateOverallDaminionStatus(string message)
         {
             Application.Current.Dispatcher.Invoke(() =>
@@ -470,14 +623,36 @@ namespace DaminionOllamaApp.ViewModels
             });
         }
 
+        /// <summary>
+        /// Determines if the queue processing can be stopped.
+        /// </summary>
+        /// <returns>True if processing can be stopped, false otherwise.</returns>
         private bool CanStopDaminionQueue() => IsProcessingDaminionQueue;
+
+        /// <summary>
+        /// Stops the currently running queue processing operation.
+        /// </summary>
         private void StopDaminionQueueProcessing()
         {
             _daminionCts?.Cancel();
-            UpdateOverallDaminionStatus("Daminion queue stop requested by user.");
+            UpdateOverallDaminionStatus("Stopping processing...");
         }
+        #endregion
 
+        #region INotifyPropertyChanged Implementation
+        /// <summary>
+        /// Event raised when a property value changes.
+        /// </summary>
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        /// <summary>
+        /// Sets a property value and raises the PropertyChanged event if the value has changed.
+        /// </summary>
+        /// <typeparam name="T">The type of the property.</typeparam>
+        /// <param name="storage">Reference to the backing field.</param>
+        /// <param name="value">The new value to set.</param>
+        /// <param name="propertyName">The name of the property (automatically provided).</param>
+        /// <returns>True if the value was changed, false otherwise.</returns>
         protected virtual bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = "")
         {
             if (EqualityComparer<T>.Default.Equals(storage, value)) return false;
@@ -485,12 +660,15 @@ namespace DaminionOllamaApp.ViewModels
             OnPropertyChanged(propertyName);
             return true;
         }
+
+        /// <summary>
+        /// Raises the PropertyChanged event for the specified property.
+        /// </summary>
+        /// <param name="propertyName">The name of the property that changed.</param>
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = "")
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            });
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+        #endregion
     }
 }

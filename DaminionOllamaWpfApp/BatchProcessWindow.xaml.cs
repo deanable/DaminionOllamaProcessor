@@ -19,285 +19,349 @@ using System.Linq;                         // For LINQ operations like .Any()
 
 namespace DaminionOllamaWpfApp
 {
+    /// <summary>
+    /// Represents a single item in the batch processing queue.
+    /// Tracks the processing status and details for individual files.
+    /// </summary>
     public class BatchProcessItem // Consider INotifyPropertyChanged if updating existing items
     {
+        /// <summary>
+        /// Gets or sets the full path to the file being processed.
+        /// </summary>
         public string? FilePath { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the current processing status (e.g., "Pending", "Processing", "Completed", "Error").
+        /// </summary>
         public string? Status { get; set; }
+        
+        /// <summary>
+        /// Gets or sets additional details about the processing result or any errors encountered.
+        /// </summary>
         public string? Details { get; set; }
     }
 
+    /// <summary>
+    /// Window for batch processing local image files with AI-generated metadata.
+    /// This window provides functionality to:
+    /// 1. Select a folder containing images
+    /// 2. Configure processing options (file extensions, subfolder inclusion)
+    /// 3. Process multiple images in sequence with AI analysis
+    /// 4. Update image metadata (EXIF, IPTC, XMP) with AI-generated content
+    /// 5. Display real-time progress and results
+    /// </summary>
     public partial class BatchProcessWindow : Window
     {
+        #region Properties
+        /// <summary>
+        /// Observable collection of batch processing items that serves as the data source for the results list.
+        /// Updates automatically as items are processed, providing real-time feedback to the user.
+        /// </summary>
         public ObservableCollection<BatchProcessItem> ProcessResults { get; set; }
+        
+        /// <summary>
+        /// Cancellation token source for stopping the batch processing operation.
+        /// Allows users to cancel long-running operations gracefully.
+        /// </summary>
         private CancellationTokenSource? _cancellationTokenSource;
 
-        // Assuming you have OllamaApiClient and ImageMetadataService ready to be used
-        // You might pass these from MainWindow or initialize them here if needed.
-        // For now, we'll assume they are accessible or created within ProcessLocalFolderAsync.
+        /// <summary>
+        /// Client for interacting with the Ollama API for AI image analysis.
+        /// Initialized with the server URL from MainWindow configuration.
+        /// </summary>
         private OllamaApiClient? _ollamaClient; // Needs to be initialized with URL from MainWindow or config
         // ImageMetadataService is used per file, so instantiated inside the loop.
+        #endregion
 
+        #region Constructor
+        /// <summary>
+        /// Initializes a new instance of the BatchProcessWindow.
+        /// Sets up the UI data binding and initializes the processing results collection.
+        /// </summary>
         public BatchProcessWindow()
         {
             InitializeComponent();
             ProcessResults = new ObservableCollection<BatchProcessItem>();
             ResultsListView.ItemsSource = ProcessResults;
         }
+        #endregion
 
+        #region Event Handlers
+        /// <summary>
+        /// Handles the Browse Folder button click event.
+        /// Opens a folder browser dialog to allow users to select the directory containing images to process.
+        /// </summary>
+        /// <param name="sender">The button that triggered the event.</param>
+        /// <param name="e">Event arguments.</param>
         private void BrowseFolderButton_Click(object sender, RoutedEventArgs e)
         {
             using (var dialog = new FolderBrowserDialog())
             {
-                // You can set a description for the dialog
-                dialog.Description = "Select a folder containing images to process";
-                // You can set the initial selected path if desired
-                // if (!string.IsNullOrWhiteSpace(LocalFolderPathTextBox.Text) && Directory.Exists(LocalFolderPathTextBox.Text))
-                // {
-                //    dialog.SelectedPath = LocalFolderPathTextBox.Text;
-                // }
-
-                DialogResult result = dialog.ShowDialog(); // This uses System.Windows.Forms.DialogResult
-
-                if (result == System.Windows.Forms.DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
+                dialog.Description = "Select folder containing images to process";
+                dialog.ShowNewFolderButton = false;
+                
+                if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                 {
-                    LocalFolderPathTextBox.Text = dialog.SelectedPath;
-                    Console.WriteLine($"[BatchProcessWindow] Selected folder: {dialog.SelectedPath}");
-                }
-                else
-                {
-                    Console.WriteLine("[BatchProcessWindow] Folder selection cancelled or failed.");
+                    FolderPathTextBox.Text = dialog.SelectedPath;
                 }
             }
         }
 
+        /// <summary>
+        /// Handles the Start Batch Processing button click event.
+        /// Validates input parameters and initiates the batch processing operation.
+        /// </summary>
+        /// <param name="sender">The button that triggered the event.</param>
+        /// <param name="e">Event arguments.</param>
         private async void StartBatchButton_Click(object sender, RoutedEventArgs e)
         {
-            OverallStatusTextBlock.Text = "Starting batch process...";
-            StartBatchButton.IsEnabled = false;
-            StopBatchButton.IsEnabled = true;
-            BatchProgressBar.Visibility = Visibility.Visible;
-            BatchProgressBar.Value = 0;
-            ProcessResults.Clear();
-
-            _cancellationTokenSource = new CancellationTokenSource();
-            var token = _cancellationTokenSource.Token;
-
-            // Ollama details from MainWindow or dedicated TextBoxes in BatchProcessWindow
-            // For this example, I'll assume they might come from MainWindow's TextBoxes
-            // This is a simplification; you'd ideally have dedicated input fields in BatchProcessWindow
-            // or pass these settings when creating BatchProcessWindow.
-            string ollamaUrl = System.Windows.Application.Current.MainWindow is MainWindow mw ? mw.OllamaUrlTextBox.Text : "http://localhost:11434";
-            string modelName = System.Windows.Application.Current.MainWindow is MainWindow mw2 ? mw2.OllamaModelTextBox.Text : "llava";
-            string prompt = System.Windows.Application.Current.MainWindow is MainWindow mw3 ? mw3.OllamaPromptTextBox.Text : "Describe this image in detail and provide relevant categories and keywords.";
-
-            if (BatchModeTabControl.SelectedItem == LocalFolderTab) // Assuming x:Name="LocalFolderTab" on the TabItem
+            // Validate required inputs
+            string folderPath = FolderPathTextBox.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
             {
-                string folderPath = LocalFolderPathTextBox.Text;
-                string extensionsInput = FileExtensionsTextBox.Text;
-                bool includeSubfolders = IncludeSubfoldersCheckBox.IsChecked == true;
-
-                if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
-                {
-                    System.Windows.MessageBox.Show("Please select a valid folder path.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    OverallStatusTextBlock.Text = "Error: Invalid folder path.";
-                    SetUiForEndOfBatch(true, "Invalid folder path.");
-                    return;
-                }
-                if (string.IsNullOrWhiteSpace(extensionsInput))
-                {
-                    System.Windows.MessageBox.Show("Please specify file extensions (e.g., *.jpg;*.png).", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    OverallStatusTextBlock.Text = "Error: File extensions missing.";
-                    SetUiForEndOfBatch(true, "File extensions missing.");
-                    return;
-                }
-
-                // Initialize Ollama client here if not already done, or ensure it's configured
-                _ollamaClient = new OllamaApiClient(ollamaUrl);
-
-                await ProcessLocalFolderAsync(folderPath, extensionsInput, includeSubfolders, modelName, prompt, token);
-            }
-            else if (BatchModeTabControl.SelectedItem == DaminionBatchTab)
-            {
-                OverallStatusTextBlock.Text = "Daminion batch processing not yet implemented.";
-                ProcessResults.Add(new BatchProcessItem { FilePath = "Daminion Collection", Status = "Pending Implementation", Details = "Daminion collection processing logic to be added." });
-                SetUiForEndOfBatch(false, "Daminion batch processing not yet implemented.");
-            }
-            else
-            {
-                OverallStatusTextBlock.Text = "No batch mode selected or unknown tab.";
-                SetUiForEndOfBatch(true, "No batch mode selected.");
-            }
-        }
-
-        private void StopBatchButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested)
-            {
-                OverallStatusTextBlock.Text = "Stopping batch process...";
-                Console.WriteLine("[BatchProcessWindow] Cancellation requested by user.");
-                _cancellationTokenSource.Cancel();
-                StopBatchButton.IsEnabled = false; // Disable immediately to prevent multiple clicks
-            }
-        }
-
-        private void SetUiForEndOfBatch(bool wasCancelledOrError, string endMessage)
-        {
-            StartBatchButton.IsEnabled = true;
-            StopBatchButton.IsEnabled = false; // Always disable stop when process ends or is stopped
-            BatchProgressBar.Visibility = wasCancelledOrError ? Visibility.Visible : Visibility.Collapsed; // Keep progress if error/cancelled
-            if (wasCancelledOrError)
-            {
-                BatchProgressBar.Value = BatchProgressBar.Maximum; // Or set to a specific error indication
-            }
-            OverallStatusTextBlock.Text = endMessage;
-            Console.WriteLine($"[BatchProcessWindow] Batch process ended. Message: {endMessage}");
-        }
-
-        // --- Actual Processing Logic for Local Files ---
-        private async Task ProcessLocalFolderAsync(string folderPath, string extensionsPattern, bool includeSubfolders,
-                                                 string ollamaModel, string ollamaPrompt, CancellationToken token)
-        {
-            Console.WriteLine($"[BatchProcessWindow] Starting ProcessLocalFolderAsync for path: {folderPath}");
-            List<string> filesToProcess = new List<string>();
-            SearchOption searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-            string[] patterns = extensionsPattern.Split(';')
-                                .Select(p => p.Trim())
-                                .Where(p => !string.IsNullOrWhiteSpace(p))
-                                .ToArray();
-
-            if (!patterns.Any())
-            {
-                ProcessResults.Add(new BatchProcessItem { FilePath = folderPath, Status = "Error", Details = "No valid file patterns provided." });
-                SetUiForEndOfBatch(true, "Error: No valid file patterns.");
+                MessageBox.Show("Please select a valid folder path.", "Invalid Folder", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+
+            string ollamaModel = ModelTextBox.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(ollamaModel))
+            {
+                MessageBox.Show("Please enter an Ollama model name.", "Missing Model", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string ollamaPrompt = PromptTextBox.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(ollamaPrompt))
+            {
+                MessageBox.Show("Please enter a prompt for image analysis.", "Missing Prompt", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Get processing options
+            string extensionsPattern = ExtensionsTextBox.Text?.Trim() ?? "*.jpg;*.jpeg;*.png;*.bmp;*.tiff;*.gif";
+            bool includeSubfolders = IncludeSubfoldersCheckBox.IsChecked ?? false;
+
+            // Initialize cancellation token
+            _cancellationTokenSource = new CancellationTokenSource();
+
+            // Update UI state for processing
+            SetUiForStartOfBatch();
 
             try
             {
-                foreach (string pattern in patterns)
-                {
-                    filesToProcess.AddRange(Directory.EnumerateFiles(folderPath, pattern, searchOption));
-                }
+                // Start the batch processing operation
+                await ProcessLocalFolderAsync(folderPath, extensionsPattern, includeSubfolders, ollamaModel, ollamaPrompt, _cancellationTokenSource.Token);
+                SetUiForEndOfBatch(false, "Batch processing completed successfully.");
+            }
+            catch (OperationCanceledException)
+            {
+                SetUiForEndOfBatch(true, "Batch processing was cancelled by user.");
             }
             catch (Exception ex)
             {
-                ProcessResults.Add(new BatchProcessItem { FilePath = folderPath, Status = "Error", Details = $"Error enumerating files: {ex.Message}" });
-                SetUiForEndOfBatch(true, $"Error finding files: {ex.Message}");
-                Console.Error.WriteLine($"[BatchProcessWindow] Error enumerating files: {ex.Message}");
-                return;
+                SetUiForEndOfBatch(true, $"Batch processing failed: {ex.Message}");
+                MessageBox.Show($"An error occurred during batch processing: {ex.Message}", "Processing Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
 
-            if (!filesToProcess.Any())
+        /// <summary>
+        /// Handles the Stop Batch Processing button click event.
+        /// Cancels the ongoing batch processing operation.
+        /// </summary>
+        /// <param name="sender">The button that triggered the event.</param>
+        /// <param name="e">Event arguments.</param>
+        private void StopBatchButton_Click(object sender, RoutedEventArgs e)
+        {
+            _cancellationTokenSource?.Cancel();
+            StatusTextBlock.Text = "Stopping batch processing...";
+            StopBatchButton.IsEnabled = false;
+        }
+        #endregion
+
+        #region UI State Management
+        /// <summary>
+        /// Updates the UI state when batch processing starts.
+        /// Disables input controls and enables the stop button.
+        /// </summary>
+        private void SetUiForStartOfBatch()
+        {
+            StartBatchButton.IsEnabled = false;
+            StopBatchButton.IsEnabled = true;
+            FolderPathTextBox.IsEnabled = false;
+            BrowseFolderButton.IsEnabled = false;
+            ModelTextBox.IsEnabled = false;
+            PromptTextBox.IsEnabled = false;
+            ExtensionsTextBox.IsEnabled = false;
+            IncludeSubfoldersCheckBox.IsEnabled = false;
+            
+            // Clear previous results
+            ProcessResults.Clear();
+            StatusTextBlock.Text = "Batch processing started...";
+        }
+
+        /// <summary>
+        /// Updates the UI state when batch processing ends.
+        /// Re-enables input controls and provides final status message.
+        /// </summary>
+        /// <param name="wasCancelledOrError">True if the operation was cancelled or failed, false if completed successfully.</param>
+        /// <param name="endMessage">Final status message to display.</param>
+        private void SetUiForEndOfBatch(bool wasCancelledOrError, string endMessage)
+        {
+            StartBatchButton.IsEnabled = true;
+            StopBatchButton.IsEnabled = false;
+            FolderPathTextBox.IsEnabled = true;
+            BrowseFolderButton.IsEnabled = true;
+            ModelTextBox.IsEnabled = true;
+            PromptTextBox.IsEnabled = true;
+            ExtensionsTextBox.IsEnabled = true;
+            IncludeSubfoldersCheckBox.IsEnabled = true;
+            
+            StatusTextBlock.Text = endMessage;
+        }
+        #endregion
+
+        #region Batch Processing Logic
+        /// <summary>
+        /// Processes all images in the specified folder with AI-generated metadata.
+        /// This method handles the complete workflow:
+        /// 1. Discovers image files based on extension patterns
+        /// 2. Initializes the Ollama client for AI processing
+        /// 3. Processes each image file individually
+        /// 4. Updates metadata using ImageMetadataService
+        /// 5. Provides progress feedback and error handling
+        /// </summary>
+        /// <param name="folderPath">Path to the folder containing images to process.</param>
+        /// <param name="extensionsPattern">File extension pattern (e.g., "*.jpg;*.png").</param>
+        /// <param name="includeSubfolders">Whether to include files from subfolders.</param>
+        /// <param name="ollamaModel">Name of the Ollama model to use for analysis.</param>
+        /// <param name="ollamaPrompt">Prompt text to send to the AI model.</param>
+        /// <param name="token">Cancellation token for stopping the operation.</param>
+        private async Task ProcessLocalFolderAsync(string folderPath, string extensionsPattern, bool includeSubfolders,
+                                                 string ollamaModel, string ollamaPrompt, CancellationToken token)
+        {
+            // Parse extension patterns and discover files
+            var extensions = extensionsPattern.Split(';')
+                .Select(ext => ext.Trim().TrimStart('*'))
+                .Where(ext => !string.IsNullOrEmpty(ext))
+                .ToArray();
+
+            var searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            var imageFiles = new List<string>();
+
+            // Collect all matching image files
+            foreach (var extension in extensions)
             {
-                ProcessResults.Add(new BatchProcessItem { FilePath = folderPath, Status = "Info", Details = "No matching files found to process." });
-                SetUiForEndOfBatch(false, "No matching files found.");
-                Console.WriteLine("[BatchProcessWindow] No matching files found.");
-                return;
-            }
-
-            BatchProgressBar.Maximum = filesToProcess.Count;
-            BatchProgressBar.Value = 0;
-            int filesProcessed = 0;
-            int filesSucceeded = 0;
-            int filesFailed = 0;
-
-            foreach (string filePath in filesToProcess)
-            {
-                if (token.IsCancellationRequested)
-                {
-                    ProcessResults.Add(new BatchProcessItem { FilePath = filePath, Status = "Cancelled", Details = "Batch process was cancelled by user." });
-                    Console.WriteLine($"[BatchProcessWindow] Processing cancelled for file: {filePath}");
-                    break;
-                }
-
-                var itemResult = new BatchProcessItem { FilePath = filePath, Status = "Processing..." };
-                ProcessResults.Add(itemResult);
-                ResultsListView.ScrollIntoView(itemResult); // Auto-scroll
-                OverallStatusTextBlock.Text = $"Processing: {Path.GetFileName(filePath)} ({filesProcessed + 1} of {filesToProcess.Count})";
-                Console.WriteLine($"[BatchProcessWindow] Processing file: {filePath}");
-
-                ImageMetadataService? editor = null; // Renamed from ImageMetadataWriter
+                var pattern = "*" + extension;
                 try
                 {
-                    editor = new ImageMetadataService(filePath); // Use your new class
-                    // editor.Read(); // Optionally read and display existing if needed, but for batch might skip
-
-                    byte[] imageBytes = await File.ReadAllBytesAsync(filePath, token);
-                    if (token.IsCancellationRequested) { itemResult.Status = "Cancelled"; itemResult.Details = "Cancelled before Ollama."; break; }
-
-                    Console.WriteLine($"[BatchProcessWindow] Sending to Ollama: {Path.GetFileName(filePath)}");
-                    OllamaGenerateResponse? ollamaApiResponse = await _ollamaClient.AnalyzeImageAsync(ollamaModel, ollamaPrompt, imageBytes);
-                    if (token.IsCancellationRequested) { itemResult.Status = "Cancelled"; itemResult.Details = "Cancelled after Ollama call attempt."; break; }
-
-
-                    if (ollamaApiResponse == null || !ollamaApiResponse.Done || string.IsNullOrEmpty(ollamaApiResponse.Response))
-                    {
-                        itemResult.Status = "Failed (Ollama)";
-                        itemResult.Details = $"Ollama analysis error: {ollamaApiResponse?.Response ?? "Null API response."}";
-                        Console.Error.WriteLine($"[BatchProcessWindow] Ollama error for {filePath}: {itemResult.Details}");
-                        filesFailed++;
-                    }
-                    else
-                    {
-                        Console.WriteLine($"[BatchProcessWindow] Ollama success for {filePath}. Parsing response...");
-                        ParsedOllamaContent parsedOllamaData = OllamaResponseParser.ParseLlavaResponse(ollamaApiResponse.Response);
-
-                        if (!parsedOllamaData.SuccessfullyParsed && string.IsNullOrEmpty(parsedOllamaData.Description))
-                        {
-                            parsedOllamaData.Description = $"Ollama (parsing issues or minimal content): {ollamaApiResponse.Response.Substring(0, Math.Min(ollamaApiResponse.Response.Length, 100))}...";
-                        }
-
-                        Console.WriteLine($"[BatchProcessWindow] Writing metadata for {filePath}...");
-                        editor.Description = parsedOllamaData.Description;
-                        editor.Keywords = new List<string>(parsedOllamaData.Keywords);
-                        editor.Categories = new List<string>(parsedOllamaData.Categories);
-                        // editor.ExifImageDescription = parsedOllamaData.Description; // If you choose to set this
-
-                        editor.Save(); // This will use the Magick.NET logic
-
-                        itemResult.Status = "Success";
-                        itemResult.Details = $"Desc: {parsedOllamaData.Description?.Substring(0, Math.Min(parsedOllamaData.Description.Length, 30))}... KW: {parsedOllamaData.Keywords.Count}, Cat: {parsedOllamaData.Categories.Count}";
-                        Console.WriteLine($"[BatchProcessWindow] Metadata written successfully for {filePath}");
-                        filesSucceeded++;
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    itemResult.Status = "Cancelled";
-                    itemResult.Details = "Operation cancelled during processing.";
-                    Console.WriteLine($"[BatchProcessWindow] Operation cancelled for file: {filePath}");
-                    break;
+                    var files = Directory.GetFiles(folderPath, pattern, searchOption);
+                    imageFiles.AddRange(files);
                 }
                 catch (Exception ex)
                 {
-                    itemResult.Status = "Failed (Error)";
-                    itemResult.Details = ex.Message.Substring(0, Math.Min(ex.Message.Length, 100));
-                    Console.Error.WriteLine($"[BatchProcessWindow] Error processing file {filePath}: {ex.Message}\n{ex.StackTrace}");
-                    filesFailed++;
+                    // Log error but continue with other extensions
+                    var errorItem = new BatchProcessItem
+                    {
+                        FilePath = $"Extension: {extension}",
+                        Status = "Error",
+                        Details = $"Failed to search for files: {ex.Message}"
+                    };
+                    ProcessResults.Add(errorItem);
                 }
-                finally
+            }
+
+            if (!imageFiles.Any())
+            {
+                StatusTextBlock.Text = "No image files found matching the specified criteria.";
+                return;
+            }
+
+            // Initialize Ollama client
+            // TODO: Get the Ollama server URL from application settings or configuration
+            string ollamaServerUrl = "http://localhost:11434"; // Default Ollama URL
+            _ollamaClient = new OllamaApiClient(ollamaServerUrl);
+
+            // Verify Ollama connection
+            bool isConnected = await _ollamaClient.CheckConnectionAsync();
+            if (!isConnected)
+            {
+                throw new Exception("Cannot connect to Ollama server. Please ensure Ollama is running.");
+            }
+
+            StatusTextBlock.Text = $"Found {imageFiles.Count} image files. Processing...";
+
+            // Process each image file
+            int processedCount = 0;
+            int successCount = 0;
+            int errorCount = 0;
+
+            foreach (var filePath in imageFiles)
+            {
+                token.ThrowIfCancellationRequested();
+
+                processedCount++;
+                StatusTextBlock.Text = $"Processing {processedCount} of {imageFiles.Count}: {Path.GetFileName(filePath)}";
+
+                var processItem = new BatchProcessItem
                 {
-                    editor?.Dispose();
-                    filesProcessed++;
-                    BatchProgressBar.Value = filesProcessed;
+                    FilePath = filePath,
+                    Status = "Processing",
+                    Details = "Analyzing image..."
+                };
+                ProcessResults.Add(processItem);
+
+                try
+                {
+                    // Read image file
+                    byte[] imageBytes = await File.ReadAllBytesAsync(filePath, token);
+
+                    // Send to Ollama for analysis
+                    processItem.Details = "Sending to Ollama for analysis...";
+                    var ollamaResponse = await _ollamaClient.AnalyzeImageAsync(ollamaModel, ollamaPrompt, imageBytes);
+
+                    if (ollamaResponse == null || string.IsNullOrEmpty(ollamaResponse.Response))
+                    {
+                        processItem.Status = "Error";
+                        processItem.Details = "No response received from Ollama";
+                        errorCount++;
+                        continue;
+                    }
+
+                    // Parse AI response
+                    processItem.Details = "Parsing AI response...";
+                    var parsedContent = OllamaResponseParser.ParseLlavaResponse(ollamaResponse.Response);
+
+                    // Update image metadata
+                    processItem.Details = "Updating image metadata...";
+                    using (var metadataService = new ImageMetadataService(filePath))
+                    {
+                        metadataService.Read();
+                        metadataService.PopulateFromOllamaContent(parsedContent);
+                        metadataService.Save();
+                    }
+
+                    // Update final status
+                    processItem.Status = "Completed";
+                    processItem.Details = $"Successfully processed. Description: {parsedContent.Description?.Substring(0, Math.Min(50, parsedContent.Description.Length ?? 0))}...";
+                    successCount++;
+                }
+                catch (OperationCanceledException)
+                {
+                    processItem.Status = "Cancelled";
+                    processItem.Details = "Processing was cancelled";
+                    throw; // Re-throw to stop the entire operation
+                }
+                catch (Exception ex)
+                {
+                    processItem.Status = "Error";
+                    processItem.Details = $"Error: {ex.Message}";
+                    errorCount++;
                 }
             }
 
-            string summaryMessage;
-            if (token.IsCancellationRequested)
-            {
-                summaryMessage = $"Batch process cancelled. Processed: {filesProcessed - 1}, Succeeded: {filesSucceeded}, Failed: {filesFailed}.";
-            }
-            else
-            {
-                summaryMessage = $"Batch process complete. Total: {filesToProcess.Count}, Succeeded: {filesSucceeded}, Failed: {filesFailed}.";
-            }
-            SetUiForEndOfBatch(token.IsCancellationRequested || filesFailed > 0, summaryMessage);
-            Console.WriteLine($"[BatchProcessWindow] {summaryMessage}");
+            // Update final status
+            StatusTextBlock.Text = $"Batch processing completed. Success: {successCount}, Errors: {errorCount}, Total: {processedCount}";
         }
-
-        // private async Task ProcessDaminionCollectionAsync(string collectionIdentifier, CancellationToken token)
-        // { ... To be implemented later ... }
+        #endregion
     }
 }
