@@ -6,12 +6,20 @@ namespace DaminionOllamaApp.Models
 {
     public class AppSettings : INotifyPropertyChanged
     {
+        // -- Existing Daminion Properties --
         private string _daminionServerUrl = "http://researchserver.juicefilm.local/daminion"; // Example default
         private string _daminionUsername = "admin";
         private string _daminionPassword = "admin"; // For simplicity now, consider SecureString later
+
+        // -- Existing Ollama Properties --
         private string _ollamaServerUrl = "http://researchserver.juicefilm.local:11434"; // Example default
         private string _ollamaModelName = "llava:13b"; // Example default
         private string _ollamaPrompt = "Please describe this image in detail. Identify key objects, subjects, and the overall scene. If relevant, suggest suitable categories and keywords.\n\nDescription:\n\nCategories:\n- Category1\n- Category2\n\nKeywords:\n- Keyword1, Keyword2, Keyword3"; // Example default
+
+        // -- NEW OpenRouter Properties --
+        private string _openRouterApiKey = string.Empty;
+        private string _openRouterHttpReferer = "http://localhost"; // Replace with your actual app name or URL
+        private string _openRouterModelName = "google/gemini-pro-vision"; // A sensible default
 
         public string DaminionServerUrl
         {
@@ -91,6 +99,47 @@ namespace DaminionOllamaApp.Models
             }
         }
 
+        // -- NEW OpenRouter Property Implementations --
+        public string OpenRouterApiKey
+        {
+            get => _openRouterApiKey;
+            set
+            {
+                if (_openRouterApiKey != value)
+                {
+                    _openRouterApiKey = value;
+                    OnPropertyChanged(nameof(OpenRouterApiKey));
+                }
+            }
+        }
+
+        public string OpenRouterHttpReferer
+        {
+            get => _openRouterHttpReferer;
+            set
+            {
+                if (_openRouterHttpReferer != value)
+                {
+                    _openRouterHttpReferer = value;
+                    OnPropertyChanged(nameof(OpenRouterHttpReferer));
+                }
+            }
+        }
+
+        public string OpenRouterModelName
+        {
+            get => _openRouterModelName;
+            set
+            {
+                if (_openRouterModelName != value)
+                {
+                    _openRouterModelName = value;
+                    OnPropertyChanged(nameof(OpenRouterModelName));
+                }
+            }
+        }
+
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged(string propertyName)
@@ -98,8 +147,7 @@ namespace DaminionOllamaApp.Models
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
-        // ... existing properties ...
-
+        // ... existing properties for Daminion Tag GUIDs and Flags ...
         private string _daminionDescriptionTagGuid = string.Empty;
         private string _daminionKeywordsTagGuid = string.Empty;
         private string _daminionCategoriesTagGuid = string.Empty;
@@ -127,13 +175,10 @@ namespace DaminionOllamaApp.Models
             set { if (_daminionFlagTagGuid != value) { _daminionFlagTagGuid = value; OnPropertyChanged(nameof(DaminionFlagTagGuid)); } }
         }
 
-        // DaminionOllamaApp/Models/AppSettings.cs
-        // ... (existing properties for DaminionServerUrl, Daminion Tag GUIDs, etc.) ...
-
         // --- NEW PROPERTIES FOR POST-OLLAMA FLAG MANAGEMENT ---
         private bool _automaticallyUpdateFlagAfterOllama = false;
         private string _flagValueIdToClearAfterOllama = string.Empty; // e.g., ID for "Unflagged" or "ReadyForOllama"
-        private string _flagValueIdToSetAfterOllama = string.Empty;   // e.g., ID for "OllamaProcessed"
+        private string _flagValueIdToSetAfterOllama = string.Empty; // e.g., ID for "OllamaProcessed"
 
         public bool AutomaticallyUpdateFlagAfterOllama
         {
@@ -173,9 +218,5 @@ namespace DaminionOllamaApp.Models
                 }
             }
         }
-        // --- END NEW POST-OLLAMA FLAG MANAGEMENT PROPERTIES ---
-
-        // ... (existing PropertyChanged event and OnPropertyChanged method) ...
-
     }
 }

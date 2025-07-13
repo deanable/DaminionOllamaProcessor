@@ -1,18 +1,19 @@
 ﻿// DaminionOllamaApp/ViewModels/SettingsViewModel.cs
 using DaminionOllamaApp.Models;
 using DaminionOllamaApp.Services;
-using DaminionOllamaApp.Utils;         // For RelayCommand
-using DaminionOllamaInteractionLib;    // For DaminionApiClient & OllamaApiClient
-using DaminionOllamaInteractionLib.Daminion; // For DaminionGetTagsResponse, DaminionTag
-using DaminionOllamaInteractionLib.Ollama;   // For OllamaListTagsResponse, OllamaModelInfo
+using DaminionOllamaApp.Utils;
+using DaminionOllamaInteractionLib;
+using DaminionOllamaInteractionLib.Daminion;
+using DaminionOllamaInteractionLib.Ollama;
+using DaminionOllamaInteractionLib.OpenRouter; // <-- NEW: Add using for OpenRouter client
 using System;
-using System.Collections.Generic;      // For EqualityComparer
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
-using System.Runtime.CompilerServices; // For CallerMemberName
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using System.Windows;                  // For Application.Current.Dispatcher
+using System.Windows;
 using System.Windows.Input;
 
 namespace DaminionOllamaApp.ViewModels
@@ -22,17 +23,21 @@ namespace DaminionOllamaApp.ViewModels
         private readonly SettingsService _settingsService;
         private AppSettings _settings;
 
-        // Daminion GUID Discovery
-        private bool _isDiscoveringGuids;
-        private string _discoveryStatusMessage = string.Empty;
-
-        // Ollama Settings
+        // --- Ollama Settings ---
         private string _ollamaConnectionStatus = "Ollama connection not verified.";
         private bool _isVerifyingOllamaConnection;
         private bool _isFetchingOllamaModels;
         private ObservableCollection<string> _ollamaModels;
 
-        // Daminion Connection Test
+        // --- NEW: OpenRouter Settings ---
+        private string _openRouterConnectionStatus = "OpenRouter connection not verified.";
+        private bool _isVerifyingOpenRouterConnection;
+        private bool _isFetchingOpenRouterModels;
+        private ObservableCollection<string> _openRouterModels;
+
+        // --- Daminion Settings ---
+        private bool _isDiscoveringGuids;
+        private string _discoveryStatusMessage = string.Empty;
         private string _daminionConnectionTestStatus = "Daminion connection not verified.";
         private bool _isVerifyingDaminionConnectionTest;
 
@@ -42,27 +47,7 @@ namespace DaminionOllamaApp.ViewModels
             set { SetProperty(ref _settings, value); }
         }
 
-        // Daminion GUID Discovery Properties
-        public bool IsDiscoveringGuids
-        {
-            get => _isDiscoveringGuids;
-            private set
-            {
-                if (SetProperty(ref _isDiscoveringGuids, value))
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                        (DiscoverTagGuidsCommand as RelayCommand)?.RaiseCanExecuteChanged());
-                }
-            }
-        }
-
-        public string DiscoveryStatusMessage
-        {
-            get => _discoveryStatusMessage;
-            private set { SetProperty(ref _discoveryStatusMessage, value); }
-        }
-
-        // Ollama Settings Properties
+        // --- Ollama Properties ---
         public string OllamaConnectionStatus
         {
             get => _ollamaConnectionStatus;
@@ -107,6 +92,71 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        // --- NEW: OpenRouter Properties ---
+        public string OpenRouterConnectionStatus
+        {
+            get => _openRouterConnectionStatus;
+            private set { SetProperty(ref _openRouterConnectionStatus, value); }
+        }
+
+        public bool IsVerifyingOpenRouterConnection
+        {
+            get => _isVerifyingOpenRouterConnection;
+            private set
+            {
+                if (SetProperty(ref _isVerifyingOpenRouterConnection, value))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        (VerifyOpenRouterConnectionCommand as RelayCommand)?.RaiseCanExecuteChanged());
+                }
+            }
+        }
+
+        public bool IsFetchingOpenRouterModels
+        {
+            get => _isFetchingOpenRouterModels;
+            private set { SetProperty(ref _isFetchingOpenRouterModels, value); }
+        }
+
+        public ObservableCollection<string> OpenRouterModels
+        {
+            get => _openRouterModels;
+            private set { SetProperty(ref _openRouterModels, value); }
+        }
+
+        public string? SelectedOpenRouterModelName
+        {
+            get => Settings?.OpenRouterModelName;
+            set
+            {
+                if (Settings != null && Settings.OpenRouterModelName != value)
+                {
+                    Settings.OpenRouterModelName = value ?? string.Empty;
+                    OnPropertyChanged(nameof(SelectedOpenRouterModelName));
+                }
+            }
+        }
+
+        // Daminion GUID Discovery Properties
+        public bool IsDiscoveringGuids
+        {
+            get => _isDiscoveringGuids;
+            private set
+            {
+                if (SetProperty(ref _isDiscoveringGuids, value))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        (DiscoverTagGuidsCommand as RelayCommand)?.RaiseCanExecuteChanged());
+                }
+            }
+        }
+
+        public string DiscoveryStatusMessage
+        {
+            get => _discoveryStatusMessage;
+            private set { SetProperty(ref _discoveryStatusMessage, value); }
+        }
+
         // Daminion Connection Test Properties
         public string DaminionConnectionTestStatus
         {
@@ -127,28 +177,32 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // Commands
+        // --- Commands ---
         public ICommand SaveCommand { get; }
         public ICommand CloseCommand { get; }
         public ICommand DiscoverTagGuidsCommand { get; }
-        public ICommand VerifyOllamaConnectionCommand { get; } // For Ollama
-        public ICommand TestDaminionConnectionCommand { get; } // For Daminion
+        public ICommand VerifyOllamaConnectionCommand { get; }
+        public ICommand TestDaminionConnectionCommand { get; }
+        public ICommand VerifyOpenRouterConnectionCommand { get; } // <-- NEW COMMAND
 
         // Actions for View Interaction
         public Action? CloseAction { get; set; }
         public Action<string>? UpdatePasswordBoxAction { get; set; }
+
 
         public SettingsViewModel()
         {
             _settingsService = new SettingsService();
             _settings = _settingsService.LoadSettings();
             _ollamaModels = new ObservableCollection<string>();
+            _openRouterModels = new ObservableCollection<string>(); // <-- NEW: Initialize collection
 
             SaveCommand = new RelayCommand(param => SaveSettings());
             CloseCommand = new RelayCommand(param => Close());
             DiscoverTagGuidsCommand = new RelayCommand(async param => await DiscoverTagGuidsAsync(), param => CanDiscoverTagGuids());
             VerifyOllamaConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOllamaModelsAsync(), param => CanVerifyOllamaConnection());
             TestDaminionConnectionCommand = new RelayCommand(async param => await TestDaminionConnectionAsync(), param => CanTestDaminionConnection());
+            VerifyOpenRouterConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOpenRouterModelsAsync(), param => CanVerifyOpenRouterConnection()); // <-- NEW COMMAND
         }
 
         private void SaveSettings()
@@ -186,6 +240,7 @@ namespace DaminionOllamaApp.ViewModels
         private async Task DiscoverTagGuidsAsync()
         {
             if (!CanDiscoverTagGuids()) return;
+
             IsDiscoveringGuids = true;
             DiscoveryStatusMessage = "Connecting to Daminion to discover GUIDs...";
 
@@ -220,12 +275,86 @@ namespace DaminionOllamaApp.ViewModels
                             if (notFoundNames.Any()) report += $" Could not find: {string.Join(", ", notFoundNames)}.";
                             DiscoveryStatusMessage = report + " Review and Save.";
                         }
-                        else { DiscoveryStatusMessage = $"Failed to fetch tags: {tagsResponse?.Error ?? "Unknown error"}."; }
+                        else
+                        {
+                            DiscoveryStatusMessage = $"Failed to fetch tags: {tagsResponse?.Error ?? "Unknown error"}.";
+                        }
                     }
-                    else { DiscoveryStatusMessage = "Login failed for discovery. Check credentials/URL."; }
+                    else
+                    {
+                        DiscoveryStatusMessage = "Login failed for discovery. Check credentials/URL.";
+                    }
                 }
-                catch (Exception ex) { DiscoveryStatusMessage = $"Error during GUID discovery: {ex.Message}"; System.Diagnostics.Debug.WriteLine($"GUID Discovery Exception: {ex}"); }
-                finally { IsDiscoveringGuids = false; }
+                catch (Exception ex)
+                {
+                    DiscoveryStatusMessage = $"Error during GUID discovery: {ex.Message}";
+                    System.Diagnostics.Debug.WriteLine($"GUID Discovery Exception: {ex}");
+                }
+                finally
+                {
+                    IsDiscoveringGuids = false;
+                }
+            }
+        }
+
+        // --- NEW: OpenRouter Verification and Model Fetching Logic ---
+        private bool CanVerifyOpenRouterConnection()
+        {
+            return !IsVerifyingOpenRouterConnection && Settings != null && !string.IsNullOrWhiteSpace(Settings.OpenRouterApiKey);
+        }
+
+        private async Task VerifyAndFetchOpenRouterModelsAsync()
+        {
+            if (!CanVerifyOpenRouterConnection() || Settings == null) return;
+
+            IsVerifyingOpenRouterConnection = true;
+            IsFetchingOpenRouterModels = true;
+            OpenRouterConnectionStatus = "Verifying OpenRouter connection...";
+            Application.Current.Dispatcher.Invoke(() => OpenRouterModels.Clear());
+
+            try
+            {
+                using (var client = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer))
+                {
+                    var modelsResponse = await client.ListModelsAsync();
+                    if (modelsResponse?.Data != null)
+                    {
+                        var multimodalModels = modelsResponse.Data
+                            .Where(m => m.Id != null && (m.Id.Contains("vision") || m.Id.Contains("claude-3"))) // Simple filter for likely multimodal models
+                            .OrderBy(m => m.Name)
+                            .ToList();
+
+                        foreach (var model in multimodalModels)
+                        {
+                            OpenRouterModels.Add(model.Id!);
+                        }
+                        OpenRouterConnectionStatus = $"{OpenRouterModels.Count} multimodal models found.";
+
+                        // Set selected item
+                        if (!string.IsNullOrWhiteSpace(Settings.OpenRouterModelName) && OpenRouterModels.Contains(Settings.OpenRouterModelName))
+                        {
+                            SelectedOpenRouterModelName = Settings.OpenRouterModelName;
+                        }
+                        else if (OpenRouterModels.Any())
+                        {
+                            SelectedOpenRouterModelName = OpenRouterModels.FirstOrDefault();
+                        }
+                    }
+                    else
+                    {
+                        OpenRouterConnectionStatus = "Failed to fetch models from OpenRouter. Check API Key.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                OpenRouterConnectionStatus = $"Error: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"OpenRouter Verification Exception: {ex}");
+            }
+            finally
+            {
+                IsFetchingOpenRouterModels = false;
+                IsVerifyingOpenRouterConnection = false;
             }
         }
 
@@ -238,19 +367,18 @@ namespace DaminionOllamaApp.ViewModels
         private async Task VerifyAndFetchOllamaModelsAsync()
         {
             if (!CanVerifyOllamaConnection() || Settings == null) return;
+
             IsVerifyingOllamaConnection = true;
             IsFetchingOllamaModels = false;
             OllamaConnectionStatus = $"Verifying Ollama connection to {Settings.OllamaServerUrl}...";
 
-            // Clear previous models on new verification attempt
             Application.Current.Dispatcher.Invoke(() => OllamaModels.Clear());
 
-
-            OllamaApiClient? tempOllamaClient = null; // Declare outside try to use in finally if needed for dispose, though 'using' is better
+            OllamaApiClient? tempOllamaClient = null;
             try
             {
-                tempOllamaClient = new OllamaApiClient(Settings.OllamaServerUrl); // Constructor takes URL
-                using (tempOllamaClient) // Ensure disposal
+                tempOllamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
+                using (tempOllamaClient)
                 {
                     bool connected = await tempOllamaClient.CheckConnectionAsync();
                     if (connected)
@@ -265,6 +393,7 @@ namespace DaminionOllamaApp.ViewModels
                                 OllamaModels.Add(modelInfo.Name);
                             }
                             OllamaConnectionStatus = $"{OllamaModels.Count} Ollama models found.";
+
                             if (!string.IsNullOrWhiteSpace(Settings.OllamaModelName) && OllamaModels.Contains(Settings.OllamaModelName))
                             {
                                 SelectedOllamaModelName = Settings.OllamaModelName;
@@ -274,13 +403,19 @@ namespace DaminionOllamaApp.ViewModels
                                 SelectedOllamaModelName = OllamaModels.FirstOrDefault();
                             }
                         }
-                        else { OllamaConnectionStatus = "Connected, but failed to fetch models or no models found."; }
+                        else
+                        {
+                            OllamaConnectionStatus = "Connected, but failed to fetch models or no models found.";
+                        }
                         IsFetchingOllamaModels = false;
                     }
-                    else { OllamaConnectionStatus = "Failed to connect to Ollama server. Check URL and ensure server is running."; }
+                    else
+                    {
+                        OllamaConnectionStatus = "Failed to connect to Ollama server. Check URL and ensure server is running.";
+                    }
                 }
             }
-            catch (ArgumentException ex) // From OllamaApiClient constructor if URL is bad
+            catch (ArgumentException ex)
             {
                 OllamaConnectionStatus = $"Error: Invalid Ollama Server URL - {ex.Message}";
             }
@@ -308,6 +443,7 @@ namespace DaminionOllamaApp.ViewModels
         private async Task TestDaminionConnectionAsync()
         {
             if (!CanTestDaminionConnection() || Settings == null) return;
+
             IsVerifyingDaminionConnectionTest = true;
             DaminionConnectionTestStatus = $"Testing Daminion connection to {Settings.DaminionServerUrl}...";
 
