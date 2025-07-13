@@ -4,29 +4,44 @@ using DaminionOllamaApp.Services;
 using DaminionOllamaApp.Utils;
 using Microsoft.Win32;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using System.Windows;
-using System.Collections.Generic; // For List
+using System.Windows.Input;
 
 namespace DaminionOllamaApp.ViewModels
 {
+    /// <summary>
+    /// ViewModel for the "Local File Tagger" tab.
+    /// Manages the state and logic for processing a queue of local image files.
+    /// </summary>
     public class LocalFileTaggerViewModel : INotifyPropertyChanged
     {
+        // --- Private Fields ---
         private string _currentOperationStatus = "Ready. Add files to begin.";
         private ObservableCollection<FileQueueItem> _filesToProcess;
         private bool _isProcessingQueue;
         private CancellationTokenSource? _cancellationTokenSource;
-        private FileQueueItem? _selectedFile; // To track the selected file
+        private FileQueueItem? _selectedFile;
 
         private readonly ProcessingService _processingService;
         private readonly SettingsService _settingsService;
-        private AppSettings _currentSettings;
 
+        // --- Public Properties ---
+
+        /// <summary>
+        /// Holds the shared application settings, passed in from the MainViewModel.
+        /// This allows the ViewModel to react to global settings changes.
+        /// </summary>
+        public AppSettings Settings { get; }
+
+        /// <summary>
+        /// A collection of files that are queued for processing. This is bound to the ListView in the UI.
+        /// </summary>
         public ObservableCollection<FileQueueItem> FilesToProcess
         {
             get => _filesToProcess;
@@ -37,7 +52,9 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // Property for the ListView's SelectedItem
+        /// <summary>
+        /// The currently selected file in the ListView.
+        /// </summary>
         public FileQueueItem? SelectedFile
         {
             get => _selectedFile;
@@ -47,12 +64,15 @@ namespace DaminionOllamaApp.ViewModels
                 {
                     _selectedFile = value;
                     OnPropertyChanged(nameof(SelectedFile));
-                    // Notify that CanExecute for RemoveSelectedFileCommand might have changed
+                    // Notify that the "Remove Selected" command's executability might have changed.
                     ((RelayCommand)RemoveSelectedFileCommand).RaiseCanExecuteChanged();
                 }
             }
         }
 
+        /// <summary>
+        /// A status message displayed to the user, indicating the current operation or result.
+        /// </summary>
         public string CurrentOperationStatus
         {
             get => _currentOperationStatus;
@@ -63,6 +83,10 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        /// <summary>
+        /// A flag indicating whether the processing queue is currently active.
+        /// Used to enable/disable UI controls.
+        /// </summary>
         public bool IsProcessingQueue
         {
             get => _isProcessingQueue;
@@ -72,6 +96,7 @@ namespace DaminionOllamaApp.ViewModels
                 {
                     _isProcessingQueue = value;
                     OnPropertyChanged(nameof(IsProcessingQueue));
+                    // When this property changes, update the state of all related commands.
                     Application.Current.Dispatcher.Invoke(() =>
                     {
                         ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
@@ -85,34 +110,38 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        // --- Commands ---
         public ICommand AddFilesCommand { get; }
         public ICommand StartQueueCommand { get; }
         public ICommand StopQueueCommand { get; }
-        // New Commands
         public ICommand RemoveSelectedFileCommand { get; }
         public ICommand ClearProcessedFilesCommand { get; }
         public ICommand ClearAllFilesCommand { get; }
 
-
-        public LocalFileTaggerViewModel()
+        /// <summary>
+        /// Initializes a new instance of the LocalFileTaggerViewModel.
+        /// </summary>
+        /// <param name="settings">The shared AppSettings instance.</param>
+        /// <param name="settingsService">The service for loading/saving settings.</param>
+        public LocalFileTaggerViewModel(AppSettings settings, SettingsService settingsService)
         {
+            // Store the shared settings instance
+            Settings = settings;
+            _settingsService = settingsService;
+
             FilesToProcess = new ObservableCollection<FileQueueItem>();
             _processingService = new ProcessingService();
-            _settingsService = new SettingsService();
-            _currentSettings = _settingsService.LoadSettings();
 
+            // Initialize commands
             AddFilesCommand = new RelayCommand(param => AddFiles(), param => CanAddFiles());
             StartQueueCommand = new RelayCommand(async param => await StartQueueAsync(), param => CanStartQueue());
             StopQueueCommand = new RelayCommand(param => StopQueue(), param => CanStopQueue());
-
-            // Initialize New Commands
             RemoveSelectedFileCommand = new RelayCommand(param => RemoveSelectedFile(), param => CanRemoveSelectedFile());
             ClearProcessedFilesCommand = new RelayCommand(param => ClearProcessedFiles(), param => CanClearProcessedFiles());
             ClearAllFilesCommand = new RelayCommand(param => ClearAllFiles(), param => CanClearAllFiles());
         }
 
         private bool CanAddFiles() => !IsProcessingQueue;
-
         private void AddFiles()
         {
             var openFileDialog = new OpenFileDialog
@@ -121,7 +150,6 @@ namespace DaminionOllamaApp.ViewModels
                 Filter = "Image Files (*.jpg; *.jpeg; *.png; *.bmp; *.gif; *.tiff)|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tiff|All files (*.*)|*.*",
                 Title = "Select Image Files"
             };
-
             if (openFileDialog.ShowDialog() == true)
             {
                 int filesAddedCount = 0;
@@ -134,9 +162,10 @@ namespace DaminionOllamaApp.ViewModels
                     }
                 }
                 CurrentOperationStatus = $"{filesAddedCount} file(s) added to the queue. {FilesToProcess.Count} total.";
+                // Update command states after modifying the list
                 ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
-                ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged(); // List is no longer empty
-                ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged(); // Status of items might allow this
+                ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
             }
         }
 
@@ -148,7 +177,6 @@ namespace DaminionOllamaApp.ViewModels
         private async Task StartQueueAsync()
         {
             IsProcessingQueue = true;
-            _currentSettings = _settingsService.LoadSettings();
             _cancellationTokenSource = new CancellationTokenSource();
             var token = _cancellationTokenSource.Token;
 
@@ -159,7 +187,6 @@ namespace DaminionOllamaApp.ViewModels
             var itemsToProcessThisRun = FilesToProcess
                                         .Where(f => f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error)
                                         .ToList();
-
             foreach (var item in itemsToProcessThisRun)
             {
                 if (token.IsCancellationRequested)
@@ -170,7 +197,10 @@ namespace DaminionOllamaApp.ViewModels
                 }
                 item.Status = ProcessingStatus.Queued;
                 item.StatusMessage = "Waiting for processing...";
-                await _processingService.ProcessLocalFileAsync(item, _currentSettings, UpdateOverallStatus, token);
+
+                // Use the shared Settings property directly
+                await _processingService.ProcessLocalFileAsync(item, Settings, UpdateOverallStatus, token);
+
                 if (item.Status == ProcessingStatus.Processed) processedCount++;
                 else if (item.Status == ProcessingStatus.Error || item.Status == ProcessingStatus.Cancelled) errorCount++;
             }
@@ -178,12 +208,11 @@ namespace DaminionOllamaApp.ViewModels
             IsProcessingQueue = false;
             _cancellationTokenSource?.Dispose();
             _cancellationTokenSource = null;
-
             string summary = $"Queue finished. Processed: {processedCount}, Errors/Cancelled: {errorCount}.";
             CurrentOperationStatus = summary;
             UpdateOverallStatus(summary);
             ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged(); // Processed items might now exist
+            ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
         }
 
         private void UpdateOverallStatus(string message)
@@ -195,7 +224,6 @@ namespace DaminionOllamaApp.ViewModels
         }
 
         private bool CanStopQueue() => IsProcessingQueue;
-
         private void StopQueue()
         {
             if (_cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested)
@@ -205,9 +233,7 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // --- New Command Methods ---
         private bool CanRemoveSelectedFile() => SelectedFile != null && !IsProcessingQueue;
-
         private void RemoveSelectedFile()
         {
             if (SelectedFile != null)
@@ -222,7 +248,6 @@ namespace DaminionOllamaApp.ViewModels
         }
 
         private bool CanClearProcessedFiles() => FilesToProcess.Any(f => f.Status == ProcessingStatus.Processed) && !IsProcessingQueue;
-
         private void ClearProcessedFiles()
         {
             var processedFiles = FilesToProcess.Where(f => f.Status == ProcessingStatus.Processed).ToList();
@@ -231,13 +256,12 @@ namespace DaminionOllamaApp.ViewModels
                 FilesToProcess.Remove(file);
             }
             CurrentOperationStatus = $"{processedFiles.Count} processed file(s) cleared.";
-            ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged(); // Re-evaluate if any processable files remain
-            ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged(); // Might now be disabled
-            ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged(); // List might now be empty
+            ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
+            ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
+            ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged();
         }
 
         private bool CanClearAllFiles() => FilesToProcess.Any() && !IsProcessingQueue;
-
         private void ClearAllFiles()
         {
             int count = FilesToProcess.Count;
@@ -253,9 +277,6 @@ namespace DaminionOllamaApp.ViewModels
         protected virtual void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            // For properties that might affect command states, you might call RaiseCanExecuteChanged here
-            // e.g., if FilesToProcess.Count changes, it affects CanClearAllFiles.
-            // However, we are already calling RaiseCanExecuteChanged in the methods that modify the list.
         }
     }
 }

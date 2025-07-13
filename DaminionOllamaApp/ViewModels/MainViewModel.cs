@@ -1,8 +1,10 @@
 ﻿// DaminionOllamaApp/ViewModels/MainViewModel.cs
-using DaminionOllamaApp.Utils; // For RelayCommand
+using DaminionOllamaApp.Models;
+using DaminionOllamaApp.Services;
+using DaminionOllamaApp.Utils;
 using DaminionOllamaApp.Views;
 using System.ComponentModel;
-using System.Windows; // Required for Application.Current
+using System.Windows;
 using System.Windows.Input;
 
 namespace DaminionOllamaApp.ViewModels
@@ -12,47 +14,49 @@ namespace DaminionOllamaApp.ViewModels
         public ICommand OpenSettingsCommand { get; }
         public ICommand ExitCommand { get; }
 
-        // This property will hold the ViewModel for the "Local File Tagger" tab
         public LocalFileTaggerViewModel LocalFileTaggerVM { get; }
-
-        // ... other properties ...
-        public DaminionCollectionTaggerViewModel DaminionCollectionTaggerVM { get; } // Add this
-
-        // --- ADD NEW PROPERTY for MetadataTidyUpViewModel ---
+        public DaminionCollectionTaggerViewModel DaminionCollectionTaggerVM { get; }
         public MetadataTidyUpViewModel MetadataTidyUpVM { get; }
+
+        // This is the single source of truth for settings
+        public AppSettings AppSettings { get; }
 
         public MainViewModel()
         {
+            // Load settings once when the application starts
+            var settingsService = new SettingsService();
+            AppSettings = settingsService.LoadSettings();
+
             OpenSettingsCommand = new RelayCommand(param => OpenSettingsWindow());
             ExitCommand = new RelayCommand(param => ExitApplication());
 
-            LocalFileTaggerVM = new LocalFileTaggerViewModel();
-            DaminionCollectionTaggerVM = new DaminionCollectionTaggerViewModel();
-
-            // --- INITIALIZE NEW ViewModel ---
-            MetadataTidyUpVM = new MetadataTidyUpViewModel();
+            // Pass the single AppSettings instance to all child ViewModels
+            LocalFileTaggerVM = new LocalFileTaggerViewModel(AppSettings, settingsService);
+            DaminionCollectionTaggerVM = new DaminionCollectionTaggerViewModel(AppSettings, settingsService);
+            MetadataTidyUpVM = new MetadataTidyUpViewModel(AppSettings, settingsService);
         }
-
 
         private void OpenSettingsWindow()
         {
-            var settingsViewModel = new SettingsViewModel(); // Assumes SettingsViewModel is in this namespace or DaminionOllamaApp.ViewModels
+            // Pass the single AppSettings instance to the SettingsViewModel
+            var settingsViewModel = new SettingsViewModel(this.AppSettings);
             var settingsWindow = new SettingsWindow
             {
-                Owner = Application.Current.MainWindow, // Set owner to the current main window
+                Owner = Application.Current.MainWindow,
                 DataContext = settingsViewModel
             };
 
-            // Wire up the actions for the SettingsViewModel
-            settingsViewModel.CloseAction = () => settingsWindow.Close();
-            settingsViewModel.UpdatePasswordBoxAction = (pwd) => settingsWindow.SetPasswordBox(pwd);
-
-            // Call the action to set the initial password in the PasswordBox
-            // This should be done after the window's DataContext is set and it's about to be shown
-            if (settingsViewModel.Settings != null) // Ensure settings are loaded
+            // Define what happens when the settings window is closed/saved
+            settingsViewModel.CloseAction = () =>
             {
-                settingsViewModel.UpdatePasswordBoxAction?.Invoke(settingsViewModel.Settings.DaminionPassword);
-            }
+                // Save the (potentially modified) settings object to disk
+                var settingsService = new SettingsService();
+                settingsService.SaveSettings(this.AppSettings);
+                settingsWindow.Close();
+            };
+
+            settingsViewModel.UpdatePasswordBoxAction = (pwd) => settingsWindow.SetPasswordBox(pwd);
+            settingsViewModel.UpdatePasswordBoxAction?.Invoke(settingsViewModel.Settings.DaminionPassword);
 
             settingsWindow.ShowDialog();
         }

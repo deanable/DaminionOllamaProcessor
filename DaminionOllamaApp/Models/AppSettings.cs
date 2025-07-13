@@ -4,8 +4,18 @@ using System.Security; // Required for SecureString if you choose to use it late
 
 namespace DaminionOllamaApp.Models
 {
+    // NEW: Enum to define the available AI providers.
+    public enum AiProvider
+    {
+        Ollama,
+        OpenRouter
+    }
+
     public class AppSettings : INotifyPropertyChanged
     {
+        // -- AI Provider Selection --
+        private AiProvider _selectedAiProvider = AiProvider.Ollama; // Default to Ollama
+
         // -- Existing Daminion Properties --
         private string _daminionServerUrl = "http://researchserver.juicefilm.local/daminion"; // Example default
         private string _daminionUsername = "admin";
@@ -16,10 +26,24 @@ namespace DaminionOllamaApp.Models
         private string _ollamaModelName = "llava:13b"; // Example default
         private string _ollamaPrompt = "Please describe this image in detail. Identify key objects, subjects, and the overall scene. If relevant, suggest suitable categories and keywords.\n\nDescription:\n\nCategories:\n- Category1\n- Category2\n\nKeywords:\n- Keyword1, Keyword2, Keyword3"; // Example default
 
-        // -- NEW OpenRouter Properties --
+        // -- OpenRouter Properties --
         private string _openRouterApiKey = string.Empty;
         private string _openRouterHttpReferer = "http://localhost"; // Replace with your actual app name or URL
         private string _openRouterModelName = "google/gemini-pro-vision"; // A sensible default
+
+        // NEW: Public property for the selected AI provider
+        public AiProvider SelectedAiProvider
+        {
+            get => _selectedAiProvider;
+            set
+            {
+                if (_selectedAiProvider != value)
+                {
+                    _selectedAiProvider = value;
+                    OnPropertyChanged(nameof(SelectedAiProvider));
+                }
+            }
+        }
 
         public string DaminionServerUrl
         {
@@ -99,7 +123,6 @@ namespace DaminionOllamaApp.Models
             }
         }
 
-        // -- NEW OpenRouter Property Implementations --
         public string OpenRouterApiKey
         {
             get => _openRouterApiKey;
@@ -151,8 +174,7 @@ namespace DaminionOllamaApp.Models
         private string _daminionDescriptionTagGuid = string.Empty;
         private string _daminionKeywordsTagGuid = string.Empty;
         private string _daminionCategoriesTagGuid = string.Empty;
-        private string _daminionFlagTagGuid = string.Empty; // For the main "Flag" tag
-                                                            // You might also need IDs/GUIDs for specific flag *values* like "Processed"
+        private string _daminionFlagTagGuid = string.Empty;
 
         public string DaminionDescriptionTagGuid
         {
@@ -169,16 +191,15 @@ namespace DaminionOllamaApp.Models
             get => _daminionCategoriesTagGuid;
             set { if (_daminionCategoriesTagGuid != value) { _daminionCategoriesTagGuid = value; OnPropertyChanged(nameof(DaminionCategoriesTagGuid)); } }
         }
-        public string DaminionFlagTagGuid // GUID of the "Flag" tag itself
+        public string DaminionFlagTagGuid
         {
             get => _daminionFlagTagGuid;
             set { if (_daminionFlagTagGuid != value) { _daminionFlagTagGuid = value; OnPropertyChanged(nameof(DaminionFlagTagGuid)); } }
         }
 
-        // --- NEW PROPERTIES FOR POST-OLLAMA FLAG MANAGEMENT ---
         private bool _automaticallyUpdateFlagAfterOllama = false;
-        private string _flagValueIdToClearAfterOllama = string.Empty; // e.g., ID for "Unflagged" or "ReadyForOllama"
-        private string _flagValueIdToSetAfterOllama = string.Empty; // e.g., ID for "OllamaProcessed"
+        private string _flagValueIdToClearAfterOllama = string.Empty;
+        private string _flagValueIdToSetAfterOllama = string.Empty;
 
         public bool AutomaticallyUpdateFlagAfterOllama
         {
@@ -193,7 +214,7 @@ namespace DaminionOllamaApp.Models
             }
         }
 
-        public string FlagValueIdToClearAfterOllama // Stores the Daminion Tag Value ID
+        public string FlagValueIdToClearAfterOllama
         {
             get => _flagValueIdToClearAfterOllama;
             set
@@ -206,7 +227,7 @@ namespace DaminionOllamaApp.Models
             }
         }
 
-        public string FlagValueIdToSetAfterOllama // Stores the Daminion Tag Value ID
+        public string FlagValueIdToSetAfterOllama
         {
             get => _flagValueIdToSetAfterOllama;
             set

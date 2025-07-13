@@ -4,11 +4,21 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DaminionOllamaApp"
+        xmlns:viewModels="clr-namespace:DaminionOllamaApp.ViewModels"
+        xmlns:models="clr-namespace:DaminionOllamaApp.Models"
+        xmlns:converters="clr-namespace:DaminionOllamaApp.Converters"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="Daminion Llama Processor" Height="600" Width="900">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+        <converters:EnumToBooleanConverter x:Key="EnumToBooleanConverter"/>
+
     </Window.Resources>
+    <Window.DataContext>
+        <viewModels:MainViewModel/>
+    </Window.DataContext>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -28,11 +38,21 @@
                 <Grid Margin="5" DataContext="{Binding LocalFileTaggerVM}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,10">
+                    <GroupBox Grid.Row="0" Header="AI Provider" Padding="5" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton GroupName="LocalProvider" Content="Ollama" Margin="0,0,20,0"
+                                         IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.Ollama}}"/>
+                            <RadioButton GroupName="LocalProvider" Content="OpenRouter"
+                                         IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.OpenRouter}}"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,10">
                         <Button Content="Add Files..." Command="{Binding AddFilesCommand}" Width="100" Margin="0,0,5,0" />
                         <Button Content="Start Queue" Command="{Binding StartQueueCommand}" Width="100" Margin="0,0,5,0" />
                         <Button Content="Stop Queue" Command="{Binding StopQueueCommand}" Width="100" Margin="0,0,15,0" />
@@ -41,8 +61,8 @@
                         <Button Content="Clear All" Command="{Binding ClearAllFilesCommand}" Width="80" />
                     </StackPanel>
 
-                    <ListView Grid.Row="1" ItemsSource="{Binding FilesToProcess}" SelectionMode="Single"
-          SelectedItem="{Binding SelectedFile}">
+                    <ListView Grid.Row="2" ItemsSource="{Binding FilesToProcess}" SelectionMode="Single"
+                              SelectedItem="{Binding SelectedFile}">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="File Name" Width="300" DisplayMemberBinding="{Binding FileName}" />
@@ -51,22 +71,33 @@
                             </GridView>
                         </ListView.View>
                     </ListView>
-                    
-                    <TextBox Grid.Row="2" Text="{Binding CurrentOperationStatus}"
-                         IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                         MinHeight="60" MaxHeight="150" Margin="0,10,0,0" />
+
+                    <TextBox Grid.Row="3" Text="{Binding CurrentOperationStatus}"
+                             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             MinHeight="60" MaxHeight="150" Margin="0,10,0,0" />
                 </Grid>
             </TabItem>
+
             <TabItem Header="Daminion Query Tagger">
                 <Grid Margin="5" DataContext="{Binding DaminionCollectionTaggerVM}">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,10">
+                    <GroupBox Grid.Row="0" Header="AI Provider" Padding="5" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton GroupName="DaminionProvider" Content="Ollama" Margin="0,0,20,0"
+                                         IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.Ollama}}"/>
+                            <RadioButton GroupName="DaminionProvider" Content="OpenRouter"
+                                         IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.OpenRouter}}"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Login to Daminion" Command="{Binding LoginCommand}" Width="150" Margin="0,0,10,0" />
                             <TextBlock Text="{Binding DaminionStatus}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />
@@ -75,20 +106,20 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Label Content="Select Query Type:" VerticalAlignment="Center" IsEnabled="{Binding IsLoggedIn}" />
                             <ComboBox ItemsSource="{Binding QueryTypes}"
-                  SelectedItem="{Binding SelectedQueryType}"
-                  DisplayMemberPath="DisplayName" 
-                  MinWidth="200" Margin="5,0,10,0"
-                  IsEnabled="{Binding IsLoggedIn}" />
+                                      SelectedItem="{Binding SelectedQueryType}"
+                                      DisplayMemberPath="DisplayName" 
+                                      MinWidth="200" Margin="5,0,10,0"
+                                      IsEnabled="{Binding IsLoggedIn}" />
                             <Button Content="Load Daminion Items" Command="{Binding LoadItemsByQueryCommand}" Width="150" IsEnabled="{Binding IsLoggedIn}"/>
                         </StackPanel>
                     </StackPanel>
-                    
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,10">
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,5,0,10">
                         <Button Content="Start Daminion Queue" Command="{Binding StartDaminionQueueCommand}" Width="160" Margin="0,0,5,0" />
                         <Button Content="Stop Daminion Queue" Command="{Binding StopDaminionQueueCommand}" Width="160" />
                     </StackPanel>
 
-                    <ListView Grid.Row="2" ItemsSource="{Binding DaminionFilesToProcess}" SelectionMode="Single">
+                    <ListView Grid.Row="3" ItemsSource="{Binding DaminionFilesToProcess}" SelectionMode="Single">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="Daminion ID" Width="100" DisplayMemberBinding="{Binding DaminionItemId}" />
@@ -100,11 +131,12 @@
                         </ListView.View>
                     </ListView>
 
-                    <TextBox Grid.Row="3" Text="{Binding DaminionStatus}"
-                     IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                     MinHeight="40" MaxHeight="100" Margin="0,10,0,0" />
+                    <TextBox Grid.Row="4" Text="{Binding DaminionStatus}"
+                             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             MinHeight="40" MaxHeight="100" Margin="0,10,0,0" />
                 </Grid>
             </TabItem>
+
             <TabItem Header="Metadata Tidy-up">
                 <Grid Margin="5" DataContext="{Binding MetadataTidyUpVM}">
                     <Grid.RowDefinitions>
@@ -119,14 +151,14 @@
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
                         <Label Content="Processing Mode:" VerticalAlignment="Center"/>
-                        <RadioButton Content="Local Files" GroupName="ProcessingMode" Margin="5,0,0,0"
-                     IsChecked="{Binding IsLocalFilesMode, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
-                        <RadioButton Content="Daminion Catalog" GroupName="ProcessingMode" Margin="10,0,0,0"
-                     IsChecked="{Binding IsDaminionCatalogMode, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                        <RadioButton Content="Local Files" GroupName="TidyUpMode" Margin="5,0,0,0"
+                                     IsChecked="{Binding IsLocalFilesMode, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                        <RadioButton Content="Daminion Catalog" GroupName="TidyUpMode" Margin="10,0,0,0"
+                                     IsChecked="{Binding IsDaminionCatalogMode, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <Border Grid.Row="1" BorderBrush="LightGray" BorderThickness="0,0,0,1" Margin="0,0,0,5" Padding="0,0,0,5"
-            Visibility="{Binding IsDaminionCatalogMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            Visibility="{Binding IsDaminionCatalogMode, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel Orientation="Vertical">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
                                 <Button Content="Login to Daminion" Command="{Binding DaminionLoginCommand}" Width="150" Margin="0,0,10,0" />
@@ -135,25 +167,25 @@
                             <StackPanel Orientation="Horizontal" Margin="0,5,0,0" IsEnabled="{Binding IsDaminionLoggedIn}">
                                 <Label Content="Select Daminion Query:" VerticalAlignment="Center"/>
                                 <ComboBox ItemsSource="{Binding DaminionQueryTypes}"
-                          SelectedItem="{Binding SelectedDaminionQueryType}"
-                          DisplayMemberPath="DisplayName" 
-                          MinWidth="200" Margin="5,0,10,0" />
+                                          SelectedItem="{Binding SelectedDaminionQueryType}"
+                                          DisplayMemberPath="DisplayName" 
+                                          MinWidth="200" Margin="5,0,10,0" />
                                 <Button Content="Load Daminion Items" Command="{Binding LoadDaminionItemsCommand}" Width="150"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
                     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,5"
-                Visibility="{Binding IsLocalFilesMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                Visibility="{Binding IsLocalFilesMode, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Button Content="Add Local Files..." Command="{Binding AddFilesCommand}" Width="130"/>
                     </StackPanel>
 
                     <GroupBox Header="Cleanup Options" Grid.Row="3" Margin="0,5,0,10" Padding="5">
                         <StackPanel>
                             <CheckBox Content="Split comma-separated categories into individual items" 
-                      IsChecked="{Binding SplitCategories}" Margin="0,0,0,3"/>
+                                      IsChecked="{Binding SplitCategories}" Margin="0,0,0,3"/>
                             <CheckBox Content="Trim standard prefix from descriptions" 
-                      IsChecked="{Binding TrimDescriptionPrefix}" Margin="0,0,0,3"/>
+                                      IsChecked="{Binding TrimDescriptionPrefix}" Margin="0,0,0,3"/>
                             <StackPanel Orientation="Horizontal" IsEnabled="{Binding TrimDescriptionPrefix}">
                                 <Label Content="Prefix to trim:" VerticalAlignment="Center" Margin="20,0,5,0"/>
                                 <TextBox Text="{Binding DescriptionPrefixToTrim}" MinWidth="300" MaxWidth="450" VerticalAlignment="Center"/>
@@ -184,8 +216,8 @@
                     </ListView>
 
                     <TextBox Grid.Row="6" Text="{Binding CurrentOperationStatus}"
-             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-             MinHeight="60" MaxHeight="100" Margin="0,10,0,0" />
+                             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             MinHeight="60" MaxHeight="100" Margin="0,10,0,0" />
                 </Grid>
             </TabItem>
         </TabControl>

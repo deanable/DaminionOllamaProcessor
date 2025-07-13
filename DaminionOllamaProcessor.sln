@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DaminionOllamaInteractionLi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DaminionOllamaApp", "DaminionOllamaApp\DaminionOllamaApp.csproj", "{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}"
 EndProject
-Project("{840C416C-B8F3-42BC-B0DD-F6BB14C9F8CB}") = "SetupDaminionLlama_advinst", "SetupDaminionLlama_advinst\SetupDaminionLlama_advinst.aiproj", "{D3061C2A-D74E-46A6-803B-2EB14A6F0BE6}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,12 +26,6 @@ Global
 		{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}.DefaultBuild|Any CPU.Build.0 = Release|Any CPU
 		{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6BE4A87-B4BA-41BC-8395-EF576BC47F22}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D3061C2A-D74E-46A6-803B-2EB14A6F0BE6}.Debug|Any CPU.ActiveCfg = DefaultBuild
-		{D3061C2A-D74E-46A6-803B-2EB14A6F0BE6}.Debug|Any CPU.Build.0 = DefaultBuild
-		{D3061C2A-D74E-46A6-803B-2EB14A6F0BE6}.DefaultBuild|Any CPU.ActiveCfg = DefaultBuild
-		{D3061C2A-D74E-46A6-803B-2EB14A6F0BE6}.DefaultBuild|Any CPU.Build.0 = DefaultBuild
-		{D3061C2A-D74E-46A6-803B-2EB14A6F0BE6}.Release|Any CPU.ActiveCfg = DefaultBuild
-		{D3061C2A-D74E-46A6-803B-2EB14A6F0BE6}.Release|Any CPU.Build.0 = DefaultBuild
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

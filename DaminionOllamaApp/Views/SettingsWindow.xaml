@@ -11,9 +11,6 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         MaxHeight="850">
-    <Window.DataContext>
-        <viewModels:SettingsViewModel />
-    </Window.DataContext>
     <Window.Resources>
         <converters:CountToBooleanConverter x:Key="CountToBoolConverter" />
     </Window.Resources>

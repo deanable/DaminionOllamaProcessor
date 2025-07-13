@@ -1,18 +1,18 @@
 ﻿// DaminionOllamaApp/ViewModels/DaminionCollectionTaggerViewModel.cs
-using DaminionOllamaApp.Models;      // For AppSettings, DaminionQueueItem, QueryTypeDisplayItem, ProcessingStatus
-using DaminionOllamaApp.Services;    // For SettingsService, ProcessingService
-using DaminionOllamaApp.Utils;       // For RelayCommand
-using DaminionOllamaInteractionLib;  // For DaminionApiClient
-using DaminionOllamaInteractionLib.Daminion; // For DaminionMediaItem, DaminionPathResult, DaminionUpdateOperation etc.
-using DaminionOllamaInteractionLib.Ollama;   // For ParsedOllamaContent, OllamaResponseParser
-using DaminionOllamaInteractionLib.Services;
+using DaminionOllamaApp.Models;
+using DaminionOllamaApp.Services;
+using DaminionOllamaApp.Utils;
+using DaminionOllamaInteractionLib;
+using DaminionOllamaInteractionLib.Daminion;
+using DaminionOllamaInteractionLib.Ollama;
+using DaminionOllamaInteractionLib.OpenRouter;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;          // For INotifyPropertyChanged
-using System.IO;                    // For Path, File.ReadAllBytesAsync
+using System.ComponentModel;
+using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices; // For CallerMemberName
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -20,29 +20,24 @@ using System.Windows.Input;
 
 namespace DaminionOllamaApp.ViewModels
 {
-    // Assuming QueryTypeDisplayItem is in DaminionOllamaApp.Models namespace
-    // If not, adjust the 'using DaminionOllamaApp.Models;' statement or its definition location.
-
     public class DaminionCollectionTaggerViewModel : INotifyPropertyChanged
     {
         // --- Fields ---
         private readonly SettingsService _settingsService;
-        private AppSettings _currentSettings;
         private DaminionApiClient? _daminionClient;
-        private readonly ProcessingService _processingService;
 
         private bool _isLoggedIn;
         private string _daminionStatus = "Not logged in. Please configure Daminion settings and click Login.";
-
         private ObservableCollection<QueryTypeDisplayItem> _queryTypes;
         private QueryTypeDisplayItem? _selectedQueryType;
-
         private ObservableCollection<DaminionQueueItem> _daminionFilesToProcess;
         private bool _isLoadingItems;
         private bool _isProcessingDaminionQueue;
         private CancellationTokenSource? _daminionCts;
 
         // --- Properties ---
+        public AppSettings Settings { get; }
+
         public bool IsLoggedIn
         {
             get => _isLoggedIn;
@@ -107,30 +102,26 @@ namespace DaminionOllamaApp.ViewModels
         public ICommand StartDaminionQueueCommand { get; }
         public ICommand StopDaminionQueueCommand { get; }
 
-        // --- Constructor ---
-        public DaminionCollectionTaggerViewModel()
+        public DaminionCollectionTaggerViewModel(AppSettings settings, SettingsService settingsService)
         {
-            _settingsService = new SettingsService();
-            _currentSettings = _settingsService.LoadSettings();
-            _processingService = new ProcessingService();
+            Settings = settings;
+            _settingsService = settingsService;
 
-            _daminionFilesToProcess = new ObservableCollection<DaminionQueueItem>(); // Initialize backing field
-            _queryTypes = new ObservableCollection<QueryTypeDisplayItem> // Initialize backing field
+            _daminionFilesToProcess = new ObservableCollection<DaminionQueueItem>();
+            _queryTypes = new ObservableCollection<QueryTypeDisplayItem>
             {
                 new QueryTypeDisplayItem { DisplayName = "Unflagged Items", QueryLine = "1,7179;41,1", Operators = "1,any;41,any" },
                 new QueryTypeDisplayItem { DisplayName = "Flagged Items", QueryLine = "1,7179;41,2", Operators = "1,any;41,any" },
                 new QueryTypeDisplayItem { DisplayName = "Rejected Items", QueryLine = "1,7179;41,3", Operators = "1,any;41,any" }
             };
-            _selectedQueryType = _queryTypes.FirstOrDefault(); // Initialize backing field
+            _selectedQueryType = _queryTypes.FirstOrDefault();
 
-            // Initialize Commands
             LoginCommand = new RelayCommand(async param => await LoginAsync(), param => CanLogin());
             LoadItemsByQueryCommand = new RelayCommand(async param => await LoadItemsByQueryAsync(), param => CanLoadItemsByQuery());
             StartDaminionQueueCommand = new RelayCommand(async param => await StartDaminionQueueProcessingAsync(), param => CanStartDaminionQueue());
             StopDaminionQueueCommand = new RelayCommand(param => StopDaminionQueueProcessing(), param => CanStopDaminionQueue());
         }
 
-        // --- Command Methods & Helpers ---
         private void UpdateCommandStates()
         {
             Application.Current.Dispatcher.Invoke(() =>
@@ -145,24 +136,23 @@ namespace DaminionOllamaApp.ViewModels
         private bool CanLogin() => !IsLoggedIn && !IsLoadingItems && !IsProcessingDaminionQueue;
         private async Task LoginAsync()
         {
-            _currentSettings = _settingsService.LoadSettings();
-            if (string.IsNullOrWhiteSpace(_currentSettings.DaminionServerUrl) ||
-                string.IsNullOrWhiteSpace(_currentSettings.DaminionUsername))
+            if (string.IsNullOrWhiteSpace(Settings.DaminionServerUrl) ||
+                string.IsNullOrWhiteSpace(Settings.DaminionUsername))
             {
                 DaminionStatus = "Error: Daminion server URL or username is not configured in settings.";
                 return;
             }
 
             _daminionClient = new DaminionApiClient();
-            DaminionStatus = $"Logging in to {_currentSettings.DaminionServerUrl}...";
+            DaminionStatus = $"Logging in to {Settings.DaminionServerUrl}...";
             IsLoggedIn = false;
 
             try
             {
                 bool success = await _daminionClient.LoginAsync(
-                    _currentSettings.DaminionServerUrl,
-                    _currentSettings.DaminionUsername,
-                    _currentSettings.DaminionPassword);
+                    Settings.DaminionServerUrl,
+                    Settings.DaminionUsername,
+                    Settings.DaminionPassword);
 
                 if (success)
                 {
@@ -195,20 +185,18 @@ namespace DaminionOllamaApp.ViewModels
             IsLoadingItems = true;
             DaminionStatus = $"Loading items for query: '{SelectedQueryType.DisplayName}'...";
             Application.Current.Dispatcher.Invoke(() => DaminionFilesToProcess.Clear());
-
             try
             {
                 DaminionSearchMediaItemsResponse? searchResult = await _daminionClient.SearchMediaItemsAsync(
                     SelectedQueryType.QueryLine,
                     SelectedQueryType.Operators,
                     pageSize: 1000);
-
                 if (searchResult != null && searchResult.Success && searchResult.MediaItems != null)
                 {
                     if (!searchResult.MediaItems.Any())
                     {
                         DaminionStatus = $"No items found for query: '{SelectedQueryType.DisplayName}'.";
-                        IsLoadingItems = false; // Ensure flag is reset
+                        IsLoadingItems = false;
                         return;
                     }
 
@@ -218,12 +206,11 @@ namespace DaminionOllamaApp.ViewModels
                     if (!itemIds.Any())
                     {
                         DaminionStatus = $"No item IDs found to fetch paths for query: '{SelectedQueryType.DisplayName}'.";
-                        IsLoadingItems = false; // Ensure flag is reset
+                        IsLoadingItems = false;
                         return;
                     }
 
                     DaminionPathResult pathResult = await _daminionClient.GetAbsolutePathsAsync(itemIds);
-
                     if (pathResult.Success && pathResult.Paths != null)
                     {
                         var tempQueueItems = new List<DaminionQueueItem>();
@@ -231,7 +218,6 @@ namespace DaminionOllamaApp.ViewModels
                         {
                             string displayName = !string.IsNullOrWhiteSpace(daminionItem.Name) ? daminionItem.Name :
                                                  (!string.IsNullOrWhiteSpace(daminionItem.FileName) ? daminionItem.FileName : $"Item {daminionItem.Id}");
-
                             if (pathResult.Paths.TryGetValue(daminionItem.Id.ToString(), out string? filePath) && !string.IsNullOrEmpty(filePath))
                             {
                                 tempQueueItems.Add(new DaminionQueueItem(daminionItem.Id, displayName) { FilePath = filePath });
@@ -245,7 +231,7 @@ namespace DaminionOllamaApp.ViewModels
                                 });
                             }
                         }
-                        DaminionFilesToProcess = new ObservableCollection<DaminionQueueItem>(tempQueueItems); // Assign new collection
+                        DaminionFilesToProcess = new ObservableCollection<DaminionQueueItem>(tempQueueItems);
                         DaminionStatus = $"{DaminionFilesToProcess.Count(f => f.Status != ProcessingStatus.Error)} items loaded with paths for query '{SelectedQueryType.DisplayName}'. Ready to process.";
                     }
                     else
@@ -291,7 +277,6 @@ namespace DaminionOllamaApp.ViewModels
             }
 
             IsProcessingDaminionQueue = true;
-            _currentSettings = _settingsService.LoadSettings();
             _daminionCts = new CancellationTokenSource();
             var token = _daminionCts.Token;
 
@@ -300,9 +285,8 @@ namespace DaminionOllamaApp.ViewModels
             int failureCount = 0;
 
             var itemsToProcessThisRun = DaminionFilesToProcess
-                .Where(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) && !string.IsNullOrEmpty(f.FilePath) && !f.FilePath.Contains("(dummy path)"))
+                .Where(f => (f.Status == ProcessingStatus.Unprocessed || f.Status == ProcessingStatus.Error) && !string.IsNullOrEmpty(f.FilePath))
                 .ToList();
-
             if (!itemsToProcessThisRun.Any())
             {
                 DaminionStatus = "No valid items with paths to process in the Daminion queue.";
@@ -310,10 +294,9 @@ namespace DaminionOllamaApp.ViewModels
                 return;
             }
 
-            string descTagGuid = _currentSettings.DaminionDescriptionTagGuid;
-            string keywordsTagGuid = _currentSettings.DaminionKeywordsTagGuid;
-            string categoriesTagGuid = _currentSettings.DaminionCategoriesTagGuid;
-            // string flagTagGuid = _currentSettings.DaminionFlagTagGuid; // For later flag changes
+            string descTagGuid = Settings.DaminionDescriptionTagGuid;
+            string keywordsTagGuid = Settings.DaminionKeywordsTagGuid;
+            string categoriesTagGuid = Settings.DaminionCategoriesTagGuid;
 
             if (string.IsNullOrWhiteSpace(descTagGuid) || string.IsNullOrWhiteSpace(keywordsTagGuid) || string.IsNullOrWhiteSpace(categoriesTagGuid))
             {
@@ -323,7 +306,7 @@ namespace DaminionOllamaApp.ViewModels
                 return;
             }
 
-            try // Added main try block for the processing loop
+            try
             {
                 foreach (var item in itemsToProcessThisRun)
                 {
@@ -331,98 +314,97 @@ namespace DaminionOllamaApp.ViewModels
                     {
                         item.Status = ProcessingStatus.Cancelled;
                         item.StatusMessage = "Daminion queue stopped by user.";
-                        break; // Break from foreach loop
+                        break;
                     }
 
                     item.Status = ProcessingStatus.Processing;
-                    item.StatusMessage = "Sending to Ollama...";
                     UpdateOverallDaminionStatus($"Processing item: {item.FileName} (ID: {item.DaminionItemId})");
 
-                    ParsedOllamaContent? parsedContentForDaminion = null;
-                    bool ollamaAndLocalWriteSuccess = false;
+                    string aiResponse = string.Empty;
+                    bool aiSuccess = false;
 
-                    try // Inner try for individual item processing (Ollama + Local Write)
+                    try
                     {
                         if (string.IsNullOrEmpty(item.FilePath))
                         {
-                            item.StatusMessage = "Error: File path is missing.";
-                            System.Diagnostics.Debug.WriteLine($"Missing file path for Daminion item {item.FileName} (ID: {item.DaminionItemId})");
-                            // ollamaAndLocalWriteSuccess remains false
+                            throw new InvalidOperationException("File path is missing.");
                         }
-                        else
+
+                        byte[] imageBytes = await File.ReadAllBytesAsync(item.FilePath, token);
+                        item.StatusMessage = $"Sending to {Settings.SelectedAiProvider}...";
+
+                        // --- AI Provider Switch ---
+                        if (Settings.SelectedAiProvider == AiProvider.Ollama)
                         {
-                            byte[] imageBytes = await File.ReadAllBytesAsync(item.FilePath, token);
-                            var ollamaClient = new OllamaApiClient(_currentSettings.OllamaServerUrl);
-                            var ollamaResponse = await ollamaClient.AnalyzeImageAsync(_currentSettings.OllamaModelName, _currentSettings.OllamaPrompt, imageBytes);
-
-                            if (token.IsCancellationRequested) throw new OperationCanceledException();
-
-                            if (ollamaResponse != null && ollamaResponse.Done && !string.IsNullOrWhiteSpace(ollamaResponse.Response))
+                            var ollamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
+                            var ollamaResponse = await ollamaClient.AnalyzeImageAsync(Settings.OllamaModelName, Settings.OllamaPrompt, imageBytes);
+                            if (ollamaResponse != null && ollamaResponse.Done)
                             {
-                                parsedContentForDaminion = OllamaResponseParser.ParseLlavaResponse(ollamaResponse.Response);
-                                if (parsedContentForDaminion.SuccessfullyParsed)
-                                {
-                                    item.StatusMessage = "Ollama processing complete. Writing to local file...";
-                                    var metadataService = new ImageMetadataService(item.FilePath);
-                                    metadataService.Read();
-                                    metadataService.PopulateFromOllamaContent(parsedContentForDaminion);
-                                    metadataService.Save();
-                                    item.StatusMessage = "Local metadata written. Updating Daminion server...";
-                                    ollamaAndLocalWriteSuccess = true;
-                                }
-                                else
-                                {
-                                    item.StatusMessage = "Ollama processing complete, but parsing response failed.";
-                                }
+                                aiResponse = ollamaResponse.Response;
+                                aiSuccess = true;
                             }
                             else
                             {
-                                item.StatusMessage = $"Ollama API error or empty response: {ollamaResponse?.Response?.Substring(0, Math.Min(ollamaResponse.Response?.Length ?? 0, 100)) ?? "N/A"}";
+                                throw new Exception($"Ollama API error: {ollamaResponse?.Response ?? "Empty response."}");
+                            }
+                        }
+                        else // AiProvider.OpenRouter
+                        {
+                            var routerClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
+                            string base64Image = Convert.ToBase64String(imageBytes);
+                            string? routerResponse = await routerClient.AnalyzeImageAsync(Settings.OpenRouterModelName, Settings.OllamaPrompt, base64Image);
+                            if (!string.IsNullOrEmpty(routerResponse) && !routerResponse.StartsWith("Error:"))
+                            {
+                                aiResponse = routerResponse;
+                                aiSuccess = true;
+                            }
+                            else
+                            {
+                                throw new Exception($"OpenRouter API error: {routerResponse ?? "Empty response."}");
                             }
                         }
                     }
                     catch (OperationCanceledException) { throw; }
                     catch (Exception ex)
                     {
-                        item.StatusMessage = $"Ollama processing or local write error: {ex.Message}";
-                        System.Diagnostics.Debug.WriteLine($"Ollama/LocalWrite error for {item.FileName}: {ex}");
-                        // ollamaAndLocalWriteSuccess remains false
+                        item.StatusMessage = $"AI processing error: {ex.Message}";
+                        System.Diagnostics.Debug.WriteLine($"AI error for {item.FileName}: {ex}");
+                        aiSuccess = false;
                     }
 
-                    if (token.IsCancellationRequested) throw new OperationCanceledException(); // Check again before Daminion update
+                    if (token.IsCancellationRequested) throw new OperationCanceledException();
 
-                    if (!ollamaAndLocalWriteSuccess || parsedContentForDaminion == null)
+                    if (!aiSuccess)
                     {
-                        item.Status = ProcessingStatus.Error; // Ensure status is Error if we continue
+                        item.Status = ProcessingStatus.Error;
                         failureCount++;
-                        continue; // Move to next item in the foreach loop
+                        continue;
                     }
 
-                    // Update Daminion server metadata
-                    UpdateOverallDaminionStatus($"Updating Daminion for: {item.FileName}");
+                    item.StatusMessage = "Parsing AI response...";
+                    ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(aiResponse);
+
+                    item.StatusMessage = "Updating local file and Daminion...";
                     var operations = new List<DaminionUpdateOperation>();
 
-                    if (!string.IsNullOrWhiteSpace(parsedContentForDaminion.Description))
+                    if (!string.IsNullOrWhiteSpace(parsedContent.Description))
                     {
-                        operations.Add(new DaminionUpdateOperation { Guid = descTagGuid, Value = parsedContentForDaminion.Description, Id = 0, Remove = false });
+                        operations.Add(new DaminionUpdateOperation { Guid = descTagGuid, Value = parsedContent.Description, Id = 0, Remove = false });
                     }
-                    if (parsedContentForDaminion.Keywords.Any())
+                    if (parsedContent.Keywords.Any())
                     {
-                        foreach (var keyword in parsedContentForDaminion.Keywords.Where(k => !string.IsNullOrWhiteSpace(k)))
+                        foreach (var keyword in parsedContent.Keywords.Where(k => !string.IsNullOrWhiteSpace(k)))
                         {
                             operations.Add(new DaminionUpdateOperation { Guid = keywordsTagGuid, Value = keyword, Id = 0, Remove = false });
                         }
                     }
-                    if (parsedContentForDaminion.Categories.Any())
+                    if (parsedContent.Categories.Any())
                     {
-                        foreach (var category in parsedContentForDaminion.Categories.Where(c => !string.IsNullOrWhiteSpace(c)))
+                        foreach (var category in parsedContent.Categories.Where(c => !string.IsNullOrWhiteSpace(c)))
                         {
                             operations.Add(new DaminionUpdateOperation { Guid = categoriesTagGuid, Value = category, Id = 0, Remove = false });
                         }
                     }
-
-                    // Placeholder for changing flag status in Daminion (e.g., from "Unflagged" to "Processed")
-                    // This logic would be added here if desired, using the flagTagGuid and relevant value IDs.
 
                     if (operations.Any())
                     {
@@ -443,19 +425,17 @@ namespace DaminionOllamaApp.ViewModels
                     else
                     {
                         item.Status = ProcessingStatus.Processed;
-                        item.StatusMessage = "Local file processed; no new metadata from Ollama to update in Daminion.";
+                        item.StatusMessage = "Local file processed; no new metadata from AI to update in Daminion.";
                         successCount++;
                     }
-                } // End foreach item
-            } // End main try block
+                }
+            }
             catch (OperationCanceledException)
             {
                 UpdateOverallDaminionStatus("Daminion queue processing cancelled by user.");
-                // Items already processed or errored will keep their status.
-                // Items that were in 'Processing' or 'Queued' and haven't been updated to Cancelled yet can be marked here.
-                foreach (var item in DaminionFilesToProcess.Where(i => i.Status == ProcessingStatus.Processing || i.Status == ProcessingStatus.Queued))
+                foreach (var item in DaminionFilesToProcess.Where(i => i.Status == ProcessingStatus.Processing))
                 {
-                    item.Status = ProcessingStatus.Cancelled; // Or Error if preferred for partially processed
+                    item.Status = ProcessingStatus.Cancelled;
                     item.StatusMessage = "Cancelled during queue processing.";
                 }
             }
@@ -463,7 +443,7 @@ namespace DaminionOllamaApp.ViewModels
             {
                 UpdateOverallDaminionStatus($"An error occurred during Daminion queue processing: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"Error in StartDaminionQueueProcessingAsync: {ex}");
-                foreach (var item in DaminionFilesToProcess.Where(i => i.Status == ProcessingStatus.Processing || i.Status == ProcessingStatus.Queued))
+                foreach (var item in DaminionFilesToProcess.Where(i => i.Status == ProcessingStatus.Processing))
                 {
                     item.Status = ProcessingStatus.Error;
                     item.StatusMessage = "Queue processing error.";
@@ -471,17 +451,16 @@ namespace DaminionOllamaApp.ViewModels
             }
             finally
             {
-                IsProcessingDaminionQueue = false; // This will call UpdateCommandStates via its setter
+                IsProcessingDaminionQueue = false;
                 _daminionCts?.Dispose();
                 _daminionCts = null;
-                // Recalculate counts based on final statuses
                 successCount = DaminionFilesToProcess.Count(i => i.Status == ProcessingStatus.Processed);
                 failureCount = DaminionFilesToProcess.Count(i => i.Status == ProcessingStatus.Error);
                 int cancelledCount = DaminionFilesToProcess.Count(i => i.Status == ProcessingStatus.Cancelled);
                 string finalSummary = $"Daminion queue finished. Successful: {successCount}, Failures: {failureCount}, Cancelled: {cancelledCount}.";
                 UpdateOverallDaminionStatus(finalSummary);
             }
-        } // End StartDaminionQueueProcessingAsync
+        }
 
         private void UpdateOverallDaminionStatus(string message)
         {
@@ -496,10 +475,8 @@ namespace DaminionOllamaApp.ViewModels
         {
             _daminionCts?.Cancel();
             UpdateOverallDaminionStatus("Daminion queue stop requested by user.");
-            // IsProcessingDaminionQueue will be set to false in the finally block of StartDaminionQueueProcessingAsync
         }
 
-        // --- INotifyPropertyChanged Implementation ---
         public event PropertyChangedEventHandler? PropertyChanged;
         protected virtual bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = "")
         {
@@ -510,10 +487,10 @@ namespace DaminionOllamaApp.ViewModels
         }
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = "")
         {
-            Application.Current.Dispatcher.Invoke(() => // Ensure PropertyChanged is raised on UI thread
+            Application.Current.Dispatcher.Invoke(() =>
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
             });
         }
-    } // End DaminionCollectionTaggerViewModel class
-} // End namespace
+    }
+}

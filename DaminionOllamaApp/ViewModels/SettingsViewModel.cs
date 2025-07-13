@@ -5,7 +5,7 @@ using DaminionOllamaApp.Utils;
 using DaminionOllamaInteractionLib;
 using DaminionOllamaInteractionLib.Daminion;
 using DaminionOllamaInteractionLib.Ollama;
-using DaminionOllamaInteractionLib.OpenRouter; // <-- NEW: Add using for OpenRouter client
+using DaminionOllamaInteractionLib.OpenRouter;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -20,7 +20,6 @@ namespace DaminionOllamaApp.ViewModels
 {
     public class SettingsViewModel : INotifyPropertyChanged
     {
-        private readonly SettingsService _settingsService;
         private AppSettings _settings;
 
         // --- Ollama Settings ---
@@ -29,7 +28,7 @@ namespace DaminionOllamaApp.ViewModels
         private bool _isFetchingOllamaModels;
         private ObservableCollection<string> _ollamaModels;
 
-        // --- NEW: OpenRouter Settings ---
+        // --- OpenRouter Settings ---
         private string _openRouterConnectionStatus = "OpenRouter connection not verified.";
         private bool _isVerifyingOpenRouterConnection;
         private bool _isFetchingOpenRouterModels;
@@ -92,7 +91,7 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // --- NEW: OpenRouter Properties ---
+        // --- OpenRouter Properties ---
         public string OpenRouterConnectionStatus
         {
             get => _openRouterConnectionStatus;
@@ -183,37 +182,27 @@ namespace DaminionOllamaApp.ViewModels
         public ICommand DiscoverTagGuidsCommand { get; }
         public ICommand VerifyOllamaConnectionCommand { get; }
         public ICommand TestDaminionConnectionCommand { get; }
-        public ICommand VerifyOpenRouterConnectionCommand { get; } // <-- NEW COMMAND
+        public ICommand VerifyOpenRouterConnectionCommand { get; }
 
         // Actions for View Interaction
         public Action? CloseAction { get; set; }
         public Action<string>? UpdatePasswordBoxAction { get; set; }
 
-
-        public SettingsViewModel()
+        public SettingsViewModel(AppSettings settings)
         {
-            _settingsService = new SettingsService();
-            _settings = _settingsService.LoadSettings();
-            _ollamaModels = new ObservableCollection<string>();
-            _openRouterModels = new ObservableCollection<string>(); // <-- NEW: Initialize collection
+            _settings = settings;
 
-            SaveCommand = new RelayCommand(param => SaveSettings());
-            CloseCommand = new RelayCommand(param => Close());
+            _ollamaModels = new ObservableCollection<string>();
+            _openRouterModels = new ObservableCollection<string>();
+
+            // The Save command simply invokes the CloseAction, which also handles saving in MainViewModel.
+            SaveCommand = new RelayCommand(param => CloseAction?.Invoke());
+            CloseCommand = new RelayCommand(param => CloseAction?.Invoke());
+
             DiscoverTagGuidsCommand = new RelayCommand(async param => await DiscoverTagGuidsAsync(), param => CanDiscoverTagGuids());
             VerifyOllamaConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOllamaModelsAsync(), param => CanVerifyOllamaConnection());
             TestDaminionConnectionCommand = new RelayCommand(async param => await TestDaminionConnectionAsync(), param => CanTestDaminionConnection());
-            VerifyOpenRouterConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOpenRouterModelsAsync(), param => CanVerifyOpenRouterConnection()); // <-- NEW COMMAND
-        }
-
-        private void SaveSettings()
-        {
-            _settingsService.SaveSettings(Settings);
-            CloseAction?.Invoke();
-        }
-
-        private void Close()
-        {
-            CloseAction?.Invoke();
+            VerifyOpenRouterConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOpenRouterModelsAsync(), param => CanVerifyOpenRouterConnection());
         }
 
         public void SetDaminionPassword(string password)
@@ -228,7 +217,6 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // Daminion GUID Discovery Methods
         private bool CanDiscoverTagGuids()
         {
             return !IsDiscoveringGuids && Settings != null &&
@@ -297,7 +285,6 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // --- NEW: OpenRouter Verification and Model Fetching Logic ---
         private bool CanVerifyOpenRouterConnection()
         {
             return !IsVerifyingOpenRouterConnection && Settings != null && !string.IsNullOrWhiteSpace(Settings.OpenRouterApiKey);
@@ -320,7 +307,7 @@ namespace DaminionOllamaApp.ViewModels
                     if (modelsResponse?.Data != null)
                     {
                         var multimodalModels = modelsResponse.Data
-                            .Where(m => m.Id != null && (m.Id.Contains("vision") || m.Id.Contains("claude-3"))) // Simple filter for likely multimodal models
+                            .Where(m => m.Id != null && (m.Id.Contains("vision") || m.Id.Contains("claude-3")))
                             .OrderBy(m => m.Name)
                             .ToList();
 
@@ -330,7 +317,6 @@ namespace DaminionOllamaApp.ViewModels
                         }
                         OpenRouterConnectionStatus = $"{OpenRouterModels.Count} multimodal models found.";
 
-                        // Set selected item
                         if (!string.IsNullOrWhiteSpace(Settings.OpenRouterModelName) && OpenRouterModels.Contains(Settings.OpenRouterModelName))
                         {
                             SelectedOpenRouterModelName = Settings.OpenRouterModelName;
@@ -358,7 +344,6 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // Ollama Connection and Model Fetching Methods
         private bool CanVerifyOllamaConnection()
         {
             return !IsVerifyingOllamaConnection && Settings != null && !string.IsNullOrWhiteSpace(Settings.OllamaServerUrl);
@@ -374,11 +359,9 @@ namespace DaminionOllamaApp.ViewModels
 
             Application.Current.Dispatcher.Invoke(() => OllamaModels.Clear());
 
-            OllamaApiClient? tempOllamaClient = null;
             try
             {
-                tempOllamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
-                using (tempOllamaClient)
+                using (var tempOllamaClient = new OllamaApiClient(Settings.OllamaServerUrl))
                 {
                     bool connected = await tempOllamaClient.CheckConnectionAsync();
                     if (connected)
@@ -431,7 +414,6 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // Daminion Connection Test Methods
         private bool CanTestDaminionConnection()
         {
             return !IsVerifyingDaminionConnectionTest && Settings != null &&
@@ -466,7 +448,6 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        // INotifyPropertyChanged Implementation
         public event PropertyChangedEventHandler? PropertyChanged;
         protected virtual bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string propertyName = "")
         {
