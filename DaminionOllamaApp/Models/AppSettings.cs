@@ -239,5 +239,69 @@ namespace DaminionOllamaApp.Models
                 }
             }
         }
+
+        // --- Daminion Query Properties ---
+        private string _daminionQueryType = string.Empty;
+        private string _daminionQueryLine = string.Empty;
+        private string _daminionProcessingPrompt = "Please describe this image in detail. Identify key objects, subjects, and the overall scene. If relevant, suggest suitable categories and keywords.\n\nDescription:\n\nCategories:\n- Category1\n- Category2\n\nKeywords:\n- Keyword1, Keyword2, Keyword3";
+
+        public string DaminionQueryType
+        {
+            get => _daminionQueryType;
+            set
+            {
+                if (_daminionQueryType != value)
+                {
+                    _daminionQueryType = value;
+                    OnPropertyChanged(nameof(DaminionQueryType));
+                }
+            }
+        }
+
+        public string DaminionQueryLine
+        {
+            get => _daminionQueryLine;
+            set
+            {
+                if (_daminionQueryLine != value)
+                {
+                    _daminionQueryLine = value;
+                    OnPropertyChanged(nameof(DaminionQueryLine));
+                }
+            }
+        }
+
+        public string DaminionProcessingPrompt
+        {
+            get => _daminionProcessingPrompt;
+            set
+            {
+                if (_daminionProcessingPrompt != value)
+                {
+                    _daminionProcessingPrompt = value;
+                    OnPropertyChanged(nameof(DaminionProcessingPrompt));
+                }
+            }
+        }
+
+        // --- AI Provider Selection Properties ---
+        private bool _useOpenRouter = false;
+
+        public bool UseOpenRouter
+        {
+            get => _useOpenRouter;
+            set
+            {
+                if (_useOpenRouter != value)
+                {
+                    _useOpenRouter = value;
+                    OnPropertyChanged(nameof(UseOpenRouter));
+                }
+            }
+        }
+
+        // --- Alias Properties for Compatibility ---
+        public string OllamaModel => OllamaModelName;
+        public string OpenRouterModel => OpenRouterModelName;
     }
 }

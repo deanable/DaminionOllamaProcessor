@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.IO; // Required for Path
 using System.Runtime.CompilerServices; // Required for CallerMemberName
+using System.Collections.Generic; // Required for EqualityComparer
 
 namespace DaminionOllamaApp.Models
 {
@@ -11,6 +12,7 @@ namespace DaminionOllamaApp.Models
         Queued,
         Processing,
         Processed,
+        Completed, // Added missing status
         Error,
         Cancelled
     }

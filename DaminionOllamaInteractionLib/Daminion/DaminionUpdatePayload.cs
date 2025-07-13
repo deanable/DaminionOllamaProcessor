@@ -32,6 +32,10 @@ namespace DaminionOllamaInteractionLib.Daminion
 
         [JsonPropertyName("remove")]
         public bool Remove { get; set; } = false;
+
+        // Alias properties for compatibility with existing code
+        public string TagGuid => Guid;
+        public string Operation => Remove ? "remove" : "add";
     }
 
     /// <summary>

@@ -12,6 +12,7 @@ namespace DaminionOllamaApp.Models
     public class QueryTypeDisplayItem
     {
         public string DisplayName { get; set; } = string.Empty;
+        public string QueryType { get; set; } = string.Empty; // Added missing property
         public string QueryLine { get; set; } = string.Empty;
         public string Operators { get; set; } = string.Empty;
 

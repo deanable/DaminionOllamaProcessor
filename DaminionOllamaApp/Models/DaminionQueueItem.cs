@@ -16,6 +16,9 @@ namespace DaminionOllamaApp.Models
         private ProcessingStatus _status = ProcessingStatus.Unprocessed;
         private string _statusMessage = string.Empty;
 
+        // Alias property for compatibility with existing code
+        public long Id => DaminionItemId;
+
         public long DaminionItemId
         {
             get => _daminionItemId;

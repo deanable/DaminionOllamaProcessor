@@ -222,10 +222,10 @@ namespace DaminionOllamaApp.ViewModels
             InitializeQueryTypes();
             
             // Initialize commands with their respective handlers and can-execute predicates
-            LoginCommand = new AsyncRelayCommand(LoginAsync, CanLogin);
-            LoadItemsByQueryCommand = new AsyncRelayCommand(LoadItemsByQueryAsync, CanLoadItemsByQuery);
-            StartDaminionQueueCommand = new AsyncRelayCommand(StartDaminionQueueProcessingAsync, CanStartDaminionQueue);
-            StopDaminionQueueCommand = new RelayCommand(param => StopDaminionQueueProcessing(), CanStopDaminionQueue);
+            LoginCommand = new AsyncRelayCommand(async param => await LoginAsync(), CanLogin);
+            LoadItemsByQueryCommand = new AsyncRelayCommand(async param => await LoadItemsByQueryAsync(), CanLoadItemsByQuery);
+            StartDaminionQueueCommand = new AsyncRelayCommand(async param => await StartDaminionQueueProcessingAsync(), CanStartDaminionQueue);
+            StopDaminionQueueCommand = new RelayCommand(param => StopDaminionQueueProcessing(), param => CanStopDaminionQueue());
         }
         #endregion
 
@@ -371,23 +371,21 @@ namespace DaminionOllamaApp.ViewModels
                     pageSize: 100,
                     pageIndex: 0);
 
-                if (response?.Items != null)
+                if (response?.MediaItems != null)
                 {
                     // Get absolute file paths for the items
-                    var itemIds = response.Items.Select(item => item.Id).ToList();
+                    var itemIds = response.MediaItems.Select(item => item.Id).ToList();
                     var pathResult = await _daminionClient.GetAbsolutePathsAsync(itemIds);
 
                     // Create queue items with file paths
-                    foreach (var item in response.Items)
+                    foreach (var item in response.MediaItems)
                     {
-                        var filePath = pathResult.PathMappings.ContainsKey(item.Id) 
-                            ? pathResult.PathMappings[item.Id] 
+                        var filePath = pathResult.Paths?.ContainsKey(item.Id.ToString()) == true
+                            ? pathResult.Paths[item.Id.ToString()]
                             : null;
 
-                        var queueItem = new DaminionQueueItem
+                        var queueItem = new DaminionQueueItem(item.Id, item.FileName ?? item.Name ?? $"Item {item.Id}")
                         {
-                            Id = item.Id,
-                            FileName = item.FileName,
                             FilePath = filePath,
                             Status = ProcessingStatus.Unprocessed,
                             StatusMessage = "Ready for processing"
@@ -539,13 +537,12 @@ namespace DaminionOllamaApp.ViewModels
             if (Settings.UseOpenRouter)
             {
                 // Use OpenRouter service
-                var openRouterClient = new OpenRouterClient(Settings.OpenRouterApiKey);
+                var openRouterClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
                 var response = await openRouterClient.AnalyzeImageAsync(
                     Settings.OpenRouterModel, 
                     Settings.DaminionProcessingPrompt, 
-                    imageBytes, 
-                    cancellationToken);
-                return response?.Content ?? "No response from OpenRouter";
+                    imageBytes);
+                return response ?? "No response from OpenRouter";
             }
             else
             {
@@ -576,9 +573,9 @@ namespace DaminionOllamaApp.ViewModels
             {
                 operations.Add(new DaminionUpdateOperation
                 {
-                    TagGuid = Settings.DaminionDescriptionTagGuid,
-                    Operation = "set",
-                    Value = content.Description
+                    Guid = Settings.DaminionDescriptionTagGuid,
+                    Value = content.Description,
+                    Remove = false
                 });
             }
 
@@ -587,9 +584,9 @@ namespace DaminionOllamaApp.ViewModels
             {
                 operations.Add(new DaminionUpdateOperation
                 {
-                    TagGuid = Settings.DaminionKeywordsTagGuid,
-                    Operation = "set",
-                    Value = string.Join(", ", content.Keywords)
+                    Guid = Settings.DaminionKeywordsTagGuid,
+                    Value = string.Join(", ", content.Keywords),
+                    Remove = false
                 });
             }
 
@@ -598,9 +595,9 @@ namespace DaminionOllamaApp.ViewModels
             {
                 operations.Add(new DaminionUpdateOperation
                 {
-                    TagGuid = Settings.DaminionCategoriesTagGuid,
-                    Operation = "set",
-                    Value = string.Join(", ", content.Categories)
+                    Guid = Settings.DaminionCategoriesTagGuid,
+                    Value = string.Join(", ", content.Categories),
+                    Remove = false
                 });
             }
 
