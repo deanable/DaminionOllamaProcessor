@@ -12,6 +12,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -482,6 +483,20 @@ namespace DaminionOllamaApp.ViewModels
                         // Parse the AI response
                         var parsedContent = OllamaResponseParser.ParseLlavaResponse(aiResponse);
                         
+                        if (!parsedContent.SuccessfullyParsed)
+                        {
+                            // If parsing fails but we have a response, use it as description
+                            if (!string.IsNullOrWhiteSpace(aiResponse))
+                            {
+                                parsedContent.Description = aiResponse;
+                                parsedContent.SuccessfullyParsed = true;
+                            }
+                            else
+                            {
+                                throw new Exception("Failed to parse AI response and no fallback content available");
+                            }
+                        }
+                        
                         // Update metadata in Daminion
                         await UpdateDaminionMetadata(item.Id, parsedContent);
 
@@ -500,7 +515,27 @@ namespace DaminionOllamaApp.ViewModels
                     catch (Exception ex)
                     {
                         item.Status = ProcessingStatus.Error;
-                        item.StatusMessage = $"Error: {ex.Message}";
+                        
+                        // Provide more specific error messages based on exception type
+                        if (ex is HttpRequestException)
+                        {
+                            item.StatusMessage = $"Network error: {ex.Message}";
+                        }
+                        else if (ex is TaskCanceledException)
+                        {
+                            item.StatusMessage = $"Request timed out: {ex.Message}";
+                        }
+                        else if (ex.InnerException is HttpRequestException)
+                        {
+                            item.StatusMessage = $"Network error: {ex.InnerException.Message}";
+                        }
+                        else
+                        {
+                            item.StatusMessage = $"Processing error: {ex.Message}";
+                        }
+                        
+                        // Log the full exception for debugging
+                        Console.WriteLine($"[DaminionCollectionTaggerViewModel] Error processing {item.FileName}: {ex}");
                     }
                 }
 
@@ -534,25 +569,55 @@ namespace DaminionOllamaApp.ViewModels
         /// <returns>The AI-generated response text.</returns>
         private async Task<string> ProcessWithAIService(byte[] imageBytes, CancellationToken cancellationToken)
         {
-            if (Settings.UseOpenRouter)
+            try
             {
-                // Use OpenRouter service
-                var openRouterClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
-                var response = await openRouterClient.AnalyzeImageAsync(
-                    Settings.OpenRouterModel, 
-                    Settings.DaminionProcessingPrompt, 
-                    imageBytes);
-                return response ?? "No response from OpenRouter";
+                if (Settings.UseOpenRouter)
+                {
+                    // Use OpenRouter service
+                    var openRouterClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
+                    var response = await openRouterClient.AnalyzeImageAsync(
+                        Settings.OpenRouterModel, 
+                        Settings.DaminionProcessingPrompt, 
+                        imageBytes);
+                    
+                    if (string.IsNullOrWhiteSpace(response))
+                    {
+                        throw new Exception("OpenRouter returned an empty response");
+                    }
+                    
+                    return response;
+                }
+                else
+                {
+                    // Use Ollama service
+                    var ollamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
+                    var response = await ollamaClient.AnalyzeImageAsync(
+                        Settings.OllamaModel, 
+                        Settings.DaminionProcessingPrompt, 
+                        imageBytes);
+                    
+                    if (response?.Response == null)
+                    {
+                        throw new Exception("Ollama returned an empty response");
+                    }
+                    
+                    return response.Response;
+                }
             }
-            else
+            catch (HttpRequestException ex)
             {
-                // Use Ollama service
-                var ollamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
-                var response = await ollamaClient.AnalyzeImageAsync(
-                    Settings.OllamaModel, 
-                    Settings.DaminionProcessingPrompt, 
-                    imageBytes);
-                return response?.Response ?? "No response from Ollama";
+                var serviceName = Settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                throw new Exception($"{serviceName} connection error: {ex.Message}", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                var serviceName = Settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                throw new Exception($"{serviceName} request timed out: {ex.Message}", ex);
+            }
+            catch (Exception ex)
+            {
+                var serviceName = Settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                throw new Exception($"{serviceName} error: {ex.Message}", ex);
             }
         }
 

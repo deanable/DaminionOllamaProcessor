@@ -1,9 +1,11 @@
 ﻿// DaminionOllamaApp/Services/ProcessingService.cs
 using DaminionOllamaApp.Models;
 using DaminionOllamaInteractionLib.Ollama;
+using DaminionOllamaInteractionLib.OpenRouter;
 using DaminionOllamaInteractionLib.Services; // For ImageMetadataService
 using System;
 using System.IO;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -55,17 +57,59 @@ namespace DaminionOllamaApp.Services
                 reportProgress?.Invoke($"Processing: {item.FileName} - Sending to Ollama...");
                 if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
 
-                // 2. Call Ollama API
-                OllamaApiClient ollamaClient = new OllamaApiClient(settings.OllamaServerUrl);
-                OllamaGenerateResponse? ollamaResponse = null;
+                // 2. Call AI API (Ollama or OpenRouter)
+                string aiResponse;
                 try
                 {
-                    ollamaResponse = await ollamaClient.AnalyzeImageAsync(settings.OllamaModelName, settings.OllamaPrompt, imageBytes);
+                    if (settings.UseOpenRouter)
+                    {
+                        // Use OpenRouter service
+                        var openRouterClient = new OpenRouterApiClient(settings.OpenRouterApiKey, settings.OpenRouterHttpReferer);
+                        aiResponse = await openRouterClient.AnalyzeImageAsync(
+                            settings.OpenRouterModelName, 
+                            settings.OllamaPrompt, 
+                            imageBytes);
+                        
+                        if (string.IsNullOrWhiteSpace(aiResponse))
+                        {
+                            throw new Exception("OpenRouter returned an empty response");
+                        }
+                    }
+                    else
+                    {
+                        // Use Ollama service
+                        OllamaApiClient ollamaClient = new OllamaApiClient(settings.OllamaServerUrl);
+                        OllamaGenerateResponse? ollamaResponse = await ollamaClient.AnalyzeImageAsync(settings.OllamaModelName, settings.OllamaPrompt, imageBytes);
+                        
+                        if (ollamaResponse == null || !ollamaResponse.Done || string.IsNullOrWhiteSpace(ollamaResponse.Response))
+                        {
+                            throw new Exception($"Ollama returned an empty or invalid response. API Message: {ollamaResponse?.Response?.Substring(0, Math.Min(ollamaResponse.Response?.Length ?? 0, 100)) ?? "N/A"}");
+                        }
+                        
+                        aiResponse = ollamaResponse.Response;
+                    }
                 }
-                catch (Exception ex) // Catch specific exceptions if OllamaApiClient throws them, or general Exception
+                catch (HttpRequestException ex)
                 {
+                    var serviceName = settings.UseOpenRouter ? "OpenRouter" : "Ollama";
                     item.Status = ProcessingStatus.Error;
-                    item.StatusMessage = $"Ollama API error: {ex.Message}";
+                    item.StatusMessage = $"{serviceName} connection error: {ex.Message}";
+                    reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
+                    return;
+                }
+                catch (TaskCanceledException ex)
+                {
+                    var serviceName = settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                    item.Status = ProcessingStatus.Error;
+                    item.StatusMessage = $"{serviceName} request timed out: {ex.Message}";
+                    reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    var serviceName = settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                    item.Status = ProcessingStatus.Error;
+                    item.StatusMessage = $"{serviceName} API error: {ex.Message}";
                     reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
                     return;
                 }
@@ -73,32 +117,24 @@ namespace DaminionOllamaApp.Services
 
                 if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
 
-                if (ollamaResponse == null || !ollamaResponse.Done || string.IsNullOrWhiteSpace(ollamaResponse.Response))
-                {
-                    item.Status = ProcessingStatus.Error;
-                    item.StatusMessage = $"Ollama returned an empty or invalid response. API Message: {ollamaResponse?.Response?.Substring(0, Math.Min(ollamaResponse.Response.Length, 100)) ?? "N/A"}";
-                    reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
-                    return;
-                }
+                reportProgress?.Invoke($"Processing: {item.FileName} - Parsing AI response...");
 
-                reportProgress?.Invoke($"Processing: {item.FileName} - Parsing Ollama response...");
-
-                // 3. Parse Ollama response
-                ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(ollamaResponse.Response);
+                // 3. Parse AI response
+                ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(aiResponse);
                 if (!parsedContent.SuccessfullyParsed)
                 {
                     item.Status = ProcessingStatus.Error;
                     // If parsing fails but we have a description, use the raw response as description.
                     // Otherwise, indicate parsing failure.
-                    if (!string.IsNullOrWhiteSpace(ollamaResponse.Response) && string.IsNullOrWhiteSpace(parsedContent.Description) && !parsedContent.Keywords.Any() && !parsedContent.Categories.Any())
+                    if (!string.IsNullOrWhiteSpace(aiResponse) && string.IsNullOrWhiteSpace(parsedContent.Description) && !parsedContent.Keywords.Any() && !parsedContent.Categories.Any())
                     {
-                        parsedContent.Description = ollamaResponse.Response; // Fallback
+                        parsedContent.Description = aiResponse; // Fallback
                         parsedContent.SuccessfullyParsed = true; // Consider it parsed as a single block
                         reportProgress?.Invoke($"Warning: {item.FileName} - Could not parse structured data, using full response as description.");
                     }
                     else
                     {
-                        item.StatusMessage = "Failed to parse structured data from Ollama response.";
+                        item.StatusMessage = "Failed to parse structured data from AI response.";
                         reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
                         return;
                     }
