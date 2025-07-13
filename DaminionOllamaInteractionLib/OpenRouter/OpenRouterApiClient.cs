@@ -89,8 +89,8 @@ namespace DaminionOllamaInteractionLib.OpenRouter
                         role = "user",
                         content = new object[]
                         {
-                            new { type = "image_url", image_url = new { url = $"data:image/jpeg;base64,{base64Image}" } },
-                            new { type = "text", text = prompt }
+                            new { type = "text", text = prompt },
+                            new { type = "image_url", image_url = new { url = $"data:image/jpeg;base64,{base64Image}" } }
                         }
                     }
                 }
@@ -98,7 +98,8 @@ namespace DaminionOllamaInteractionLib.OpenRouter
 
             try
             {
-                var content = new StringContent(JsonSerializer.Serialize(requestPayload), Encoding.UTF8, "application/json");
+                var json = JsonSerializer.Serialize(requestPayload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
                 Console.WriteLine($"[OpenRouterApiClient] Sending chat completion request to model: {modelName}");
 
                 HttpResponseMessage response = await _httpClient.PostAsync("chat/completions", content);
@@ -106,8 +107,19 @@ namespace DaminionOllamaInteractionLib.OpenRouter
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.Error.WriteLine($"[OpenRouterApiClient] Chat completion request failed. Status: {response.StatusCode}. Body: {responseBody}");
-                    return $"Error: API request failed with status {response.StatusCode}.";
+                    Console.Error.WriteLine($"[OpenRouterApiClient] Chat completion request failed. Status: {response.StatusCode}");
+                    Console.Error.WriteLine($"[OpenRouterApiClient] Response: {responseBody}");
+                    
+                    // Try to parse OpenRouter error response
+                    try
+                    {
+                        var errorResponse = JsonSerializer.Deserialize<OpenRouterErrorResponse>(responseBody);
+                        return $"Error: {errorResponse?.Error?.Message ?? "Unknown API error"}";
+                    }
+                    catch
+                    {
+                        return $"Error: API request failed with status {response.StatusCode}. Response: {responseBody}";
+                    }
                 }
 
                 var openRouterResponse = JsonSerializer.Deserialize<OpenRouterChatCompletionResponse>(responseBody);
@@ -118,6 +130,123 @@ namespace DaminionOllamaInteractionLib.OpenRouter
                 Console.Error.WriteLine($"[OpenRouterApiClient] Error during chat completion request: {ex.Message}");
                 return $"Error: An exception occurred. {ex.Message}";
             }
+        }
+
+        /// <summary>
+        /// Analyzes an image using a multimodal model on OpenRouter with proper image format detection.
+        /// </summary>
+        /// <param name="modelName">The name of the model to use (e.g., "google/gemini-pro-vision").</param>
+        /// <param name="prompt">The text prompt for the analysis.</param>
+        /// <param name="imageBytes">The image bytes.</param>
+        /// <returns>The content of the AI's response.</returns>
+        public async Task<string?> AnalyzeImageAsync(string modelName, string prompt, byte[] imageBytes)
+        {
+            string mimeType = GetImageMimeType(imageBytes);
+            string base64Image = Convert.ToBase64String(imageBytes);
+            
+            var requestPayload = new
+            {
+                model = modelName,
+                messages = new[]
+                {
+                    new {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new { type = "text", text = prompt },
+                            new { type = "image_url", image_url = new { url = $"data:{mimeType};base64,{base64Image}" } }
+                        }
+                    }
+                }
+            };
+
+            try
+            {
+                var json = JsonSerializer.Serialize(requestPayload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                
+                Console.WriteLine($"[OpenRouterApiClient] Sending request to model: {modelName}");
+                Console.WriteLine($"[OpenRouterApiClient] Image type: {mimeType}, Size: {imageBytes.Length} bytes");
+
+                HttpResponseMessage response = await _httpClient.PostAsync("chat/completions", content);
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.Error.WriteLine($"[OpenRouterApiClient] Request failed. Status: {response.StatusCode}");
+                    Console.Error.WriteLine($"[OpenRouterApiClient] Response: {responseBody}");
+                    
+                    // Try to parse OpenRouter error response
+                    try
+                    {
+                        var errorResponse = JsonSerializer.Deserialize<OpenRouterErrorResponse>(responseBody);
+                        return $"Error: {errorResponse?.Error?.Message ?? "Unknown API error"}";
+                    }
+                    catch
+                    {
+                        return $"Error: API request failed with status {response.StatusCode}. Response: {responseBody}";
+                    }
+                }
+
+                var openRouterResponse = JsonSerializer.Deserialize<OpenRouterChatCompletionResponse>(responseBody);
+                return openRouterResponse?.Choices?.FirstOrDefault()?.Message?.Content;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OpenRouterApiClient] Exception: {ex.Message}");
+                return $"Error: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Checks if a model supports multimodal/vision capabilities.
+        /// </summary>
+        /// <param name="modelName">The model name to check.</param>
+        /// <returns>True if the model supports vision, false otherwise.</returns>
+        public async Task<bool> IsModelMultimodalAsync(string modelName)
+        {
+            var modelsResponse = await ListModelsAsync();
+            if (modelsResponse?.Data == null) return false;
+            
+            var model = modelsResponse.Data.FirstOrDefault(m => m.Id == modelName);
+            if (model == null) return false;
+            
+            // Check if model supports vision/multimodal
+            return modelName.Contains("vision") || 
+                   modelName.Contains("claude-3") || 
+                   modelName.Contains("gpt-4") || 
+                   modelName.Contains("gemini");
+        }
+
+        /// <summary>
+        /// Detects the MIME type of an image from its byte signature.
+        /// </summary>
+        /// <param name="imageBytes">The image bytes.</param>
+        /// <returns>The MIME type string.</returns>
+        private static string GetImageMimeType(byte[] imageBytes)
+        {
+            if (imageBytes.Length >= 4)
+            {
+                // PNG signature
+                if (imageBytes[0] == 0x89 && imageBytes[1] == 0x50 && imageBytes[2] == 0x4E && imageBytes[3] == 0x47)
+                    return "image/png";
+                
+                // JPEG signature
+                if (imageBytes[0] == 0xFF && imageBytes[1] == 0xD8 && imageBytes[2] == 0xFF)
+                    return "image/jpeg";
+                
+                // GIF signature
+                if (imageBytes[0] == 0x47 && imageBytes[1] == 0x49 && imageBytes[2] == 0x46)
+                    return "image/gif";
+                
+                // WebP signature
+                if (imageBytes.Length >= 12 && imageBytes[0] == 0x52 && imageBytes[1] == 0x49 && 
+                    imageBytes[2] == 0x46 && imageBytes[3] == 0x46 && imageBytes[8] == 0x57 && 
+                    imageBytes[9] == 0x45 && imageBytes[10] == 0x42 && imageBytes[11] == 0x50)
+                    return "image/webp";
+            }
+            
+            return "image/jpeg"; // Default fallback
         }
 
         public void Dispose()
@@ -159,5 +288,23 @@ namespace DaminionOllamaInteractionLib.OpenRouter
     {
         [JsonPropertyName("content")]
         public string? Content { get; set; }
+    }
+
+    public class OpenRouterErrorResponse
+    {
+        [JsonPropertyName("error")]
+        public OpenRouterError? Error { get; set; }
+    }
+
+    public class OpenRouterError
+    {
+        [JsonPropertyName("message")]
+        public string? Message { get; set; }
+        
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+        
+        [JsonPropertyName("code")]
+        public string? Code { get; set; }
     }
 }
