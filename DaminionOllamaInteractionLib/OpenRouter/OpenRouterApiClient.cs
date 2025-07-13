@@ -34,7 +34,10 @@ namespace DaminionOllamaInteractionLib.OpenRouter
             _httpClient = new HttpClient();
             _httpClient.BaseAddress = new Uri("https://openrouter.ai/api/v1/");
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-            _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", httpReferer);
+            if (!string.IsNullOrWhiteSpace(httpReferer))
+            {
+                _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", httpReferer);
+            }
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             _httpClient.Timeout = TimeSpan.FromMinutes(5);
 

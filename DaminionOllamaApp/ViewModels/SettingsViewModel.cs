@@ -195,7 +195,6 @@ namespace DaminionOllamaApp.ViewModels
             _ollamaModels = new ObservableCollection<string>();
             _openRouterModels = new ObservableCollection<string>();
 
-            // The Save command simply invokes the CloseAction, which also handles saving in MainViewModel.
             SaveCommand = new RelayCommand(param => CloseAction?.Invoke());
             CloseCommand = new RelayCommand(param => CloseAction?.Invoke());
 
