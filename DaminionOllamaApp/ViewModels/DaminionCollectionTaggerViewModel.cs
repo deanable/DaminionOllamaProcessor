@@ -351,8 +351,14 @@ namespace DaminionOllamaApp.ViewModels
                         else // AiProvider.OpenRouter
                         {
                             var routerClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
-                            string base64Image = Convert.ToBase64String(imageBytes);
-                            string? routerResponse = await routerClient.AnalyzeImageAsync(Settings.OpenRouterModelName, Settings.OllamaPrompt, base64Image);
+                            
+                            // Validate model supports images
+                            if (!await routerClient.IsModelMultimodalAsync(Settings.OpenRouterModelName))
+                            {
+                                throw new Exception($"Model {Settings.OpenRouterModelName} does not support image analysis. Please select a vision-capable model.");
+                            }
+                            
+                            string? routerResponse = await routerClient.AnalyzeImageAsync(Settings.OpenRouterModelName, Settings.OllamaPrompt, imageBytes);
                             if (!string.IsNullOrEmpty(routerResponse) && !routerResponse.StartsWith("Error:"))
                             {
                                 aiResponse = routerResponse;

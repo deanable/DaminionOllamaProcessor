@@ -306,7 +306,8 @@ namespace DaminionOllamaApp.ViewModels
                     if (modelsResponse?.Data != null)
                     {
                         var multimodalModels = modelsResponse.Data
-                            .Where(m => m.Id != null && (m.Id.Contains("vision") || m.Id.Contains("claude-3")))
+                            .Where(m => m.Id != null && (m.Id.Contains("vision") || m.Id.Contains("claude-3") || 
+                                                        m.Id.Contains("gpt-4") || m.Id.Contains("gemini")))
                             .OrderBy(m => m.Name)
                             .ToList();
 
