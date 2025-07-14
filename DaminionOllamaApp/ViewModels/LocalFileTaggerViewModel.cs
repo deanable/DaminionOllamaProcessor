@@ -10,8 +10,14 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+<<<<<<< HEAD
 using System.Windows;
 using System.Windows.Input;
+=======
+using System.Windows.Input;
+using Serilog;
+using System.IO;
+>>>>>>> 07-14 pm Office
 
 namespace DaminionOllamaApp.ViewModels
 {
@@ -21,6 +27,21 @@ namespace DaminionOllamaApp.ViewModels
     /// </summary>
     public class LocalFileTaggerViewModel : INotifyPropertyChanged
     {
+<<<<<<< HEAD
+=======
+        private static readonly ILogger Logger;
+        static LocalFileTaggerViewModel()
+        {
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
+            Directory.CreateDirectory(logDir);
+            var logPath = Path.Combine(logDir, "localfiletaggerviewmodel.log");
+            Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+                .CreateLogger();
+        }
+
+>>>>>>> 07-14 pm Office
         // --- Private Fields ---
         private string _currentOperationStatus = "Ready. Add files to begin.";
         private ObservableCollection<FileQueueItem> _filesToProcess;
@@ -166,6 +187,10 @@ namespace DaminionOllamaApp.ViewModels
                 ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
+<<<<<<< HEAD
+=======
+                LogFileQueueChange("AddFiles", new { FileCount = filesAddedCount });
+>>>>>>> 07-14 pm Office
             }
         }
 
@@ -213,6 +238,10 @@ namespace DaminionOllamaApp.ViewModels
             UpdateOverallStatus(summary);
             ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
             ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
+<<<<<<< HEAD
+=======
+            LogFileQueueChange("StartQueueAsync", new { ProcessedCount = processedCount, ErrorCount = errorCount });
+>>>>>>> 07-14 pm Office
         }
 
         private void UpdateOverallStatus(string message)
@@ -230,6 +259,7 @@ namespace DaminionOllamaApp.ViewModels
             {
                 CurrentOperationStatus = "Stop request received. Finishing current item then stopping...";
                 _cancellationTokenSource.Cancel();
+                LogFileQueueChange("StopQueue");
             }
         }
 
@@ -244,6 +274,7 @@ namespace DaminionOllamaApp.ViewModels
                 ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
+                LogFileQueueChange("RemoveSelectedFile", SelectedFile);
             }
         }
 
@@ -259,6 +290,10 @@ namespace DaminionOllamaApp.ViewModels
             ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
             ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
             ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged();
+<<<<<<< HEAD
+=======
+            LogFileQueueChange("ClearProcessedFiles", new { Count = processedFiles.Count });
+>>>>>>> 07-14 pm Office
         }
 
         private bool CanClearAllFiles() => FilesToProcess.Any() && !IsProcessingQueue;
@@ -271,12 +306,19 @@ namespace DaminionOllamaApp.ViewModels
             ((RelayCommand)StartQueueCommand).RaiseCanExecuteChanged();
             ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged();
             ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
+            LogFileQueueChange("ClearAllFiles", new { Count = count });
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected virtual void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        // Example: Log when files are added to the queue
+        private void LogFileQueueChange(string action, object? details = null)
+        {
+            Logger.Information("File queue action: {Action}, Details: {@Details}", action, details);
         }
     }
 }

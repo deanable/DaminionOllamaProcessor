@@ -18,11 +18,26 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using Serilog;
 
 namespace DaminionOllamaApp.ViewModels
 {
     public class MetadataTidyUpViewModel : INotifyPropertyChanged
     {
+<<<<<<< HEAD
+=======
+        private static readonly ILogger Logger;
+        static MetadataTidyUpViewModel()
+        {
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
+            Directory.CreateDirectory(logDir);
+            var logPath = Path.Combine(logDir, "metadatatidyupviewmodel.log");
+            Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+                .CreateLogger();
+        }
+>>>>>>> 07-14 pm Office
         // --- Fields ---
         private readonly SettingsService _settingsService;
         private DaminionApiClient? _daminionClient;
@@ -216,6 +231,10 @@ namespace DaminionOllamaApp.ViewModels
         private bool CanLoginToDaminion() => IsDaminionCatalogMode && !IsDaminionLoggedIn && !IsLoadingDaminionItems && !IsCleaningQueue;
         private async Task LoginToDaminionAsync()
         {
+<<<<<<< HEAD
+=======
+            Logger.Information("Attempting Daminion login for server: {Server}", Settings.DaminionServerUrl);
+>>>>>>> 07-14 pm Office
             if (string.IsNullOrWhiteSpace(Settings.DaminionServerUrl) ||
                 string.IsNullOrWhiteSpace(Settings.DaminionUsername))
             {
@@ -232,14 +251,18 @@ namespace DaminionOllamaApp.ViewModels
                     Settings.DaminionServerUrl,
                     Settings.DaminionUsername,
                     Settings.DaminionPassword);
+<<<<<<< HEAD
+=======
+                Logger.Information("Daminion login result: {Result}", success);
+>>>>>>> 07-14 pm Office
                 IsDaminionLoggedIn = success;
                 DaminionLoginStatus = success ? "Daminion login successful. Select query and load items." : "Daminion login failed.";
             }
             catch (Exception ex)
             {
+                Logger.Error(ex, "Daminion login error");
                 DaminionLoginStatus = $"Daminion login error: {ex.Message}";
                 IsDaminionLoggedIn = false;
-                System.Diagnostics.Debug.WriteLine($"Daminion Login Exception (TidyUpVM): {ex}");
             }
         }
 
@@ -606,6 +629,12 @@ namespace DaminionOllamaApp.ViewModels
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
             });
+        }
+
+        // Example: Log when files are added to the queue
+        private void LogFileQueueChange(string action, object? details = null)
+        {
+            Logger.Information("File queue action: {Action}, Details: {@Details}", action, details);
         }
     }
 }

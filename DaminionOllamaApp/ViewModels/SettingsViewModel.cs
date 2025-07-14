@@ -15,11 +15,28 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using Serilog;
+using System.IO;
 
 namespace DaminionOllamaApp.ViewModels
 {
     public class SettingsViewModel : INotifyPropertyChanged
     {
+<<<<<<< HEAD
+=======
+        private static readonly ILogger Logger;
+        static SettingsViewModel()
+        {
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
+            Directory.CreateDirectory(logDir);
+            var logPath = Path.Combine(logDir, "settingsviewmodel.log");
+            Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+                .CreateLogger();
+        }
+
+>>>>>>> 07-14 pm Office
         private AppSettings _settings;
 
         // --- Ollama Settings ---
@@ -461,7 +478,14 @@ namespace DaminionOllamaApp.ViewModels
             Application.Current.Dispatcher.Invoke(() =>
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+                LogSettingChange(propertyName, GetType().GetProperty(propertyName)?.GetValue(this));
             });
+        }
+
+        // Example: Log when settings are changed
+        private void LogSettingChange(string property, object? value)
+        {
+            Logger.Information("Setting changed: {Property} = {Value}", property, value);
         }
     }
 }

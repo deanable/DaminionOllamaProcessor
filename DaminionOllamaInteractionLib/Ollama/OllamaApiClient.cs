@@ -8,6 +8,9 @@ using System.Text.Json; // For JsonSerializer
 using System.Threading.Tasks;
 // Ensure this using statement correctly points to where your Ollama DTOs are:
 using DaminionOllamaInteractionLib.Ollama;
+using Serilog;
+using System.IO;
+using Serilog.Sinks.File;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
@@ -16,6 +19,18 @@ namespace DaminionOllamaInteractionLib.Ollama
     /// </summary>
     public class OllamaApiClient : IDisposable
     {
+        private static readonly ILogger Logger;
+        static OllamaApiClient()
+        {
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
+            Directory.CreateDirectory(logDir);
+            var logPath = Path.Combine(logDir, "ollamaapiclient.log");
+            Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+                .CreateLogger();
+        }
+
         private readonly HttpClient _httpClient;
         private string _apiBaseUrl;
 
@@ -244,6 +259,20 @@ namespace DaminionOllamaInteractionLib.Ollama
                 Console.Error.WriteLine($"[OllamaApiClient] An unexpected error occurred during ListLocalModels from '{listModelsUrl}': {ex.Message}");
                 return null;
             }
+        }
+
+        // Example: Log API requests and responses
+        private void LogApiRequest(string endpoint, object? payload = null)
+        {
+            Logger.Information("Ollama API Request: {Endpoint}, Payload: {@Payload}", endpoint, payload);
+        }
+        private void LogApiResponse(string endpoint, object? response = null)
+        {
+            Logger.Information("Ollama API Response: {Endpoint}, Response: {@Response}", endpoint, response);
+        }
+        private void LogApiError(string endpoint, Exception ex)
+        {
+            Logger.Error(ex, "Ollama API Error: {Endpoint}", endpoint);
         }
 
         public void Dispose()

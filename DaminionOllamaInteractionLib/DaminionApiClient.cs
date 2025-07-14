@@ -10,6 +10,9 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using DaminionOllamaInteractionLib.Daminion;
 using DaminionOllamaInteractionLib.Ollama; // For Daminion DTOs
+using Serilog;
+using System.IO;
+using Serilog.Sinks.File;
 
 namespace DaminionOllamaInteractionLib
 {
@@ -18,6 +21,18 @@ namespace DaminionOllamaInteractionLib
     /// </summary>
     public class DaminionApiClient : IDisposable
     {
+        private static readonly ILogger Logger;
+        static DaminionApiClient()
+        {
+            var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
+            Directory.CreateDirectory(logDir);
+            var logPath = Path.Combine(logDir, "daminionapiclient.log");
+            Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+                .CreateLogger();
+        }
+
         private readonly HttpClient _httpClient;
         private string? _apiBaseUrl;
         private string? _authenticationCookie;
@@ -679,6 +694,19 @@ namespace DaminionOllamaInteractionLib
             }
         }
 
+        // Example: Log API requests and responses
+        private void LogApiRequest(string endpoint, object? payload = null)
+        {
+            Logger.Information("API Request: {Endpoint}, Payload: {@Payload}", endpoint, payload);
+        }
+        private void LogApiResponse(string endpoint, object? response = null)
+        {
+            Logger.Information("API Response: {Endpoint}, Response: {@Response}", endpoint, response);
+        }
+        private void LogApiError(string endpoint, Exception ex)
+        {
+            Logger.Error(ex, "API Error: {Endpoint}", endpoint);
+        }
     }
 
     /// <summary>
