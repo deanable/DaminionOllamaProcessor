@@ -84,9 +84,10 @@ namespace DaminionOllamaApp.Services
                 {
                     if (settings.SelectedAiProvider == AiProvider.Gemma)
                     {
-                        if (App.Logger != null) App.Logger.Log($"Sending request to Gemma for {item.FileName}");
+                        if (App.Logger != null) App.Logger.Log($"Sending request to Gemma for {item.FileName} (Model: {settings.GemmaModelName}, MimeType: {item.MimeType ?? "image/jpeg"})");
                         var gemmaClient = new GemmaApiClient(settings.GemmaServiceAccountJsonPath, settings.GemmaModelName);
-                        aiResponse = await gemmaClient.GenerateContentAsync(settings.OllamaPrompt); // Use OllamaPrompt for now
+                        // Use the new overload for image+text
+                        aiResponse = await gemmaClient.GenerateContentAsync(settings.OllamaPrompt, imageBytes, item.MimeType ?? "image/jpeg");
                         if (App.Logger != null) App.Logger.Log($"Gemma response for {item.FileName}: {aiResponse.Substring(0, Math.Min(aiResponse.Length, 500))}");
                         if (string.IsNullOrWhiteSpace(aiResponse))
                         {

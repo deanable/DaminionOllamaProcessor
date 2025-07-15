@@ -24,6 +24,7 @@ namespace DaminionOllamaApp.Models
         private ProcessingStatus _status = ProcessingStatus.Unprocessed;
         private string _statusMessage = string.Empty;
         private long? _daminionItemId; // <-- NEW PROPERTY
+        private string _mimeType = "image/jpeg";
 
         public long? DaminionItemId // <-- NEW PROPERTY
         {
@@ -66,6 +67,12 @@ namespace DaminionOllamaApp.Models
             set { SetProperty(ref _statusMessage, value); }
         }
 
+        public string MimeType
+        {
+            get => _mimeType;
+            set { SetProperty(ref _mimeType, value); }
+        }
+
         // --- NEW READ-ONLY PROPERTY ---
         public string DisplayIdentifier
         {
@@ -106,6 +113,7 @@ namespace DaminionOllamaApp.Models
             }
             Status = ProcessingStatus.Unprocessed;
             StatusMessage = string.Empty;
+            MimeType = "image/jpeg";
         }
 
         // Constructor for Daminion items (includes Daminion ID and allows specific initial name)
@@ -116,8 +124,9 @@ namespace DaminionOllamaApp.Models
             FileName = initialFileName; // Explicitly set FileName
             Status = ProcessingStatus.Unprocessed;
             StatusMessage = string.Empty;
+            MimeType = "image/jpeg";
         }
 
-        public FileQueueItem() { } // Parameterless for XAML design-time if needed/used
+        public FileQueueItem() { MimeType = "image/jpeg"; } // Parameterless for XAML design-time if needed/used
     }
 }

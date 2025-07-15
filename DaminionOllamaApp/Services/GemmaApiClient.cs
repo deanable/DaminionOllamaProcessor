@@ -26,7 +26,11 @@ namespace DaminionOllamaApp.Services
         public GemmaApiClient(string serviceAccountJsonPath, string modelName)
         {
             _serviceAccountJsonPath = serviceAccountJsonPath;
-            _modelName = modelName;
+            // Ensure model name is always prefixed with 'models/'
+            if (!string.IsNullOrWhiteSpace(modelName) && !modelName.StartsWith("models/"))
+                _modelName = $"models/{modelName}";
+            else
+                _modelName = modelName;
             _httpClient = new HttpClient();
             _httpClient.BaseAddress = new Uri($"https://generativelanguage.googleapis.com/v1beta/models/{_modelName}:generateContent");
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -50,10 +54,28 @@ namespace DaminionOllamaApp.Services
             return _accessToken;
         }
 
+        // Overload for text-only prompt
         public async Task<string> GenerateContentAsync(string prompt)
+        {
+            return await GenerateContentAsync(prompt, null, null);
+        }
+
+        // Overload for prompt + image
+        public async Task<string> GenerateContentAsync(string prompt, byte[]? imageBytes, string? imageMimeType)
         {
             var accessToken = await GetAccessTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var parts = new List<object> { new { text = prompt } };
+            if (imageBytes != null && !string.IsNullOrEmpty(imageMimeType))
+            {
+                parts.Add(new {
+                    inline_data = new {
+                        mime_type = imageMimeType,
+                        data = Convert.ToBase64String(imageBytes)
+                    }
+                });
+            }
             var payload = new
             {
                 contents = new[]
@@ -61,15 +83,18 @@ namespace DaminionOllamaApp.Services
                     new
                     {
                         role = "user",
-                        parts = new[]
-                        {
-                            new { text = prompt }
-                        }
+                        parts = parts.ToArray()
                     }
                 }
             };
 
             var json = JsonSerializer.Serialize(payload);
+            if (App.Logger != null)
+            {
+                App.Logger.Log($"[Gemma] Sending request to endpoint: https://generativelanguage.googleapis.com/v1beta/models/{_modelName}:generateContent");
+                App.Logger.Log($"[Gemma] Model: {_modelName}");
+                App.Logger.Log($"[Gemma] Payload: {json.Substring(0, Math.Min(json.Length, 1000))}{(json.Length > 1000 ? "..." : "")}");
+            }
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync("", content);
@@ -77,6 +102,10 @@ namespace DaminionOllamaApp.Services
 
             if (!response.IsSuccessStatusCode)
             {
+                if (App.Logger != null)
+                {
+                    App.Logger.Log($"[Gemma] Error response: {response.StatusCode} - {responseBody}");
+                }
                 throw new Exception($"Gemma API error: {response.StatusCode} - {responseBody}");
             }
 
