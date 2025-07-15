@@ -55,6 +55,12 @@ namespace DaminionOllamaApp.ViewModels
         private string _daminionConnectionTestStatus = "Daminion connection not verified.";
         private bool _isVerifyingDaminionConnectionTest;
 
+        // --- Gemma Settings ---
+        private ObservableCollection<string> _gemmaModels = new ObservableCollection<string>();
+        private string? _selectedGemmaModelName;
+        private string _gemmaConnectionStatus = "Gemma connection not verified.";
+        private bool _isVerifyingGemmaConnection;
+
         public AppSettings Settings
         {
             get => _settings;
@@ -191,6 +197,45 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        // --- Gemma Properties ---
+        public ObservableCollection<string> GemmaModels
+        {
+            get => _gemmaModels;
+            private set { SetProperty(ref _gemmaModels, value); }
+        }
+
+        public string? SelectedGemmaModelName
+        {
+            get => Settings?.GemmaModelName;
+            set
+            {
+                if (Settings != null && Settings.GemmaModelName != value)
+                {
+                    Settings.GemmaModelName = value ?? string.Empty;
+                    OnPropertyChanged(nameof(SelectedGemmaModelName));
+                }
+            }
+        }
+
+        public string GemmaConnectionStatus
+        {
+            get => _gemmaConnectionStatus;
+            private set { SetProperty(ref _gemmaConnectionStatus, value); }
+        }
+
+        public bool IsVerifyingGemmaConnection
+        {
+            get => _isVerifyingGemmaConnection;
+            private set
+            {
+                if (SetProperty(ref _isVerifyingGemmaConnection, value))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        (VerifyGemmaConnectionCommand as RelayCommand)?.RaiseCanExecuteChanged());
+                }
+            }
+        }
+
         // --- Commands ---
         public ICommand SaveCommand { get; }
         public ICommand CloseCommand { get; }
@@ -198,6 +243,7 @@ namespace DaminionOllamaApp.ViewModels
         public ICommand VerifyOllamaConnectionCommand { get; }
         public ICommand TestDaminionConnectionCommand { get; }
         public ICommand VerifyOpenRouterConnectionCommand { get; }
+        public ICommand VerifyGemmaConnectionCommand { get; }
 
         // Actions for View Interaction
         public Action? CloseAction { get; set; }
@@ -209,6 +255,7 @@ namespace DaminionOllamaApp.ViewModels
 
             _ollamaModels = new ObservableCollection<string>();
             _openRouterModels = new ObservableCollection<string>();
+            _gemmaModels = new ObservableCollection<string>();
 
             SaveCommand = new RelayCommand(param => CloseAction?.Invoke());
             CloseCommand = new RelayCommand(param => CloseAction?.Invoke());
@@ -217,6 +264,7 @@ namespace DaminionOllamaApp.ViewModels
             VerifyOllamaConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOllamaModelsAsync(), param => CanVerifyOllamaConnection());
             TestDaminionConnectionCommand = new RelayCommand(async param => await TestDaminionConnectionAsync(), param => CanTestDaminionConnection());
             VerifyOpenRouterConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOpenRouterModelsAsync(), param => CanVerifyOpenRouterConnection());
+            VerifyGemmaConnectionCommand = new RelayCommand(async param => await VerifyAndFetchGemmaModelsAsync(), param => CanVerifyGemmaConnection());
         }
 
         public void SetDaminionPassword(string password)
@@ -462,6 +510,54 @@ namespace DaminionOllamaApp.ViewModels
                 {
                     IsVerifyingDaminionConnectionTest = false;
                 }
+            }
+        }
+
+        private bool CanVerifyGemmaConnection()
+        {
+            return !IsVerifyingGemmaConnection && Settings != null && !string.IsNullOrWhiteSpace(Settings.GemmaApiKey);
+        }
+
+        private async Task VerifyAndFetchGemmaModelsAsync()
+        {
+            if (!CanVerifyGemmaConnection() || Settings == null) return;
+            IsVerifyingGemmaConnection = true;
+            GemmaConnectionStatus = "Verifying Gemma credentials and loading models...";
+            Application.Current.Dispatcher.Invoke(() => GemmaModels.Clear());
+            try
+            {
+                using (var client = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaApiKey, Settings.GemmaModelName))
+                {
+                    var models = await client.ListModelsAsync(); // To be implemented
+                    if (models != null && models.Count > 0)
+                    {
+                        foreach (var model in models)
+                        {
+                            GemmaModels.Add(model);
+                        }
+                        GemmaConnectionStatus = $"{GemmaModels.Count} Gemma models found.";
+                        if (!string.IsNullOrWhiteSpace(Settings.GemmaModelName) && GemmaModels.Contains(Settings.GemmaModelName))
+                        {
+                            SelectedGemmaModelName = Settings.GemmaModelName;
+                        }
+                        else if (GemmaModels.Any())
+                        {
+                            SelectedGemmaModelName = GemmaModels.FirstOrDefault();
+                        }
+                    }
+                    else
+                    {
+                        GemmaConnectionStatus = "Failed to fetch models from Gemma. Check API Key.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GemmaConnectionStatus = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                IsVerifyingGemmaConnection = false;
             }
         }
 
