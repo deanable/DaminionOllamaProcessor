@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
@@ -70,14 +71,40 @@ namespace DaminionOllamaInteractionLib.Ollama
         /// <returns>A ParsedOllamaContent object containing the extracted metadata.</returns>
         public static ParsedOllamaContent ParseLlavaResponse(string llavaResponseText)
         {
-            // Initialize the result object with the raw response
             var parsedContent = new ParsedOllamaContent { RawResponse = llavaResponseText };
-            
-            // Handle null or empty responses
             if (string.IsNullOrWhiteSpace(llavaResponseText))
             {
                 parsedContent.Description = "Ollama returned an empty response.";
                 return parsedContent;
+            }
+
+            // Try to parse as JSON and extract the text field
+            string? textBlock = null;
+            try
+            {
+                using var doc = JsonDocument.Parse(llavaResponseText);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
+                {
+                    var candidate = candidates[0];
+                    if (candidate.TryGetProperty("content", out var content) &&
+                        content.TryGetProperty("parts", out var parts) &&
+                        parts.GetArrayLength() > 0)
+                    {
+                        var part = parts[0];
+                        if (part.TryGetProperty("text", out var textProp))
+                        {
+                            textBlock = textProp.GetString();
+                        }
+                    }
+                }
+            }
+            catch { /* Not JSON, fallback to old logic */ }
+
+            if (!string.IsNullOrWhiteSpace(textBlock))
+            {
+                // Use the extracted text for section splitting
+                llavaResponseText = textBlock;
             }
 
             // --- Extract clean Description (first paragraph before Categories/Keywords) ---
@@ -90,7 +117,6 @@ namespace DaminionOllamaInteractionLib.Ollama
             else if (keyIdx >= 0) firstSectionIdx = keyIdx;
             if (firstSectionIdx > 0)
                 description = llavaResponseText.Substring(0, firstSectionIdx).Trim();
-            // If description is multi-paragraph, use only the first paragraph
             var descParagraph = description.Split(new[] { "\n", "\r\n" }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
             parsedContent.Description = string.IsNullOrWhiteSpace(descParagraph) ? description.Trim() : descParagraph;
 
@@ -102,7 +128,6 @@ namespace DaminionOllamaInteractionLib.Ollama
             if (TryExtractKeywords(llavaResponseText, out var keywords))
                 parsedContent.Keywords = keywords;
 
-            // Set the parsing success flag if any field was found
             parsedContent.SuccessfullyParsed =
                 !string.IsNullOrWhiteSpace(parsedContent.Description) ||
                 (parsedContent.Categories?.Count > 0) ||

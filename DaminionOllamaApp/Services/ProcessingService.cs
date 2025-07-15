@@ -171,6 +171,11 @@ namespace DaminionOllamaApp.Services
                 if (App.Logger != null) App.Logger.Log($"Parsing AI response for {item.FileName}");
                 if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
 
+                // Log the raw model response for debugging parser issues
+                if (App.Logger != null)
+                {
+                    App.Logger.Log($"[AI Raw Response] {item.FileName}: {aiResponse}");
+                }
                 // 3. Parse AI response
                 ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(aiResponse);
                 if (!parsedContent.SuccessfullyParsed)
