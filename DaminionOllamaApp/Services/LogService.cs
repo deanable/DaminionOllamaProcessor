@@ -12,12 +12,13 @@ namespace DaminionOllamaApp.Services
 
         public LogService()
         {
-            string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string appSpecificFolder = Path.Combine(appDataPath, AppName);
-            Directory.CreateDirectory(appSpecificFolder);
+            // Use the application's base directory for logs
+            string appRoot = AppDomain.CurrentDomain.BaseDirectory;
+            string logsFolder = Path.Combine(appRoot, "logs");
+            Directory.CreateDirectory(logsFolder); // Ensure the logs directory exists
             string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
             string logFileName = $"log-{timestamp}.txt";
-            _logFilePath = Path.Combine(appSpecificFolder, logFileName);
+            _logFilePath = Path.Combine(logsFolder, logFileName);
             _writer = new StreamWriter(_logFilePath, append: false) { AutoFlush = true };
             Log($"Log started at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         }
