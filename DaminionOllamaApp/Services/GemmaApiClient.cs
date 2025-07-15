@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using Serilog;
+using System.IO;
 
 namespace DaminionOllamaApp.Services
 {
@@ -64,6 +66,17 @@ namespace DaminionOllamaApp.Services
                 var url = $"https://generativelanguage.googleapis.com/v1beta/models?key={_apiKey}";
                 var response = await _httpClient.GetAsync(url);
                 var responseBody = await response.Content.ReadAsStringAsync();
+
+                // Minimal logging: log the raw response body
+                var logDir = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
+                Directory.CreateDirectory(logDir);
+                var logPath = Path.Combine(logDir, "gemmaapiclient.log");
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+                    .CreateLogger();
+                Log.Information("[GemmaApiClient] Raw response from {Url}: {ResponseBody}", url, responseBody);
+
                 if (!response.IsSuccessStatusCode)
                 {
                     return models;
@@ -85,9 +98,9 @@ namespace DaminionOllamaApp.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore errors, return empty list
+                Log.Error(ex, "[GemmaApiClient] Exception in ListModelsAsync: {Message}", ex.Message);
             }
             return models;
         }
