@@ -17,6 +17,7 @@ using System.Windows;
 using System.Windows.Input;
 using Serilog;
 using System.IO;
+using DaminionOllamaApp;
 
 namespace DaminionOllamaApp.ViewModels
 {
@@ -349,6 +350,7 @@ namespace DaminionOllamaApp.ViewModels
             catch (Exception ex)
             {
                 OpenRouterConnectionStatus = $"Error: {ex.Message}";
+                if (App.Logger != null) App.Logger.Log($"OpenRouter Verification Exception: {ex}");
                 System.Diagnostics.Debug.WriteLine($"OpenRouter Verification Exception: {ex}");
             }
             finally
@@ -370,6 +372,7 @@ namespace DaminionOllamaApp.ViewModels
             IsVerifyingOllamaConnection = true;
             IsFetchingOllamaModels = false;
             OllamaConnectionStatus = $"Verifying Ollama connection to {Settings.OllamaServerUrl}...";
+            if (App.Logger != null) App.Logger.Log($"Verifying Ollama connection to {Settings.OllamaServerUrl}...");
 
             Application.Current.Dispatcher.Invoke(() => OllamaModels.Clear());
 

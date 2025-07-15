@@ -20,6 +20,7 @@ using System.Windows;
 using System.Windows.Input;
 using Serilog;
 using Serilog.Sinks.File;
+using DaminionOllamaApp;
 
 namespace DaminionOllamaApp.ViewModels
 {
@@ -548,7 +549,8 @@ namespace DaminionOllamaApp.ViewModels
                         }
                         
                         // Log the full exception for debugging
-                        Console.WriteLine($"[DaminionCollectionTaggerViewModel] Error processing {item.FileName}: {ex}");
+                        if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Error processing {item.FileName}: {ex}");
+                        else Console.WriteLine($"[DaminionCollectionTaggerViewModel] Error processing {item.FileName}: {ex}");
                     }
                 }
 
@@ -584,52 +586,52 @@ namespace DaminionOllamaApp.ViewModels
         {
             try
             {
+                if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Processing with AI service: {(Settings.UseOpenRouter ? "OpenRouter" : "Ollama")}");
                 if (Settings.UseOpenRouter)
                 {
-                    // Use OpenRouter service
                     var openRouterClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
                     var response = await openRouterClient.AnalyzeImageAsync(
                         Settings.OpenRouterModel, 
                         Settings.DaminionProcessingPrompt, 
                         imageBytes);
-                    
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] OpenRouter response: {response?.Substring(0, Math.Min(response?.Length ?? 0, 200))}");
                     if (string.IsNullOrWhiteSpace(response))
                     {
                         throw new Exception("OpenRouter returned an empty response");
                     }
-                    
                     return response;
                 }
                 else
                 {
-                    // Use Ollama service
                     var ollamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
                     var response = await ollamaClient.AnalyzeImageAsync(
                         Settings.OllamaModel, 
                         Settings.DaminionProcessingPrompt, 
                         imageBytes);
-                    
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Ollama response: {response?.Response?.Substring(0, Math.Min(response?.Response?.Length ?? 0, 200))}");
                     if (response?.Response == null)
                     {
                         throw new Exception("Ollama returned an empty response");
                     }
-                    
                     return response.Response;
                 }
             }
             catch (HttpRequestException ex)
             {
                 var serviceName = Settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] {serviceName} connection error: {ex.Message}");
                 throw new Exception($"{serviceName} connection error: {ex.Message}", ex);
             }
             catch (TaskCanceledException ex)
             {
                 var serviceName = Settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] {serviceName} request timed out: {ex.Message}");
                 throw new Exception($"{serviceName} request timed out: {ex.Message}", ex);
             }
             catch (Exception ex)
             {
                 var serviceName = Settings.UseOpenRouter ? "OpenRouter" : "Ollama";
+                if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] {serviceName} error: {ex.Message}");
                 throw new Exception($"{serviceName} error: {ex.Message}", ex);
             }
         }
