@@ -54,6 +54,12 @@ namespace DaminionOllamaApp.Services
             return _accessToken;
         }
 
+        // Helper to get model name for endpoint (no double 'models/' prefix)
+        private string GetModelNameForEndpoint()
+        {
+            return _modelName.StartsWith("models/") ? _modelName.Substring("models/".Length) : _modelName;
+        }
+
         // Overload for text-only prompt
         public async Task<string> GenerateContentAsync(string prompt)
         {
@@ -63,8 +69,10 @@ namespace DaminionOllamaApp.Services
         // Overload for prompt + image
         public async Task<string> GenerateContentAsync(string prompt, byte[]? imageBytes, string? imageMimeType)
         {
-            var accessToken = await GetAccessTokenAsync();
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            await GetAccessTokenAsync(); // Changed to EnsureAccessTokenAsync()
+            var modelNameForUrl = GetModelNameForEndpoint();
+            var endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{modelNameForUrl}:generateContent";
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken); // Use _accessToken
 
             var parts = new List<object> { new { text = prompt } };
             if (imageBytes != null && !string.IsNullOrEmpty(imageMimeType))
@@ -88,16 +96,16 @@ namespace DaminionOllamaApp.Services
                 }
             };
 
-            var json = JsonSerializer.Serialize(payload);
+            var payloadJson = JsonSerializer.Serialize(payload);
             if (App.Logger != null)
             {
-                App.Logger.Log($"[Gemma] Sending request to endpoint: https://generativelanguage.googleapis.com/v1beta/models/{_modelName}:generateContent");
+                App.Logger.Log($"[Gemma] Sending request to endpoint: {endpoint}");
                 App.Logger.Log($"[Gemma] Model: {_modelName}");
-                App.Logger.Log($"[Gemma] Payload: {json.Substring(0, Math.Min(json.Length, 1000))}{(json.Length > 1000 ? "..." : "")}");
+                App.Logger.Log($"[Gemma] Payload: {payloadJson.Substring(0, Math.Min(payloadJson.Length, 1000))}{(payloadJson.Length > 1000 ? "..." : "")}");
             }
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync("", content);
+            var response = await _httpClient.PostAsync(endpoint, content);
             var responseBody = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
