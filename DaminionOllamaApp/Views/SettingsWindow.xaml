@@ -159,10 +159,13 @@
                                     <TextBox Text="{Binding Settings.GemmaServiceAccountJsonPath, UpdateSourceTrigger=PropertyChanged}" Width="340" VerticalAlignment="Center"/>
                                     <Button Content="Browse..." Width="70" Margin="5,0,0,0" VerticalAlignment="Center" Click="GemmaServiceAccountBrowse_Click" />
                                 </DockPanel>
-                                <Button Content="Test Credentials &amp; Load Models" 
-                                        Command="{Binding VerifyGemmaConnectionCommand}" 
-                                        HorizontalAlignment="Left" 
-                                        MinWidth="140" Padding="5,2" Margin="0,8,0,0"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button Content="Test Credentials &amp; Load Models" 
+                                            Command="{Binding VerifyGemmaConnectionCommand}" 
+                                            MinWidth="140" Padding="5,2"/>
+                                    <CheckBox Content="Only free" Margin="12,0,0,0" VerticalAlignment="Center"
+                                              IsChecked="{Binding OnlyShowFreeGeminiGemmaModels, Mode=TwoWay}"/>
+                                </StackPanel>
                                 <TextBlock Text="{Binding GemmaConnectionStatus}" Margin="0,3,0,3" TextWrapping="Wrap" Foreground="Gray" MinHeight="16"/>
                                 <Label Content="Select Gemma Model:" Margin="0,8,0,0" Padding="0,0,0,1"/>
                                 <ComboBox ItemsSource="{Binding GemmaModels}" 

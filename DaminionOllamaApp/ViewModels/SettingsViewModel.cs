@@ -61,6 +61,21 @@ namespace DaminionOllamaApp.ViewModels
         private string _gemmaConnectionStatus = "Gemma connection not verified.";
         private bool _isVerifyingGemmaConnection;
 
+        // --- Free Model Filter ---
+        private bool _onlyShowFreeGeminiGemmaModels = false;
+        public bool OnlyShowFreeGeminiGemmaModels
+        {
+            get => _onlyShowFreeGeminiGemmaModels;
+            set
+            {
+                if (_onlyShowFreeGeminiGemmaModels != value)
+                {
+                    _onlyShowFreeGeminiGemmaModels = value;
+                    OnPropertyChanged(nameof(OnlyShowFreeGeminiGemmaModels));
+                }
+            }
+        }
+
         public AppSettings Settings
         {
             get => _settings;
@@ -540,9 +555,25 @@ namespace DaminionOllamaApp.ViewModels
                 Logger.Information($"[Gemma] ListModelsAsync returned {models?.Count ?? 0} models.");
                 if (App.Logger != null) App.Logger.Log($"[Gemma] ListModelsAsync returned {models?.Count ?? 0} models.");
 
-                if (models != null && models.Count > 0)
+                // Filtering for free models if requested
+                List<string> filteredModels = new List<string>();
+                if (OnlyShowFreeGeminiGemmaModels && models != null)
                 {
-                    foreach (var model in models)
+                    filteredModels = models.Where(m =>
+                        m.StartsWith("models/gemini-1.5-pro") ||
+                        m.StartsWith("models/gemini-1.5-flash") ||
+                        m.StartsWith("models/gemma-2-9b-it") ||
+                        m.StartsWith("models/gemma-2-27b-it")
+                    ).ToList();
+                }
+                else if (models != null)
+                {
+                    filteredModels = models;
+                }
+
+                if (filteredModels.Count > 0)
+                {
+                    foreach (var model in filteredModels)
                     {
                         Logger.Information($"[Gemma] Model found: {model}");
                         if (App.Logger != null) App.Logger.Log($"[Gemma] Model found: {model}");
@@ -561,9 +592,9 @@ namespace DaminionOllamaApp.ViewModels
                 }
                 else
                 {
-                    Logger.Warning("[Gemma] Failed to fetch models from Gemma. Check Service Account JSON.");
-                    if (App.Logger != null) App.Logger.Log("[Gemma] Failed to fetch models from Gemma. Check Service Account JSON.");
-                    GemmaConnectionStatus = "Failed to fetch models from Gemma. Check Service Account JSON.";
+                    Logger.Warning("[Gemma] Failed to fetch models from Gemma. Check Service Account JSON or filter.");
+                    if (App.Logger != null) App.Logger.Log("[Gemma] Failed to fetch models from Gemma. Check Service Account JSON or filter.");
+                    GemmaConnectionStatus = "Failed to fetch models from Gemma. Check Service Account JSON or filter.";
                 }
             }
             catch (Exception ex)
