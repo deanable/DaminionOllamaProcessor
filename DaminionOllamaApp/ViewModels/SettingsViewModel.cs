@@ -515,7 +515,7 @@ namespace DaminionOllamaApp.ViewModels
 
         private bool CanVerifyGemmaConnection()
         {
-            return !IsVerifyingGemmaConnection && Settings != null && !string.IsNullOrWhiteSpace(Settings.GemmaApiKey);
+            return !IsVerifyingGemmaConnection && Settings != null && !string.IsNullOrWhiteSpace(Settings.GemmaServiceAccountJsonPath);
         }
 
         private async Task VerifyAndFetchGemmaModelsAsync()
@@ -526,13 +526,13 @@ namespace DaminionOllamaApp.ViewModels
             Application.Current.Dispatcher.Invoke(() => GemmaModels.Clear());
             try
             {
-                string maskedApiKey = string.IsNullOrEmpty(Settings.GemmaApiKey) ? "(empty)" : Settings.GemmaApiKey.Substring(0, Math.Min(4, Settings.GemmaApiKey.Length)) + "...";
-                string logMsg = $"[Gemma] Credential/model list check: API Key (masked): {maskedApiKey}";
+                string maskedPath = string.IsNullOrEmpty(Settings.GemmaServiceAccountJsonPath) ? "(empty)" : System.IO.Path.GetFileName(Settings.GemmaServiceAccountJsonPath);
+                string logMsg = $"[Gemma] Credential/model list check: Service Account JSON: {maskedPath}";
                 Logger.Information(logMsg);
                 if (App.Logger != null) App.Logger.Log(logMsg);
 
-                var client = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaApiKey, ""); // No model name needed for listing
-                string requestUrl = $"https://generativelanguage.googleapis.com/v1beta/models?key={Settings.GemmaApiKey}";
+                var client = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaServiceAccountJsonPath, ""); // No model name needed for listing
+                string requestUrl = $"https://generativelanguage.googleapis.com/v1beta/models (OAuth2 Bearer)";
                 Logger.Information($"[Gemma] Request URL: {requestUrl}");
                 if (App.Logger != null) App.Logger.Log($"[Gemma] Request URL: {requestUrl}");
 
@@ -561,9 +561,9 @@ namespace DaminionOllamaApp.ViewModels
                 }
                 else
                 {
-                    Logger.Warning("[Gemma] Failed to fetch models from Gemma. Check API Key.");
-                    if (App.Logger != null) App.Logger.Log("[Gemma] Failed to fetch models from Gemma. Check API Key.");
-                    GemmaConnectionStatus = "Failed to fetch models from Gemma. Check API Key.";
+                    Logger.Warning("[Gemma] Failed to fetch models from Gemma. Check Service Account JSON.");
+                    if (App.Logger != null) App.Logger.Log("[Gemma] Failed to fetch models from Gemma. Check Service Account JSON.");
+                    GemmaConnectionStatus = "Failed to fetch models from Gemma. Check Service Account JSON.";
                 }
             }
             catch (Exception ex)

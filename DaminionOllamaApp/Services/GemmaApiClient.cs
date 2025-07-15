@@ -8,27 +8,51 @@ using System.Collections.Generic;
 using System.Linq;
 using Serilog;
 using System.IO;
+using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Responses;
 
 namespace DaminionOllamaApp.Services
 {
     public class GemmaApiClient
     {
-        private readonly string _apiKey;
         private readonly string _modelName;
+        private readonly string _serviceAccountJsonPath;
         private readonly HttpClient _httpClient;
+        private string? _accessToken;
+        private DateTime _accessTokenExpiry;
+        private static readonly string[] Scopes = new[] { "https://www.googleapis.com/auth/cloud-platform" };
 
-        public GemmaApiClient(string apiKey, string modelName)
+        public GemmaApiClient(string serviceAccountJsonPath, string modelName)
         {
-            _apiKey = apiKey;
+            _serviceAccountJsonPath = serviceAccountJsonPath;
             _modelName = modelName;
             _httpClient = new HttpClient();
             _httpClient.BaseAddress = new Uri($"https://generativelanguage.googleapis.com/v1beta/models/{_modelName}:generateContent");
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        }
+
+        private async Task<string> GetAccessTokenAsync()
+        {
+            if (!string.IsNullOrEmpty(_accessToken) && DateTime.UtcNow < _accessTokenExpiry)
+            {
+                return _accessToken;
+            }
+            GoogleCredential credential;
+            using (var stream = new FileStream(_serviceAccountJsonPath, FileMode.Open, FileAccess.Read))
+            {
+                credential = GoogleCredential.FromStream(stream).CreateScoped(Scopes);
+            }
+            var token = await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
+            // Token expiry is not directly available, so set a conservative expiry (50 min)
+            _accessToken = token;
+            _accessTokenExpiry = DateTime.UtcNow.AddMinutes(50);
+            return _accessToken;
         }
 
         public async Task<string> GenerateContentAsync(string prompt)
         {
+            var accessToken = await GetAccessTokenAsync();
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             var payload = new
             {
                 contents = new[]
@@ -63,33 +87,24 @@ namespace DaminionOllamaApp.Services
             var models = new List<string>();
             try
             {
-                var url = $"https://generativelanguage.googleapis.com/v1beta/models?key={_apiKey}";
+                var accessToken = await GetAccessTokenAsync();
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                var url = "https://generativelanguage.googleapis.com/v1beta/models";
                 var response = await _httpClient.GetAsync(url);
                 var responseBody = await response.Content.ReadAsStringAsync();
 
-                // Log to gemmaapiclient.log
-                var logDir = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
-                Directory.CreateDirectory(logDir);
-                var gemmaLogPath = Path.Combine(logDir, "gemmaapiclient.log");
-                var mainLogPath = Directory.GetFiles(logDir, "log-*.txt").OrderByDescending(f => f).FirstOrDefault();
-                var logger = new LoggerConfiguration()
-                    .MinimumLevel.Debug()
-                    .WriteTo.File(gemmaLogPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
-                    .CreateLogger();
-                logger.Information("[GemmaApiClient] Raw response from {Url}: {ResponseBody}", url, responseBody);
-
-                // Also append to the main log file if it exists
-                if (!string.IsNullOrEmpty(mainLogPath))
+                // Centralized logging: log the raw response body to the main app log
+                if (App.Logger != null)
                 {
-                    try
-                    {
-                        File.AppendAllText(mainLogPath, $"[GemmaApiClient] Raw response from {url}: {responseBody}{Environment.NewLine}");
-                    }
-                    catch { /* Ignore errors writing to main log */ }
+                    App.Logger.Log($"[Gemma] Raw response from {url}: {responseBody}");
                 }
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    if (App.Logger != null)
+                    {
+                        App.Logger.Log($"[Gemma] ListModelsAsync failed. Status: {response.StatusCode}, Body: {responseBody}");
+                    }
                     return models;
                 }
                 using var doc = JsonDocument.Parse(responseBody);
@@ -110,7 +125,10 @@ namespace DaminionOllamaApp.Services
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[GemmaApiClient] Exception in ListModelsAsync: {Message}", ex.Message);
+                if (App.Logger != null)
+                {
+                    App.Logger.Log($"[Gemma] Exception in ListModelsAsync: {ex.Message}\n{ex}");
+                }
             }
             return models;
         }

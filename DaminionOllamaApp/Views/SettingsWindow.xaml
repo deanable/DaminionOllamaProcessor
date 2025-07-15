@@ -154,8 +154,11 @@
                     <StackPanel>
                         <GroupBox Header="Gemma API Settings" Margin="0,5,0,5" Padding="5">
                             <StackPanel>
-                                <Label Content="Gemma API Key:" Padding="0,0,0,1"/>
-                                <TextBox Text="{Binding Settings.GemmaApiKey, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" />
+                                <Label Content="Gemma Service Account JSON Path:" Padding="0,0,0,1"/>
+                                <DockPanel Margin="0,0,0,3">
+                                    <TextBox Text="{Binding Settings.GemmaServiceAccountJsonPath, UpdateSourceTrigger=PropertyChanged}" Width="340" VerticalAlignment="Center"/>
+                                    <Button Content="Browse..." Width="70" Margin="5,0,0,0" VerticalAlignment="Center" Click="GemmaServiceAccountBrowse_Click" />
+                                </DockPanel>
                                 <Button Content="Test Credentials &amp; Load Models" 
                                         Command="{Binding VerifyGemmaConnectionCommand}" 
                                         HorizontalAlignment="Left" 

@@ -2,6 +2,7 @@
 using DaminionOllamaApp.ViewModels;
 using System.Windows;
 using System.Windows.Controls; // Required for PasswordBox
+using Microsoft.Win32; // For OpenFileDialog
 
 namespace DaminionOllamaApp.Views
 {
@@ -26,6 +27,23 @@ namespace DaminionOllamaApp.Views
         public void SetPasswordBox(string password)
         {
             DaminionPasswordBox.Password = password;
+        }
+
+        // Event handler for the Gemma Service Account JSON file picker
+        private void GemmaServiceAccountBrowse_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                Title = "Select Google Service Account JSON File"
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                if (DataContext is SettingsViewModel viewModel)
+                {
+                    viewModel.Settings.GemmaServiceAccountJsonPath = dlg.FileName;
+                }
+            }
         }
     }
 }

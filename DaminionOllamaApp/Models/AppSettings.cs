@@ -168,6 +168,7 @@ namespace DaminionOllamaApp.Models
         // --- Gemma Properties ---
         private string _gemmaApiKey = string.Empty;
         private string _gemmaModelName = "gemma-3n-e2b-it";
+        private string _gemmaServiceAccountJsonPath = string.Empty; // Path to service account JSON
         public string GemmaApiKey
         {
             get => _gemmaApiKey;
@@ -189,6 +190,18 @@ namespace DaminionOllamaApp.Models
                 {
                     _gemmaModelName = value;
                     OnPropertyChanged(nameof(GemmaModelName));
+                }
+            }
+        }
+        public string GemmaServiceAccountJsonPath
+        {
+            get => _gemmaServiceAccountJsonPath;
+            set
+            {
+                if (_gemmaServiceAccountJsonPath != value)
+                {
+                    _gemmaServiceAccountJsonPath = value;
+                    OnPropertyChanged(nameof(GemmaServiceAccountJsonPath));
                 }
             }
         }
