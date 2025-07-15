@@ -35,8 +35,6 @@ namespace DaminionOllamaApp.ViewModels
     /// </summary>
     public class DaminionCollectionTaggerViewModel : INotifyPropertyChanged
     {
-<<<<<<< HEAD
-=======
         private static readonly ILogger Logger;
         static DaminionCollectionTaggerViewModel()
         {
@@ -48,7 +46,6 @@ namespace DaminionOllamaApp.ViewModels
                 .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
                 .CreateLogger();
         }
->>>>>>> 07-14 pm Office
         #region Private Fields
         /// <summary>
         /// Service for loading and saving application settings.
@@ -312,11 +309,7 @@ namespace DaminionOllamaApp.ViewModels
         /// </summary>
         private async Task LoginAsync()
         {
-<<<<<<< HEAD
-            // Validate required settings
-=======
             Logger.Information("Attempting Daminion login for server: {Server}", Settings.DaminionServerUrl);
->>>>>>> 07-14 pm Office
             if (string.IsNullOrWhiteSpace(Settings.DaminionServerUrl) ||
                 string.IsNullOrWhiteSpace(Settings.DaminionUsername) ||
                 string.IsNullOrWhiteSpace(Settings.DaminionPassword))
@@ -325,21 +318,6 @@ namespace DaminionOllamaApp.ViewModels
                 return;
             }
 
-<<<<<<< HEAD
-            try
-            {
-                DaminionStatus = "Logging in...";
-                
-                // Initialize the API client if not already done
-                _daminionClient ??= new DaminionApiClient();
-                
-                // Attempt to authenticate with the server
-                bool loginSuccess = await _daminionClient.LoginAsync(
-                    Settings.DaminionServerUrl, 
-                    Settings.DaminionUsername, 
-                    Settings.DaminionPassword);
-
-=======
             _daminionClient = new DaminionApiClient();
             DaminionStatus = $"Logging in to {Settings.DaminionServerUrl}...";
             IsLoggedIn = false;
@@ -353,16 +331,11 @@ namespace DaminionOllamaApp.ViewModels
                     Settings.DaminionUsername,
                     Settings.DaminionPassword);
                 Logger.Information("Daminion login result: {Result}", loginSuccess);
->>>>>>> 07-14 pm Office
                 if (loginSuccess)
                 {
                     IsLoggedIn = true;
                     DaminionStatus = "Successfully logged in to Daminion.";
-<<<<<<< HEAD
-                    
                     // Restore previously selected query type if available
-=======
->>>>>>> 07-14 pm Office
                     var savedQueryType = QueryTypes.FirstOrDefault(q => q.QueryType == Settings.DaminionQueryType);
                     if (savedQueryType != null)
                     {

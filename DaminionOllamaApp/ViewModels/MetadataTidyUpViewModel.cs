@@ -24,8 +24,6 @@ namespace DaminionOllamaApp.ViewModels
 {
     public class MetadataTidyUpViewModel : INotifyPropertyChanged
     {
-<<<<<<< HEAD
-=======
         private static readonly ILogger Logger;
         static MetadataTidyUpViewModel()
         {
@@ -37,7 +35,6 @@ namespace DaminionOllamaApp.ViewModels
                 .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
                 .CreateLogger();
         }
->>>>>>> 07-14 pm Office
         // --- Fields ---
         private readonly SettingsService _settingsService;
         private DaminionApiClient? _daminionClient;
@@ -231,10 +228,7 @@ namespace DaminionOllamaApp.ViewModels
         private bool CanLoginToDaminion() => IsDaminionCatalogMode && !IsDaminionLoggedIn && !IsLoadingDaminionItems && !IsCleaningQueue;
         private async Task LoginToDaminionAsync()
         {
-<<<<<<< HEAD
-=======
             Logger.Information("Attempting Daminion login for server: {Server}", Settings.DaminionServerUrl);
->>>>>>> 07-14 pm Office
             if (string.IsNullOrWhiteSpace(Settings.DaminionServerUrl) ||
                 string.IsNullOrWhiteSpace(Settings.DaminionUsername))
             {
@@ -251,10 +245,7 @@ namespace DaminionOllamaApp.ViewModels
                     Settings.DaminionServerUrl,
                     Settings.DaminionUsername,
                     Settings.DaminionPassword);
-<<<<<<< HEAD
-=======
                 Logger.Information("Daminion login result: {Result}", success);
->>>>>>> 07-14 pm Office
                 IsDaminionLoggedIn = success;
                 DaminionLoginStatus = success ? "Daminion login successful. Select query and load items." : "Daminion login failed.";
             }

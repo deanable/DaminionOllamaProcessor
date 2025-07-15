@@ -22,8 +22,6 @@ namespace DaminionOllamaApp.ViewModels
 {
     public class SettingsViewModel : INotifyPropertyChanged
     {
-<<<<<<< HEAD
-=======
         private static readonly ILogger Logger;
         static SettingsViewModel()
         {
@@ -36,7 +34,6 @@ namespace DaminionOllamaApp.ViewModels
                 .CreateLogger();
         }
 
->>>>>>> 07-14 pm Office
         private AppSettings _settings;
 
         // --- Ollama Settings ---
