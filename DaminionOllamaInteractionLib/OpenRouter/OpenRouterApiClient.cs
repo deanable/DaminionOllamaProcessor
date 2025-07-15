@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using Serilog;
 using System.IO;
 using Serilog.Sinks.File;
-using DaminionOllamaApp;
 
 namespace DaminionOllamaInteractionLib.OpenRouter
 {
@@ -82,7 +81,7 @@ namespace DaminionOllamaInteractionLib.OpenRouter
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             _httpClient.Timeout = TimeSpan.FromMinutes(5); // Extended timeout for AI processing
 
-            if (App.Logger != null) App.Logger.Log("[OpenRouterApiClient] Initialized."); else Console.WriteLine("[OpenRouterApiClient] Initialized.");
+            Console.WriteLine("[OpenRouterApiClient] Initialized.");
         }
         #endregion
 
@@ -96,7 +95,7 @@ namespace DaminionOllamaInteractionLib.OpenRouter
         {
             try
             {
-                if (App.Logger != null) App.Logger.Log("[OpenRouterApiClient] Fetching available models..."); else Console.WriteLine("[OpenRouterApiClient] Fetching available models...");
+                Console.WriteLine("[OpenRouterApiClient] Fetching available models...");
                 
                 var response = await _httpClient.GetAsync("models");
                 
@@ -105,19 +104,19 @@ namespace DaminionOllamaInteractionLib.OpenRouter
                     var json = await response.Content.ReadAsStringAsync();
                     var result = JsonSerializer.Deserialize<OpenRouterListModelsResponse>(json);
                     
-                    if (App.Logger != null) App.Logger.Log($"[OpenRouterApiClient] Found {result?.Data?.Count ?? 0} models."); else Console.WriteLine($"[OpenRouterApiClient] Found {result?.Data?.Count ?? 0} models.");
+                    Console.WriteLine($"[OpenRouterApiClient] Found {result?.Data?.Count ?? 0} models.");
                     return result;
                 }
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    if (App.Logger != null) App.Logger.LogError(new Exception($"[OpenRouterApiClient] Failed to fetch models: {response.StatusCode} - {errorContent}"), "[OpenRouterApiClient] Failed to fetch models."); else Console.Error.WriteLine($"[OpenRouterApiClient] Failed to fetch models: {response.StatusCode}");
+                    Console.Error.WriteLine($"[OpenRouterApiClient] Failed to fetch models: {response.StatusCode} - {errorContent}");
                     return null;
                 }
             }
             catch (Exception ex)
             {
-                if (App.Logger != null) App.Logger.LogError(ex, "[OpenRouterApiClient] Error fetching models."); else Console.Error.WriteLine($"[OpenRouterApiClient] Error fetching models: {ex.Message}");
+                Console.Error.WriteLine($"[OpenRouterApiClient] Error fetching models: {ex.Message}");
                 return null;
             }
         }
@@ -134,7 +133,7 @@ namespace DaminionOllamaInteractionLib.OpenRouter
         {
             try
             {
-                if (App.Logger != null) App.Logger.Log($"[OpenRouterApiClient] Analyzing image with model: {modelName}"); else Console.WriteLine($"[OpenRouterApiClient] Analyzing image with model: {modelName}");
+                Console.WriteLine($"[OpenRouterApiClient] Analyzing image with model: {modelName}");
                 
                 // Construct the chat completion request
                 var requestData = new
@@ -171,19 +170,19 @@ namespace DaminionOllamaInteractionLib.OpenRouter
                     // Extract the content from the response
                     var analysisResult = result?.Choices?.FirstOrDefault()?.Message?.Content;
                     
-                    if (App.Logger != null) App.Logger.Log($"[OpenRouterApiClient] Analysis completed. Length: {analysisResult?.Length ?? 0} characters"); else Console.WriteLine($"[OpenRouterApiClient] Analysis completed. Length: {analysisResult?.Length ?? 0} characters");
+                    Console.WriteLine($"[OpenRouterApiClient] Analysis completed. Length: {analysisResult?.Length ?? 0} characters");
                     return analysisResult;
                 }
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    if (App.Logger != null) App.Logger.LogError(new Exception($"[OpenRouterApiClient] Analysis failed: {response.StatusCode} - {errorContent}"), "[OpenRouterApiClient] Analysis failed."); else Console.Error.WriteLine($"[OpenRouterApiClient] Analysis failed: {response.StatusCode} - {errorContent}");
+                    Console.Error.WriteLine($"[OpenRouterApiClient] Analysis failed: {response.StatusCode} - {errorContent}");
                     return null;
                 }
             }
             catch (Exception ex)
             {
-                if (App.Logger != null) App.Logger.LogError(ex, "[OpenRouterApiClient] Error analyzing image."); else Console.Error.WriteLine($"[OpenRouterApiClient] Error analyzing image: {ex.Message}");
+                Console.Error.WriteLine($"[OpenRouterApiClient] Error analyzing image: {ex.Message}");
                 return null;
             }
         }

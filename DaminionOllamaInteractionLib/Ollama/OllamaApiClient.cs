@@ -11,7 +11,6 @@ using DaminionOllamaInteractionLib.Ollama;
 using Serilog;
 using System.IO;
 using Serilog.Sinks.File;
-using DaminionOllamaApp;
 
 namespace DaminionOllamaInteractionLib.Ollama
 {
@@ -50,7 +49,7 @@ namespace DaminionOllamaInteractionLib.Ollama
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             // Increased timeout for potentially long-running Ollama requests
             _httpClient.Timeout = TimeSpan.FromMinutes(5);
-            if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Initialized with base URL: {_apiBaseUrl}");
+            Console.WriteLine($"[OllamaApiClient] Initialized with base URL: {_apiBaseUrl}");
         }
 
         /// <summary>
@@ -71,7 +70,7 @@ namespace DaminionOllamaInteractionLib.Ollama
                 throw new ArgumentNullException(nameof(imageBytes), "Image bytes cannot be null or empty.");
 
             string generateUrl = $"{_apiBaseUrl}/api/generate";
-            if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Attempting to analyze image. URL: {generateUrl}, Model: {modelName}");
+            Console.WriteLine($"[OllamaApiClient] Attempting to analyze image. URL: {generateUrl}, Model: {modelName}");
 
             string base64Image = Convert.ToBase64String(imageBytes);
             var requestPayload = new OllamaGenerateRequest
@@ -89,14 +88,14 @@ namespace DaminionOllamaInteractionLib.Ollama
                 var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
                 // Log a snippet of the request for brevity, as Base64 images are large.
-                if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Request Payload (snippet): {{ \"model\": \"{modelName}\", \"prompt\": \"{prompt.Substring(0, Math.Min(prompt.Length, 50))}...\", \"images\": [\"Base64ImageSnippet...\"] }}");
+                Console.WriteLine($"[OllamaApiClient] Request Payload (snippet): {{ \"model\": \"{modelName}\", \"prompt\": \"{prompt.Substring(0, Math.Min(prompt.Length, 50))}...\", \"images\": [\"Base64ImageSnippet...\"] }}");
 
-                if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Sending POST request to {generateUrl}...");
+                Console.WriteLine($"[OllamaApiClient] Sending POST request to {generateUrl}...");
                 HttpResponseMessage response = await _httpClient.PostAsync(generateUrl, content);
                 string responseBody = await response.Content.ReadAsStringAsync();
 
-                if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Response Status Code: {response.StatusCode}");
-                if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Response Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                Console.WriteLine($"[OllamaApiClient] Response Status Code: {response.StatusCode}");
+                Console.WriteLine($"[OllamaApiClient] Response Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -107,59 +106,58 @@ namespace DaminionOllamaInteractionLib.Ollama
                     }
                     catch (System.Text.Json.JsonException jsonEx)
                     {
-                        if (App.Logger != null) App.Logger.Error(jsonEx, $"[OllamaApiClient] Error deserializing successful Ollama response: {jsonEx.Message}. StackTrace: {jsonEx.StackTrace}. Body: {responseBody}");
+                        Console.Error.WriteLine($"[OllamaApiClient] Error deserializing successful Ollama response: {jsonEx.Message}\n{jsonEx.StackTrace}. Body: {responseBody}");
                         return new OllamaGenerateResponse { Model = modelName, Response = $"Error: Failed to parse successful response. {jsonEx.Message}", Done = false };
                     }
 
                     if (ollamaResponse == null || (string.IsNullOrEmpty(ollamaResponse.Response) && ollamaResponse.Done))
                     {
-                        if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] Ollama API returned success status but the response content is missing, invalid, or indicates an issue.");
+                        Console.Error.WriteLine($"[OllamaApiClient] Ollama API returned success status but the response content is missing, invalid, or indicates an issue.");
                         return new OllamaGenerateResponse { Model = modelName, Response = $"Error: Successful API call but problematic response body. Raw: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}", Done = ollamaResponse?.Done ?? false };
                     }
-                    if (App.Logger != null) App.Logger.Log("[OllamaApiClient] Successfully deserialized Ollama response.");
+                    Console.WriteLine("[OllamaApiClient] Successfully deserialized Ollama response.");
                     return ollamaResponse;
                 }
                 else
                 {
-                    if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] Ollama API request failed. Status: {response.StatusCode}, Reason: {response.ReasonPhrase}.");
+                    Console.Error.WriteLine($"[OllamaApiClient] Ollama API request failed. Status: {response.StatusCode}, Reason: {response.ReasonPhrase}.");
                     // The responseBody is already logged above.
                     return new OllamaGenerateResponse { Model = modelName, Response = $"Error: {response.StatusCode} - {response.ReasonPhrase}. See debug output for full body.", Done = false };
                 }
             }
             catch (HttpRequestException ex)
             {
-                if (App.Logger != null) App.Logger.Error(ex, $"[OllamaApiClient] HTTP request error to Ollama: {ex.Message}");
+                Console.Error.WriteLine($"[OllamaApiClient] HTTP request error to Ollama: {ex.Message}\n{ex.StackTrace}");
                 if (ex.InnerException != null)
                 {
-                    if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] Inner Exception: {ex.InnerException.Message}");
+                    Console.Error.WriteLine($"[OllamaApiClient] Inner Exception: {ex.InnerException.Message}");
                 }
-                if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
+                Console.Error.WriteLine($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
                 return new OllamaGenerateResponse { Model = modelName, Response = $"Error: HTTP request failed. {ex.Message}", Done = false };
             }
             catch (System.Text.Json.JsonException ex) // For errors during request serialization
             {
-                if (App.Logger != null) App.Logger.Error(ex, $"[OllamaApiClient] Error serializing Ollama request: {ex.Message}");
-                if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
+                Console.Error.WriteLine($"[OllamaApiClient] Error serializing Ollama request: {ex.Message}\n{ex.StackTrace}");
                 return new OllamaGenerateResponse { Model = modelName, Response = $"Error: JSON processing for request failed. {ex.Message}", Done = false };
             }
             catch (TaskCanceledException ex) // Often indicates a timeout
             {
-                if (App.Logger != null) App.Logger.Error(ex, $"[OllamaApiClient] Ollama request timed out: {ex.Message}");
+                Console.Error.WriteLine($"[OllamaApiClient] Ollama request timed out: {ex.Message}\n{ex.StackTrace}");
                 if (ex.InnerException != null)
                 {
-                    if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] Inner Exception (Timeout): {ex.InnerException.Message}");
+                    Console.Error.WriteLine($"[OllamaApiClient] Inner Exception (Timeout): {ex.InnerException.Message}");
                 }
-                if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
+                Console.Error.WriteLine($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
                 return new OllamaGenerateResponse { Model = modelName, Response = $"Error: Request to Ollama timed out. Timeout is {_httpClient.Timeout.TotalSeconds}s. {ex.Message}", Done = false };
             }
             catch (Exception ex)
             {
-                if (App.Logger != null) App.Logger.Error(ex, $"[OllamaApiClient] An unexpected error occurred: {ex.Message}");
+                Console.Error.WriteLine($"[OllamaApiClient] An unexpected error occurred: {ex.Message}\n{ex.StackTrace}");
                 if (ex.InnerException != null)
                 {
-                    if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] Inner Exception: {ex.InnerException.Message}");
+                    Console.Error.WriteLine($"[OllamaApiClient] Inner Exception: {ex.InnerException.Message}");
                 }
-                if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
+                Console.Error.WriteLine($"[OllamaApiClient] StackTrace: {ex.StackTrace}");
                 return new OllamaGenerateResponse { Model = modelName, Response = $"Error: An unexpected error occurred. {ex.Message}", Done = false };
             }
         }
@@ -174,12 +172,12 @@ namespace DaminionOllamaInteractionLib.Ollama
         {
             if (string.IsNullOrWhiteSpace(_apiBaseUrl))
             {
-                if (App.Logger != null) App.Logger.Error("[OllamaApiClient] CheckConnection Error: API base URL is not set.");
+                Console.Error.WriteLine("[OllamaApiClient] CheckConnection Error: API base URL is not set.");
                 return false;
             }
 
             string healthCheckUrl = _apiBaseUrl;
-            if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Checking Ollama connection at: {healthCheckUrl}");
+            Console.WriteLine($"[OllamaApiClient] Checking Ollama connection at: {healthCheckUrl}");
 
             try
             {
@@ -189,14 +187,14 @@ namespace DaminionOllamaInteractionLib.Ollama
                 using (var tempHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) }) // Increased timeout slightly
                 {
                     HttpResponseMessage response = await tempHttpClient.GetAsync(healthCheckUrl);
-                    if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Connection check response status: {response.StatusCode}");
+                    Console.WriteLine($"[OllamaApiClient] Connection check response status: {response.StatusCode}");
                     // Optional: Check response body if needed, e.g., response.Content.ReadAsStringAsync();
                     return response.IsSuccessStatusCode;
                 }
             }
             catch (Exception ex)
             {
-                if (App.Logger != null) App.Logger.Error(ex, $"[OllamaApiClient] Error checking Ollama connection to '{healthCheckUrl}': {ex.Message}");
+                Console.Error.WriteLine($"[OllamaApiClient] Error checking Ollama connection to '{healthCheckUrl}': {ex.Message}\n{ex.StackTrace}");
                 return false;
             }
         }
@@ -209,12 +207,12 @@ namespace DaminionOllamaInteractionLib.Ollama
         {
             if (string.IsNullOrWhiteSpace(_apiBaseUrl))
             {
-                if (App.Logger != null) App.Logger.Error("[OllamaApiClient] ListLocalModels Error: API base URL is not set.");
+                Console.Error.WriteLine("[OllamaApiClient] ListLocalModels Error: API base URL is not set.");
                 return null;
             }
 
             string listModelsUrl = $"{_apiBaseUrl}/api/tags";
-            if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Listing Ollama models from: {listModelsUrl}");
+            Console.WriteLine($"[OllamaApiClient] Listing Ollama models from: {listModelsUrl}");
 
             try
             {
@@ -222,7 +220,7 @@ namespace DaminionOllamaInteractionLib.Ollama
                 // If not, you might consider adjusting _httpClient.Timeout or using a temporary client like in CheckConnectionAsync.
                 HttpResponseMessage response = await _httpClient.GetAsync(listModelsUrl);
                 string responseBody = await response.Content.ReadAsStringAsync();
-                if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] ListLocalModels Response Status Code: {response.StatusCode}");
+                Console.WriteLine($"[OllamaApiClient] ListLocalModels Response Status Code: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -235,29 +233,29 @@ namespace DaminionOllamaInteractionLib.Ollama
                     }
                     catch (System.Text.Json.JsonException jsonEx)
                     {
-                        if (App.Logger != null) App.Logger.Error(jsonEx, $"[OllamaApiClient] Error deserializing ListLocalModels response: {jsonEx.Message}. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        Console.Error.WriteLine($"[OllamaApiClient] Error deserializing ListLocalModels response: {jsonEx.Message}\nBody (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
                         return null;
                     }
 
                     if (listResponse != null)
                     {
-                        if (App.Logger != null) App.Logger.Log($"[OllamaApiClient] Successfully fetched {listResponse.Models?.Count ?? 0} local models.");
+                        Console.WriteLine($"[OllamaApiClient] Successfully fetched {listResponse.Models?.Count ?? 0} local models.");
                     }
                     else
                     {
-                        if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] ListLocalModels deserialization resulted in null object. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                        Console.Error.WriteLine($"[OllamaApiClient] ListLocalModels deserialization resulted in null object. Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
                     }
                     return listResponse;
                 }
                 else
                 {
-                    if (App.Logger != null) App.Logger.Error($"[OllamaApiClient] ListLocalModels HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
+                    Console.Error.WriteLine($"[OllamaApiClient] ListLocalModels HTTP call failed. Status: {response.StatusCode}, Body (snippet): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
                     return null;
                 }
             }
             catch (Exception ex) // Catch general exceptions including HttpRequestException, TaskCanceledException (timeout)
             {
-                if (App.Logger != null) App.Logger.Error(ex, $"[OllamaApiClient] An unexpected error occurred during ListLocalModels from '{listModelsUrl}': {ex.Message}");
+                Console.Error.WriteLine($"[OllamaApiClient] An unexpected error occurred during ListLocalModels from '{listModelsUrl}': {ex.Message}\n{ex.StackTrace}");
                 return null;
             }
         }
@@ -265,15 +263,15 @@ namespace DaminionOllamaInteractionLib.Ollama
         // Example: Log API requests and responses
         private void LogApiRequest(string endpoint, object? payload = null)
         {
-            if (App.Logger != null) App.Logger.Information("Ollama API Request: {Endpoint}, Payload: {@Payload}", endpoint, payload);
+            Console.WriteLine($"Ollama API Request: Endpoint: {endpoint}, Payload: {JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true })}");
         }
         private void LogApiResponse(string endpoint, object? response = null)
         {
-            if (App.Logger != null) App.Logger.Information("Ollama API Response: {Endpoint}, Response: {@Response}", endpoint, response);
+            Console.WriteLine($"Ollama API Response: Endpoint: {endpoint}, Response: {JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true })}");
         }
         private void LogApiError(string endpoint, Exception ex)
         {
-            if (App.Logger != null) App.Logger.Error(ex, "Ollama API Error: {Endpoint}", endpoint);
+            Console.Error.WriteLine($"Ollama API Error: Endpoint: {endpoint}, Exception: {ex.Message}\n{ex.StackTrace}");
         }
 
         public void Dispose()
