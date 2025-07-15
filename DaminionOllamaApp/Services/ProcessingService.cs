@@ -90,6 +90,17 @@ namespace DaminionOllamaApp.Services
                             App.Logger.Log($"OpenRouter request metadata for {item.FileName}: Model={settings.OpenRouterModelName}, PromptSnippet={settings.OllamaPrompt.Substring(0, Math.Min(settings.OllamaPrompt.Length, 100))}, ImageSize={imageBytes.Length} bytes, ImageBase64Snippet={Convert.ToBase64String(imageBytes).Substring(0, 40)}...");
                         }
                         var openRouterClient = new OpenRouterApiClient(settings.OpenRouterApiKey, settings.OpenRouterHttpReferer);
+                        // Pre-check API key by listing models
+                        var modelCheck = await openRouterClient.ListModelsAsync();
+                        if (modelCheck == null)
+                        {
+                            if (App.Logger != null) App.Logger.Log($"OpenRouter API key check failed for {item.FileName}: Unable to list models. Aborting.");
+                            item.Status = ProcessingStatus.Error;
+                            item.StatusMessage = "OpenRouter API key invalid or unauthorized.";
+                            reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
+                            return;
+                        }
+                        if (App.Logger != null) App.Logger.Log($"OpenRouter API key check succeeded for {item.FileName}: Models listed.");
                         var openRouterResult = await openRouterClient.AnalyzeImageAsync(
                             settings.OpenRouterModelName, 
                             settings.OllamaPrompt, 
