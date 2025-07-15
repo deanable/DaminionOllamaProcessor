@@ -30,6 +30,10 @@ namespace DaminionOllamaApp.Services
 
             try
             {
+                if (App.Logger != null)
+                {
+                    App.Logger.Log($"Settings at processing start for {item.FileName}: UseOpenRouter={settings.UseOpenRouter}, OpenRouterModelName={settings.OpenRouterModelName}, OllamaModelName={settings.OllamaModelName}, OllamaServerUrl={settings.OllamaServerUrl}");
+                }
                 item.Status = ProcessingStatus.Processing;
                 item.StatusMessage = "Starting...";
                 reportProgress?.Invoke($"Processing: {item.FileName} - Reading file...");
