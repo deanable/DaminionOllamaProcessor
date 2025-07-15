@@ -80,42 +80,33 @@ namespace DaminionOllamaInteractionLib.Ollama
                 return parsedContent;
             }
 
-            // Start with the full response as the description
-            // This will be modified as we extract structured sections
+            // --- Extract clean Description (first paragraph before Categories/Keywords) ---
             string description = llavaResponseText;
-            bool foundStructuredContent = false;
+            int catIdx = llavaResponseText.IndexOf("Categories:", StringComparison.OrdinalIgnoreCase);
+            int keyIdx = llavaResponseText.IndexOf("Keywords:", StringComparison.OrdinalIgnoreCase);
+            int firstSectionIdx = -1;
+            if (catIdx >= 0 && keyIdx >= 0) firstSectionIdx = Math.Min(catIdx, keyIdx);
+            else if (catIdx >= 0) firstSectionIdx = catIdx;
+            else if (keyIdx >= 0) firstSectionIdx = keyIdx;
+            if (firstSectionIdx > 0)
+                description = llavaResponseText.Substring(0, firstSectionIdx).Trim();
+            // If description is multi-paragraph, use only the first paragraph
+            var descParagraph = description.Split(new[] { "\n", "\r\n" }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+            parsedContent.Description = string.IsNullOrWhiteSpace(descParagraph) ? description.Trim() : descParagraph;
 
-            // Extract categories section
+            // --- Extract Categories ---
             if (TryExtractCategories(llavaResponseText, out var categories))
-            {
                 parsedContent.Categories = categories;
-                description = RemoveSection(description, CategoriesRegex);
-                foundStructuredContent = true;
-            }
 
-            // Extract keywords section
+            // --- Extract Keywords ---
             if (TryExtractKeywords(llavaResponseText, out var keywords))
-            {
                 parsedContent.Keywords = keywords;
-                description = RemoveSection(description, KeywordsRegex);
-                foundStructuredContent = true;
-            }
 
-            // Extract description section or use remaining text
-            if (TryExtractDescription(llavaResponseText, out var extractedDescription))
-            {
-                parsedContent.Description = extractedDescription;
-                foundStructuredContent = true;
-            }
-            else
-            {
-                // If no explicit description section found, use the remaining text
-                // after removing categories and keywords sections
-                parsedContent.Description = description.Trim();
-            }
-
-            // Set the parsing success flag
-            parsedContent.SuccessfullyParsed = foundStructuredContent;
+            // Set the parsing success flag if any field was found
+            parsedContent.SuccessfullyParsed =
+                !string.IsNullOrWhiteSpace(parsedContent.Description) ||
+                (parsedContent.Categories?.Count > 0) ||
+                (parsedContent.Keywords?.Count > 0);
 
             return parsedContent;
         }
