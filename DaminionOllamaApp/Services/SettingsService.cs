@@ -3,6 +3,7 @@ using DaminionOllamaApp.Models;
 using System;
 using System.IO;
 using System.Text.Json;
+using DaminionOllamaApp.Services; // Add this for App.Logger
 
 namespace DaminionOllamaApp.Services
 {
@@ -35,7 +36,14 @@ namespace DaminionOllamaApp.Services
             catch (Exception ex)
             {
                 // Log or handle the exception (e.g., corrupted settings file)
-                Console.Error.WriteLine($"Error loading settings: {ex.Message}");
+                if (App.Logger != null)
+                {
+                    App.Logger.Log($"Error loading settings: {ex.Message}");
+                }
+                else
+                {
+                    Console.Error.WriteLine($"Error loading settings: {ex.Message}");
+                }
             }
             return new AppSettings(); // Return default settings if file doesn't exist or error occurs
         }
@@ -50,7 +58,14 @@ namespace DaminionOllamaApp.Services
             catch (Exception ex)
             {
                 // Log or handle the exception (e.g., permission issues)
-                Console.Error.WriteLine($"Error saving settings: {ex.Message}");
+                if (App.Logger != null)
+                {
+                    App.Logger.Log($"Error saving settings: {ex.Message}");
+                }
+                else
+                {
+                    Console.Error.WriteLine($"Error saving settings: {ex.Message}");
+                }
                 // Optionally, re-throw or notify the user
             }
         }
