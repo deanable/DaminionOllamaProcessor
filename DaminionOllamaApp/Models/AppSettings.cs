@@ -40,6 +40,8 @@ namespace DaminionOllamaApp.Models
                 if (_selectedAiProvider != value)
                 {
                     _selectedAiProvider = value;
+                    // Synchronize UseOpenRouter
+                    UseOpenRouter = (value == AiProvider.OpenRouter);
                     OnPropertyChanged(nameof(SelectedAiProvider));
                 }
             }
@@ -295,6 +297,8 @@ namespace DaminionOllamaApp.Models
                 if (_useOpenRouter != value)
                 {
                     _useOpenRouter = value;
+                    // Synchronize SelectedAiProvider
+                    SelectedAiProvider = value ? AiProvider.OpenRouter : AiProvider.Ollama;
                     OnPropertyChanged(nameof(UseOpenRouter));
                 }
             }
