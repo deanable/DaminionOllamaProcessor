@@ -20,7 +20,8 @@ namespace DaminionOllamaApp.Services
         private readonly HttpClient _httpClient;
         private string? _accessToken;
         private DateTime _accessTokenExpiry;
-        private static readonly string[] Scopes = new[] { "https://www.googleapis.com/auth/cloud-platform" };
+        // Use the correct Gemini/Gemma API scope
+        private static readonly string[] Scopes = new[] { "https://www.googleapis.com/auth/generative-language" };
 
         public GemmaApiClient(string serviceAccountJsonPath, string modelName)
         {
