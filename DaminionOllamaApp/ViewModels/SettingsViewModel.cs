@@ -526,33 +526,49 @@ namespace DaminionOllamaApp.ViewModels
             Application.Current.Dispatcher.Invoke(() => GemmaModels.Clear());
             try
             {
-                using (var client = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaApiKey, Settings.GemmaModelName))
+                string maskedApiKey = string.IsNullOrEmpty(Settings.GemmaApiKey) ? "(empty)" : Settings.GemmaApiKey.Substring(0, Math.Min(4, Settings.GemmaApiKey.Length)) + "...";
+                string logMsg = $"[Gemma] Credential check: API Key (masked): {maskedApiKey}, ModelName: {Settings.GemmaModelName}";
+                Logger.Information(logMsg);
+                if (App.Logger != null) App.Logger.Log(logMsg);
+
+                var client = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaApiKey, Settings.GemmaModelName);
+                string requestUrl = $"https://generativelanguage.googleapis.com/v1beta/models?key={Settings.GemmaApiKey}";
+                Logger.Information($"[Gemma] Request URL: {requestUrl}");
+                if (App.Logger != null) App.Logger.Log($"[Gemma] Request URL: {requestUrl}");
+
+                var models = await client.ListModelsAsync();
+                Logger.Information($"[Gemma] ListModelsAsync returned {models?.Count ?? 0} models.");
+                if (App.Logger != null) App.Logger.Log($"[Gemma] ListModelsAsync returned {models?.Count ?? 0} models.");
+
+                if (models != null && models.Count > 0)
                 {
-                    var models = await client.ListModelsAsync(); // To be implemented
-                    if (models != null && models.Count > 0)
+                    foreach (var model in models)
                     {
-                        foreach (var model in models)
-                        {
-                            GemmaModels.Add(model);
-                        }
-                        GemmaConnectionStatus = $"{GemmaModels.Count} Gemma models found.";
-                        if (!string.IsNullOrWhiteSpace(Settings.GemmaModelName) && GemmaModels.Contains(Settings.GemmaModelName))
-                        {
-                            SelectedGemmaModelName = Settings.GemmaModelName;
-                        }
-                        else if (GemmaModels.Any())
-                        {
-                            SelectedGemmaModelName = GemmaModels.FirstOrDefault();
-                        }
+                        Logger.Information($"[Gemma] Model found: {model}");
+                        if (App.Logger != null) App.Logger.Log($"[Gemma] Model found: {model}");
+                        GemmaModels.Add(model);
                     }
-                    else
+                    GemmaConnectionStatus = $"{GemmaModels.Count} Gemma models found.";
+                    if (!string.IsNullOrWhiteSpace(Settings.GemmaModelName) && GemmaModels.Contains(Settings.GemmaModelName))
                     {
-                        GemmaConnectionStatus = "Failed to fetch models from Gemma. Check API Key.";
+                        SelectedGemmaModelName = Settings.GemmaModelName;
                     }
+                    else if (GemmaModels.Any())
+                    {
+                        SelectedGemmaModelName = GemmaModels.FirstOrDefault();
+                    }
+                }
+                else
+                {
+                    Logger.Warning("[Gemma] Failed to fetch models from Gemma. Check API Key.");
+                    if (App.Logger != null) App.Logger.Log("[Gemma] Failed to fetch models from Gemma. Check API Key.");
+                    GemmaConnectionStatus = "Failed to fetch models from Gemma. Check API Key.";
                 }
             }
             catch (Exception ex)
             {
+                Logger.Error(ex, $"[Gemma] Exception during credential/model check: {ex.Message}");
+                if (App.Logger != null) App.Logger.Log($"[Gemma] Exception during credential/model check: {ex}");
                 GemmaConnectionStatus = $"Error: {ex.Message}";
             }
             finally
