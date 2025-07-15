@@ -586,33 +586,38 @@ namespace DaminionOllamaApp.ViewModels
         {
             try
             {
-                if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Processing with AI service: {(Settings.UseOpenRouter ? "OpenRouter" : "Ollama")}");
+                if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Starting AI process. Provider: {(Settings.UseOpenRouter ? "OpenRouter" : "Ollama")}");
+                if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Preparing request payload. Image size: {imageBytes.Length} bytes");
                 if (Settings.UseOpenRouter)
                 {
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Sending request to OpenRouter");
                     var openRouterClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
                     var response = await openRouterClient.AnalyzeImageAsync(
                         Settings.OpenRouterModel, 
                         Settings.DaminionProcessingPrompt, 
                         imageBytes);
-                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] OpenRouter response: {response?.Substring(0, Math.Min(response?.Length ?? 0, 200))}");
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] OpenRouter response received: {response?.Substring(0, Math.Min(response?.Length ?? 0, 200))}");
                     if (string.IsNullOrWhiteSpace(response))
                     {
                         throw new Exception("OpenRouter returned an empty response");
                     }
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Parsing OpenRouter response");
                     return response;
                 }
                 else
                 {
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Sending request to Ollama");
                     var ollamaClient = new OllamaApiClient(Settings.OllamaServerUrl);
                     var response = await ollamaClient.AnalyzeImageAsync(
                         Settings.OllamaModel, 
                         Settings.DaminionProcessingPrompt, 
                         imageBytes);
-                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Ollama response: {response?.Response?.Substring(0, Math.Min(response?.Response?.Length ?? 0, 200))}");
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Ollama response received: {response?.Response?.Substring(0, Math.Min(response?.Response?.Length ?? 0, 200))}");
                     if (response?.Response == null)
                     {
                         throw new Exception("Ollama returned an empty response");
                     }
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Parsing Ollama response");
                     return response.Response;
                 }
             }

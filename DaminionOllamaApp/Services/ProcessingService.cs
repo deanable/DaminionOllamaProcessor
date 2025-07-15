@@ -45,10 +45,12 @@ namespace DaminionOllamaApp.Services
                 }
 
                 // 1. Read image bytes
+                if (App.Logger != null) App.Logger.Log($"Reading file bytes for {item.FileName}");
                 byte[] imageBytes;
                 try
                 {
                     imageBytes = await File.ReadAllBytesAsync(item.FilePath, cancellationToken);
+                    if (App.Logger != null) App.Logger.Log($"File bytes read for {item.FileName}, size: {imageBytes.Length} bytes");
                 }
                 catch (Exception ex)
                 {
@@ -57,6 +59,15 @@ namespace DaminionOllamaApp.Services
                     reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
                     if (App.Logger != null) App.Logger.Log($"Error reading file {item.FileName}: {ex.Message}");
                     return;
+                }
+
+                if (settings.UseOpenRouter)
+                {
+                    if (App.Logger != null) App.Logger.Log($"Preparing OpenRouter request payload for {item.FileName}");
+                }
+                else
+                {
+                    if (App.Logger != null) App.Logger.Log($"Preparing Ollama request payload for {item.FileName}");
                 }
 
                 reportProgress?.Invoke($"Processing: {item.FileName} - Sending to Ollama...");
@@ -69,12 +80,13 @@ namespace DaminionOllamaApp.Services
                 {
                     if (settings.UseOpenRouter)
                     {
+                        if (App.Logger != null) App.Logger.Log($"Sending request to OpenRouter for {item.FileName}");
                         var openRouterClient = new OpenRouterApiClient(settings.OpenRouterApiKey, settings.OpenRouterHttpReferer);
                         aiResponse = await openRouterClient.AnalyzeImageAsync(
                             settings.OpenRouterModelName, 
                             settings.OllamaPrompt, 
                             imageBytes);
-                        if (App.Logger != null) App.Logger.Log($"OpenRouter response for {item.FileName}: {aiResponse?.Substring(0, Math.Min(aiResponse?.Length ?? 0, 200))}");
+                        if (App.Logger != null) App.Logger.Log($"OpenRouter response received for {item.FileName}: {aiResponse?.Substring(0, Math.Min(aiResponse?.Length ?? 0, 200))}");
                         if (string.IsNullOrWhiteSpace(aiResponse))
                         {
                             throw new Exception("OpenRouter returned an empty response");
@@ -82,9 +94,10 @@ namespace DaminionOllamaApp.Services
                     }
                     else
                     {
+                        if (App.Logger != null) App.Logger.Log($"Sending request to Ollama for {item.FileName}");
                         OllamaApiClient ollamaClient = new OllamaApiClient(settings.OllamaServerUrl);
                         OllamaGenerateResponse? ollamaResponse = await ollamaClient.AnalyzeImageAsync(settings.OllamaModelName, settings.OllamaPrompt, imageBytes);
-                        if (App.Logger != null) App.Logger.Log($"Ollama response for {item.FileName}: {ollamaResponse?.Response?.Substring(0, Math.Min(ollamaResponse?.Response?.Length ?? 0, 200))}");
+                        if (App.Logger != null) App.Logger.Log($"Ollama response received for {item.FileName}: {ollamaResponse?.Response?.Substring(0, Math.Min(ollamaResponse?.Response?.Length ?? 0, 200))}");
                         if (ollamaResponse == null || !ollamaResponse.Done || string.IsNullOrWhiteSpace(ollamaResponse.Response))
                         {
                             throw new Exception($"Ollama returned an empty or invalid response. API Message: {ollamaResponse?.Response?.Substring(0, Math.Min(ollamaResponse.Response?.Length ?? 0, 100)) ?? "N/A"}");
@@ -120,10 +133,8 @@ namespace DaminionOllamaApp.Services
                     return;
                 }
 
-                if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
-
-                reportProgress?.Invoke($"Processing: {item.FileName} - Parsing AI response...");
                 if (App.Logger != null) App.Logger.Log($"Parsing AI response for {item.FileName}");
+                if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
 
                 // 3. Parse AI response
                 ParsedOllamaContent parsedContent = OllamaResponseParser.ParseLlavaResponse(aiResponse);
