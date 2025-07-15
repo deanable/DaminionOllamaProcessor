@@ -527,11 +527,11 @@ namespace DaminionOllamaApp.ViewModels
             try
             {
                 string maskedApiKey = string.IsNullOrEmpty(Settings.GemmaApiKey) ? "(empty)" : Settings.GemmaApiKey.Substring(0, Math.Min(4, Settings.GemmaApiKey.Length)) + "...";
-                string logMsg = $"[Gemma] Credential check: API Key (masked): {maskedApiKey}, ModelName: {Settings.GemmaModelName}";
+                string logMsg = $"[Gemma] Credential/model list check: API Key (masked): {maskedApiKey}";
                 Logger.Information(logMsg);
                 if (App.Logger != null) App.Logger.Log(logMsg);
 
-                var client = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaApiKey, Settings.GemmaModelName);
+                var client = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaApiKey, ""); // No model name needed for listing
                 string requestUrl = $"https://generativelanguage.googleapis.com/v1beta/models?key={Settings.GemmaApiKey}";
                 Logger.Information($"[Gemma] Request URL: {requestUrl}");
                 if (App.Logger != null) App.Logger.Log($"[Gemma] Request URL: {requestUrl}");
@@ -548,7 +548,8 @@ namespace DaminionOllamaApp.ViewModels
                         if (App.Logger != null) App.Logger.Log($"[Gemma] Model found: {model}");
                         GemmaModels.Add(model);
                     }
-                    GemmaConnectionStatus = $"{GemmaModels.Count} Gemma models found.";
+                    GemmaConnectionStatus = $"{GemmaModels.Count} models found.";
+                    // Only set SelectedGemmaModelName if the current setting is in the list, otherwise pick the first
                     if (!string.IsNullOrWhiteSpace(Settings.GemmaModelName) && GemmaModels.Contains(Settings.GemmaModelName))
                     {
                         SelectedGemmaModelName = Settings.GemmaModelName;
