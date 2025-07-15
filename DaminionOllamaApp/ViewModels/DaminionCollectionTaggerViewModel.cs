@@ -591,18 +591,26 @@ namespace DaminionOllamaApp.ViewModels
                 if (Settings.UseOpenRouter)
                 {
                     if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Sending request to OpenRouter");
+                    // Log request metadata
+                    if (App.Logger != null)
+                    {
+                        App.Logger.Log($"OpenRouter request metadata: Model={Settings.OpenRouterModel}, PromptSnippet={Settings.DaminionProcessingPrompt.Substring(0, Math.Min(Settings.DaminionProcessingPrompt.Length, 100))}, ImageSize={imageBytes.Length} bytes, ImageBase64Snippet={Convert.ToBase64String(imageBytes).Substring(0, 40)}...");
+                    }
                     var openRouterClient = new OpenRouterApiClient(Settings.OpenRouterApiKey, Settings.OpenRouterHttpReferer);
-                    var response = await openRouterClient.AnalyzeImageAsync(
+                    var openRouterResult = await openRouterClient.AnalyzeImageAsync(
                         Settings.OpenRouterModel, 
                         Settings.DaminionProcessingPrompt, 
                         imageBytes);
-                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] OpenRouter response received: {response?.Substring(0, Math.Min(response?.Length ?? 0, 200))}");
-                    if (string.IsNullOrWhiteSpace(response))
+                    if (App.Logger != null)
+                    {
+                        App.Logger.Log($"OpenRouter response: StatusCode={openRouterResult.StatusCode}, ContentSnippet={openRouterResult.Content?.Substring(0, Math.Min(openRouterResult.Content?.Length ?? 0, 200))}, ErrorMessage={openRouterResult.ErrorMessage}, RawResponseSnippet={openRouterResult.RawResponse?.Substring(0, Math.Min(openRouterResult.RawResponse?.Length ?? 0, 500))}");
+                    }
+                    if (string.IsNullOrWhiteSpace(openRouterResult.Content))
                     {
                         throw new Exception("OpenRouter returned an empty response");
                     }
                     if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Parsing OpenRouter response");
-                    return response;
+                    return openRouterResult.Content;
                 }
                 else
                 {

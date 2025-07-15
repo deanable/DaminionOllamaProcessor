@@ -129,13 +129,12 @@ namespace DaminionOllamaInteractionLib.OpenRouter
         /// <param name="prompt">The text prompt describing what analysis to perform on the image.</param>
         /// <param name="base64Image">The image data encoded as a base64 string.</param>
         /// <returns>The AI-generated analysis text, or null if the request fails.</returns>
-        public async Task<string?> AnalyzeImageAsync(string modelName, string prompt, string base64Image)
+        public async Task<OpenRouterApiResult> AnalyzeImageAsync(string modelName, string prompt, string base64Image)
         {
+            var result = new OpenRouterApiResult();
             try
             {
                 Console.WriteLine($"[OpenRouterApiClient] Analyzing image with model: {modelName}");
-                
-                // Construct the chat completion request
                 var requestData = new
                 {
                     model = modelName,
@@ -147,44 +146,40 @@ namespace DaminionOllamaInteractionLib.OpenRouter
                             content = new object[]
                             {
                                 new { type = "text", text = prompt },
-                                new { 
-                                    type = "image_url", 
-                                    image_url = new { url = $"data:image/jpeg;base64,{base64Image}" } 
-                                }
+                                new { type = "image_url", image_url = new { url = $"data:image/jpeg;base64,{base64Image}" } }
                             }
                         }
                     }
                 };
-
-                // Serialize and send the request
                 var jsonContent = JsonSerializer.Serialize(requestData);
                 var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-                
+                result.Content = null;
+                result.ErrorMessage = null;
+                result.RawResponse = null;
                 var response = await _httpClient.PostAsync("chat/completions", content);
-                
+                result.StatusCode = (int)response.StatusCode;
+                var responseBody = await response.Content.ReadAsStringAsync();
+                result.RawResponse = responseBody;
                 if (response.IsSuccessStatusCode)
                 {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    var result = JsonSerializer.Deserialize<OpenRouterChatCompletionResponse>(responseJson);
-                    
-                    // Extract the content from the response
-                    var analysisResult = result?.Choices?.FirstOrDefault()?.Message?.Content;
-                    
+                    var responseJson = responseBody;
+                    var apiResponse = JsonSerializer.Deserialize<OpenRouterChatCompletionResponse>(responseJson);
+                    var analysisResult = apiResponse?.Choices?.FirstOrDefault()?.Message?.Content;
+                    result.Content = analysisResult;
                     Console.WriteLine($"[OpenRouterApiClient] Analysis completed. Length: {analysisResult?.Length ?? 0} characters");
-                    return analysisResult;
                 }
                 else
                 {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    Console.Error.WriteLine($"[OpenRouterApiClient] Analysis failed: {response.StatusCode} - {errorContent}");
-                    return null;
+                    result.ErrorMessage = $"Status: {response.StatusCode} - {responseBody}";
+                    Console.Error.WriteLine($"[OpenRouterApiClient] Analysis failed: {result.ErrorMessage}");
                 }
             }
             catch (Exception ex)
             {
+                result.ErrorMessage = ex.Message;
                 Console.Error.WriteLine($"[OpenRouterApiClient] Error analyzing image: {ex.Message}");
-                return null;
             }
+            return result;
         }
 
         /// <summary>
@@ -195,7 +190,7 @@ namespace DaminionOllamaInteractionLib.OpenRouter
         /// <param name="prompt">The text prompt for the analysis.</param>
         /// <param name="imageBytes">The image bytes.</param>
         /// <returns>The content of the AI's response.</returns>
-        public async Task<string?> AnalyzeImageAsync(string modelName, string prompt, byte[] imageBytes)
+        public async Task<OpenRouterApiResult> AnalyzeImageAsync(string modelName, string prompt, byte[] imageBytes)
         {
             string base64Image = Convert.ToBase64String(imageBytes);
             return await AnalyzeImageAsync(modelName, prompt, base64Image);
@@ -378,6 +373,14 @@ namespace DaminionOllamaInteractionLib.OpenRouter
         /// </summary>
         [JsonPropertyName("code")]
         public string? Code { get; set; }
+    }
+
+    public class OpenRouterApiResult
+    {
+        public string? Content { get; set; }
+        public int StatusCode { get; set; }
+        public string? ErrorMessage { get; set; }
+        public string? RawResponse { get; set; }
     }
     #endregion
 }

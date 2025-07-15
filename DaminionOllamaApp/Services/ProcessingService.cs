@@ -84,13 +84,21 @@ namespace DaminionOllamaApp.Services
                 {
                     if (settings.UseOpenRouter)
                     {
-                        if (App.Logger != null) App.Logger.Log($"Sending request to OpenRouter for {item.FileName}");
+                        // Log request metadata
+                        if (App.Logger != null)
+                        {
+                            App.Logger.Log($"OpenRouter request metadata for {item.FileName}: Model={settings.OpenRouterModelName}, PromptSnippet={settings.OllamaPrompt.Substring(0, Math.Min(settings.OllamaPrompt.Length, 100))}, ImageSize={imageBytes.Length} bytes, ImageBase64Snippet={Convert.ToBase64String(imageBytes).Substring(0, 40)}...");
+                        }
                         var openRouterClient = new OpenRouterApiClient(settings.OpenRouterApiKey, settings.OpenRouterHttpReferer);
-                        aiResponse = await openRouterClient.AnalyzeImageAsync(
+                        var openRouterResult = await openRouterClient.AnalyzeImageAsync(
                             settings.OpenRouterModelName, 
                             settings.OllamaPrompt, 
                             imageBytes);
-                        if (App.Logger != null) App.Logger.Log($"OpenRouter response received for {item.FileName}: {aiResponse?.Substring(0, Math.Min(aiResponse?.Length ?? 0, 200))}");
+                        if (App.Logger != null)
+                        {
+                            App.Logger.Log($"OpenRouter response for {item.FileName}: StatusCode={openRouterResult.StatusCode}, ContentSnippet={openRouterResult.Content?.Substring(0, Math.Min(openRouterResult.Content?.Length ?? 0, 200))}, ErrorMessage={openRouterResult.ErrorMessage}, RawResponseSnippet={openRouterResult.RawResponse?.Substring(0, Math.Min(openRouterResult.RawResponse?.Length ?? 0, 500))}");
+                        }
+                        aiResponse = openRouterResult.Content;
                         if (string.IsNullOrWhiteSpace(aiResponse))
                         {
                             throw new Exception("OpenRouter returned an empty response");
