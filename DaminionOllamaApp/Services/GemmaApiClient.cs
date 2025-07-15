@@ -78,9 +78,8 @@ namespace DaminionOllamaApp.Services
                             var name = nameProp.GetString();
                             if (!string.IsNullOrWhiteSpace(name))
                             {
-                                // The API returns names like "models/gemma-3n-e2b-it"; extract the last part
-                                var id = name.Split('/').Last();
-                                models.Add(id);
+                                // Show the full model name as returned by the API (e.g., 'models/gemini-1.5-pro-latest')
+                                models.Add(name);
                             }
                         }
                     }
