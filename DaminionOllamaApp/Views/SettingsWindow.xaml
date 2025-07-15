@@ -107,13 +107,22 @@
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Header="Ollama Prompt" Grid.Row="3" Margin="0,5,0,5" Padding="5">
+            <GroupBox Header="Gemma API Settings" Grid.Row="3" Margin="0,5,0,5" Padding="5">
+                <StackPanel>
+                    <Label Content="Gemma API Key:" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.GemmaApiKey, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" />
+                    <Label Content="Gemma Model Name:" Padding="0,0,0,1"/>
+                    <TextBox Text="{Binding Settings.GemmaModelName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" />
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Ollama Prompt" Grid.Row="4" Margin="0,5,0,5" Padding="5">
                 <TextBox Text="{Binding Settings.OllamaPrompt, UpdateSourceTrigger=PropertyChanged}"
                          AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                          MinHeight="70" MaxHeight="120" FontFamily="Consolas"/>
             </GroupBox>
 
-            <GroupBox Header="Daminion Target Tag GUIDs" Grid.Row="4" Margin="0,5,0,5" Padding="5">
+            <GroupBox Header="Daminion Target Tag GUIDs" Grid.Row="5" Margin="0,5,0,5" Padding="5">
                 <StackPanel>
                     <Button Content="Discover Standard GUIDs" 
                             Command="{Binding DiscoverTagGuidsCommand}" 
@@ -132,7 +141,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Header="Post-Ollama Processing Daminion Flag Options" Grid.Row="5" Margin="0,5,0,5" Padding="5">
+            <GroupBox Header="Post-Ollama Processing Daminion Flag Options" Grid.Row="6" Margin="0,5,0,5" Padding="5">
                 <StackPanel>
                     <CheckBox Content="Automatically update Daminion flag after successful Ollama processing"
                               IsChecked="{Binding Settings.AutomaticallyUpdateFlagAfterOllama}" Margin="0,0,0,5"/>
@@ -156,7 +165,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <StackPanel Orientation="Horizontal" Grid.Row="6" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <StackPanel Orientation="Horizontal" Grid.Row="7" HorizontalAlignment="Right" Margin="0,10,0,0">
                 <Button Content="Save" Command="{Binding SaveCommand}" Width="75" Margin="0,0,10,0" IsDefault="True" />
                 <Button Content="Close" Command="{Binding CloseCommand}" Width="75" IsCancel="True" />
             </StackPanel>

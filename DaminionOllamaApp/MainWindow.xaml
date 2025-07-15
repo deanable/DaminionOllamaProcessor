@@ -49,6 +49,8 @@
                                          IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.Ollama}}"/>
                             <RadioButton GroupName="LocalProvider" Content="OpenRouter"
                                          IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.OpenRouter}}"/>
+                            <RadioButton GroupName="LocalProvider" Content="Gemma"
+                                         IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.Gemma}}"/>
                         </StackPanel>
                     </GroupBox>
 
@@ -94,6 +96,8 @@
                                          IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.Ollama}}"/>
                             <RadioButton GroupName="DaminionProvider" Content="OpenRouter"
                                          IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.OpenRouter}}"/>
+                            <RadioButton GroupName="DaminionProvider" Content="Gemma"
+                                         IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.Gemma}}"/>
                         </StackPanel>
                     </GroupBox>
 

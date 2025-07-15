@@ -78,11 +78,22 @@ namespace DaminionOllamaApp.Services
                 if (App.Logger != null) App.Logger.Log($"Sending {item.FileName} to AI provider: {(settings.UseOpenRouter ? "OpenRouter" : "Ollama")}");
                 if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
 
-                // 2. Call AI API (Ollama or OpenRouter)
+                // 2. Call AI API (Ollama, OpenRouter, or Gemma)
                 string aiResponse;
                 try
                 {
-                    if (settings.UseOpenRouter)
+                    if (settings.SelectedAiProvider == AiProvider.Gemma)
+                    {
+                        if (App.Logger != null) App.Logger.Log($"Sending request to Gemma for {item.FileName}");
+                        var gemmaClient = new GemmaApiClient(settings.GemmaApiKey, settings.GemmaModelName);
+                        aiResponse = await gemmaClient.GenerateContentAsync(settings.OllamaPrompt); // Use OllamaPrompt for now
+                        if (App.Logger != null) App.Logger.Log($"Gemma response for {item.FileName}: {aiResponse.Substring(0, Math.Min(aiResponse.Length, 500))}");
+                        if (string.IsNullOrWhiteSpace(aiResponse))
+                        {
+                            throw new Exception("Gemma returned an empty response");
+                        }
+                    }
+                    else if (settings.UseOpenRouter)
                     {
                         // Log request metadata
                         if (App.Logger != null)

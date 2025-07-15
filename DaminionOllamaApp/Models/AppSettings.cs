@@ -8,7 +8,8 @@ namespace DaminionOllamaApp.Models
     public enum AiProvider
     {
         Ollama,
-        OpenRouter
+        OpenRouter,
+        Gemma
     }
 
     public class AppSettings : INotifyPropertyChanged
@@ -163,6 +164,36 @@ namespace DaminionOllamaApp.Models
                 }
             }
         }
+
+        // --- Gemma Properties ---
+        private string _gemmaApiKey = string.Empty;
+        private string _gemmaModelName = "gemma-3n-e2b-it";
+        public string GemmaApiKey
+        {
+            get => _gemmaApiKey;
+            set
+            {
+                if (_gemmaApiKey != value)
+                {
+                    _gemmaApiKey = value;
+                    OnPropertyChanged(nameof(GemmaApiKey));
+                }
+            }
+        }
+        public string GemmaModelName
+        {
+            get => _gemmaModelName;
+            set
+            {
+                if (_gemmaModelName != value)
+                {
+                    _gemmaModelName = value;
+                    OnPropertyChanged(nameof(GemmaModelName));
+                }
+            }
+        }
+        // Optional: For compatibility
+        public bool UseGemma => SelectedAiProvider == AiProvider.Gemma;
 
 
         public event PropertyChangedEventHandler? PropertyChanged;

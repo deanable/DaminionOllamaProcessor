@@ -620,6 +620,19 @@ namespace DaminionOllamaApp.ViewModels
                     if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Parsing OpenRouter response");
                     return openRouterResult.Content;
                 }
+                else if (Settings.SelectedAiProvider == AiProvider.Gemma)
+                {
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Sending request to Gemma");
+                    var gemmaClient = new DaminionOllamaApp.Services.GemmaApiClient(Settings.GemmaApiKey, Settings.GemmaModelName);
+                    var gemmaResponse = await gemmaClient.GenerateContentAsync(Settings.DaminionProcessingPrompt);
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Gemma response: {gemmaResponse.Substring(0, Math.Min(gemmaResponse.Length, 500))}");
+                    if (string.IsNullOrWhiteSpace(gemmaResponse))
+                    {
+                        throw new Exception("Gemma returned an empty response");
+                    }
+                    if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Parsing Gemma response");
+                    return gemmaResponse;
+                }
                 else
                 {
                     if (App.Logger != null) App.Logger.Log($"[DaminionCollectionTaggerViewModel] Sending request to Ollama");
