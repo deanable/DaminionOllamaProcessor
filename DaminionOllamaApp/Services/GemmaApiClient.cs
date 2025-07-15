@@ -67,15 +67,26 @@ namespace DaminionOllamaApp.Services
                 var response = await _httpClient.GetAsync(url);
                 var responseBody = await response.Content.ReadAsStringAsync();
 
-                // Minimal logging: log the raw response body
+                // Log to gemmaapiclient.log
                 var logDir = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DaminionOllamaApp", "logs");
                 Directory.CreateDirectory(logDir);
-                var logPath = Path.Combine(logDir, "gemmaapiclient.log");
-                Log.Logger = new LoggerConfiguration()
+                var gemmaLogPath = Path.Combine(logDir, "gemmaapiclient.log");
+                var mainLogPath = Directory.GetFiles(logDir, "log-*.txt").OrderByDescending(f => f).FirstOrDefault();
+                var logger = new LoggerConfiguration()
                     .MinimumLevel.Debug()
-                    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
+                    .WriteTo.File(gemmaLogPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
                     .CreateLogger();
-                Log.Information("[GemmaApiClient] Raw response from {Url}: {ResponseBody}", url, responseBody);
+                logger.Information("[GemmaApiClient] Raw response from {Url}: {ResponseBody}", url, responseBody);
+
+                // Also append to the main log file if it exists
+                if (!string.IsNullOrEmpty(mainLogPath))
+                {
+                    try
+                    {
+                        File.AppendAllText(mainLogPath, $"[GemmaApiClient] Raw response from {url}: {responseBody}{Environment.NewLine}");
+                    }
+                    catch { /* Ignore errors writing to main log */ }
+                }
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -91,7 +102,6 @@ namespace DaminionOllamaApp.Services
                             var name = nameProp.GetString();
                             if (!string.IsNullOrWhiteSpace(name))
                             {
-                                // Show the full model name as returned by the API (e.g., 'models/gemini-1.5-pro-latest')
                                 models.Add(name);
                             }
                         }
