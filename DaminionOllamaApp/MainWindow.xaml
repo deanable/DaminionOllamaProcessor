@@ -37,11 +37,13 @@
             <TabItem Header="Local File Tagger">
                 <Grid Margin="5" DataContext="{Binding LocalFileTaggerVM}">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /> <!-- Real spend alert -->
+                        <RowDefinition Height="Auto" /> <!-- Actual spend and refresh -->
+                        <RowDefinition Height="Auto" /> <!-- Free tier exceeded alert -->
+                        <RowDefinition Height="Auto" /> <!-- AI Provider group -->
+                        <RowDefinition Height="Auto" /> <!-- File operation buttons -->
+                        <RowDefinition Height="*" />   <!-- ListView -->
+                        <RowDefinition Height="Auto" /> <!-- Status TextBox -->
                     </Grid.RowDefinitions>
 
                     <!-- Real spend alert -->
@@ -61,6 +63,7 @@
                                Foreground="Red" FontWeight="Bold" Margin="0,0,0,10"
                                Visibility="{Binding FreeTierExceededForSelectedModel, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
+                    <!-- AI Provider group -->
                     <GroupBox Grid.Row="3" Header="AI Provider" Padding="5" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton GroupName="LocalProvider" Content="Ollama" Margin="0,0,20,0"
@@ -72,7 +75,8 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,10">
+                    <!-- File operation buttons -->
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,5,0,10">
                         <Button Content="Add Files..." Command="{Binding AddFilesCommand}" Width="100" Margin="0,0,5,0" />
                         <Button Content="Start Queue" Command="{Binding StartQueueCommand}" Width="100" Margin="0,0,5,0" />
                         <Button Content="Stop Queue" Command="{Binding StopQueueCommand}" Width="100" Margin="0,0,15,0" />
@@ -81,8 +85,9 @@
                         <Button Content="Clear All" Command="{Binding ClearAllFilesCommand}" Width="80" />
                     </StackPanel>
 
-                    <ListView Grid.Row="2" ItemsSource="{Binding FilesToProcess}" SelectionMode="Single"
-                              SelectedItem="{Binding SelectedFile}">
+                    <!-- ListView -->
+                    <ListView Grid.Row="5" ItemsSource="{Binding FilesToProcess}" SelectionMode="Single"
+                              SelectedItem="{Binding SelectedFile}" Margin="0,0,0,5">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="File Name" Width="300" DisplayMemberBinding="{Binding FileName}" />
@@ -92,7 +97,8 @@
                         </ListView.View>
                     </ListView>
 
-                    <TextBox Grid.Row="3" Text="{Binding CurrentOperationStatus}"
+                    <!-- Status TextBox -->
+                    <TextBox Grid.Row="6" Text="{Binding CurrentOperationStatus}"
                              IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                              MinHeight="60" MaxHeight="150" Margin="0,10,0,0" />
                 </Grid>
@@ -101,13 +107,14 @@
             <TabItem Header="Daminion Query Tagger">
                 <Grid Margin="5" DataContext="{Binding DaminionCollectionTaggerVM}">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /> <!-- AI Provider group -->
+                        <RowDefinition Height="Auto" /> <!-- Login and Query Type -->
+                        <RowDefinition Height="Auto" /> <!-- Queue buttons -->
+                        <RowDefinition Height="*" />   <!-- ListView -->
+                        <RowDefinition Height="Auto" /> <!-- Status TextBox -->
                     </Grid.RowDefinitions>
 
+                    <!-- AI Provider group -->
                     <GroupBox Grid.Row="0" Header="AI Provider" Padding="5" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton GroupName="DaminionProvider" Content="Ollama" Margin="0,0,20,0"
@@ -119,6 +126,7 @@
                         </StackPanel>
                     </GroupBox>
 
+                    <!-- Login and Query Type -->
                     <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Login to Daminion" Command="{Binding LoginCommand}" Width="150" Margin="0,0,10,0" />
@@ -136,12 +144,14 @@
                         </StackPanel>
                     </StackPanel>
 
+                    <!-- Queue buttons -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,5,0,10">
                         <Button Content="Start Daminion Queue" Command="{Binding StartDaminionQueueCommand}" Width="160" Margin="0,0,5,0" />
                         <Button Content="Stop Daminion Queue" Command="{Binding StopDaminionQueueCommand}" Width="160" />
                     </StackPanel>
 
-                    <ListView Grid.Row="3" ItemsSource="{Binding DaminionFilesToProcess}" SelectionMode="Single">
+                    <!-- ListView -->
+                    <ListView Grid.Row="3" ItemsSource="{Binding DaminionFilesToProcess}" SelectionMode="Single" Margin="0,0,0,5">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="Daminion ID" Width="100" DisplayMemberBinding="{Binding DaminionItemId}" />
@@ -153,6 +163,7 @@
                         </ListView.View>
                     </ListView>
 
+                    <!-- Status TextBox -->
                     <TextBox Grid.Row="4" Text="{Binding DaminionStatus}"
                              IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                              MinHeight="40" MaxHeight="100" Margin="0,10,0,0" />
@@ -162,15 +173,16 @@
             <TabItem Header="Metadata Tidy-up">
                 <Grid Margin="5" DataContext="{Binding MetadataTidyUpVM}">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /> <!-- Processing Mode -->
+                        <RowDefinition Height="Auto" /> <!-- Daminion login/query (border) -->
+                        <RowDefinition Height="Auto" /> <!-- Add Local Files -->
+                        <RowDefinition Height="Auto" /> <!-- Cleanup Options -->
+                        <RowDefinition Height="Auto" /> <!-- Cleanup buttons -->
+                        <RowDefinition Height="*" />   <!-- ListView -->
+                        <RowDefinition Height="Auto" /> <!-- Status TextBox -->
                     </Grid.RowDefinitions>
 
+                    <!-- Processing Mode -->
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
                         <Label Content="Processing Mode:" VerticalAlignment="Center"/>
                         <RadioButton Content="Local Files" GroupName="TidyUpMode" Margin="5,0,0,0"
@@ -179,6 +191,7 @@
                                      IsChecked="{Binding IsDaminionCatalogMode, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
                     </StackPanel>
 
+                    <!-- Daminion login/query (border) -->
                     <Border Grid.Row="1" BorderBrush="LightGray" BorderThickness="0,0,0,1" Margin="0,0,0,5" Padding="0,0,0,5"
                             Visibility="{Binding IsDaminionCatalogMode, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel Orientation="Vertical">
@@ -197,11 +210,13 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Add Local Files -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,5"
                                 Visibility="{Binding IsLocalFilesMode, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Button Content="Add Local Files..." Command="{Binding AddFilesCommand}" Width="130"/>
                     </StackPanel>
 
+                    <!-- Cleanup Options -->
                     <GroupBox Header="Cleanup Options" Grid.Row="3" Margin="0,5,0,10" Padding="5">
                         <StackPanel>
                             <CheckBox Content="Split comma-separated categories into individual items" 
@@ -215,12 +230,14 @@
                         </StackPanel>
                     </GroupBox>
 
+                    <!-- Cleanup buttons -->
                     <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,5,0,10">
                         <Button Content="Start Cleanup" Command="{Binding StartCleanupCommand}" Width="120" Margin="0,0,5,0" />
                         <Button Content="Stop Cleanup" Command="{Binding StopCleanupCommand}" Width="120" />
                     </StackPanel>
 
-                    <ListView Grid.Row="5" ItemsSource="{Binding FilesToProcess}" SelectionMode="Single">
+                    <!-- ListView -->
+                    <ListView Grid.Row="5" ItemsSource="{Binding FilesToProcess}" SelectionMode="Single" Margin="0,0,0,5">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="Source ID / Path" Width="150">
@@ -237,6 +254,7 @@
                         </ListView.View>
                     </ListView>
 
+                    <!-- Status TextBox -->
                     <TextBox Grid.Row="6" Text="{Binding CurrentOperationStatus}"
                              IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                              MinHeight="60" MaxHeight="100" Margin="0,10,0,0" />
