@@ -80,14 +80,18 @@ namespace DaminionOllamaApp.Services
 
                 // 2. Call AI API (Ollama, OpenRouter, or Gemma)
                 string aiResponse;
+                string usedModelName = null;
+                int inputTokens = 0; // Placeholder, update with real token count if available
+                int outputTokens = 0; // Placeholder, update with real token count if available
                 try
                 {
                     if (settings.SelectedAiProvider == AiProvider.Gemma)
                     {
                         if (App.Logger != null) App.Logger.Log($"Sending request to Gemma for {item.FileName} (Model: {settings.GemmaModelName}, MimeType: {item.MimeType ?? "image/jpeg"})");
                         var gemmaClient = new GemmaApiClient(settings.GemmaServiceAccountJsonPath, settings.GemmaModelName);
-                        // Use the new overload for image+text
                         aiResponse = await gemmaClient.GenerateContentAsync(settings.OllamaPrompt, imageBytes, item.MimeType ?? "image/jpeg");
+                        usedModelName = settings.GemmaModelName;
+                        // TODO: Parse token usage from response if available
                         if (App.Logger != null) App.Logger.Log($"Gemma response for {item.FileName}: {aiResponse.Substring(0, Math.Min(aiResponse.Length, 500))}");
                         if (string.IsNullOrWhiteSpace(aiResponse))
                         {
@@ -117,6 +121,8 @@ namespace DaminionOllamaApp.Services
                             settings.OpenRouterModelName, 
                             settings.OllamaPrompt, 
                             imageBytes);
+                        usedModelName = settings.OpenRouterModelName;
+                        // TODO: Parse token usage from response if available
                         if (App.Logger != null)
                         {
                             App.Logger.Log($"OpenRouter response for {item.FileName}: StatusCode={openRouterResult.StatusCode}, ContentSnippet={openRouterResult.Content?.Substring(0, Math.Min(openRouterResult.Content?.Length ?? 0, 200))}, ErrorMessage={openRouterResult.ErrorMessage}, RawResponseSnippet={openRouterResult.RawResponse?.Substring(0, Math.Min(openRouterResult.RawResponse?.Length ?? 0, 500))}");
@@ -132,6 +138,8 @@ namespace DaminionOllamaApp.Services
                         if (App.Logger != null) App.Logger.Log($"Sending request to Ollama for {item.FileName}");
                         OllamaApiClient ollamaClient = new OllamaApiClient(settings.OllamaServerUrl);
                         OllamaGenerateResponse? ollamaResponse = await ollamaClient.AnalyzeImageAsync(settings.OllamaModelName, settings.OllamaPrompt, imageBytes);
+                        usedModelName = settings.OllamaModelName;
+                        // Ollama is always free, so no spend tracking
                         if (App.Logger != null) App.Logger.Log($"Ollama response received for {item.FileName}: {ollamaResponse?.Response?.Substring(0, Math.Min(ollamaResponse?.Response?.Length ?? 0, 200))}");
                         if (ollamaResponse == null || !ollamaResponse.Done || string.IsNullOrWhiteSpace(ollamaResponse.Response))
                         {
@@ -166,6 +174,28 @@ namespace DaminionOllamaApp.Services
                     reportProgress?.Invoke($"Error: {item.FileName} - {item.StatusMessage}");
                     if (App.Logger != null) App.Logger.Log($"{serviceName} API error for {item.FileName}: {ex.Message}");
                     return;
+                }
+
+                // --- Usage/Spend Tracking ---
+                if (!string.IsNullOrEmpty(usedModelName))
+                {
+                    var usage = settings.GetOrCreateModelUsage(usedModelName);
+                    // For now, increment by 1 request; update with real token counts if available
+                    usage.InputTokensUsed += inputTokens > 0 ? inputTokens : 1000; // Assume 1K tokens/request as a placeholder
+                    usage.OutputTokensUsed += outputTokens;
+                    // Look up pricing
+                    if (DaminionOllamaApp.Services.ModelPricingTable.Pricing.TryGetValue(usedModelName, out var pricing))
+                    {
+                        int paidInputTokens = Math.Max(0, usage.InputTokensUsed - pricing.FreeInputTokens);
+                        int paidOutputTokens = Math.Max(0, usage.OutputTokensUsed - pricing.FreeOutputTokens);
+                        usage.EstimatedSpendUSD = (paidInputTokens / 1000.0) * pricing.PricePer1KInputTokens + (paidOutputTokens / 1000.0) * pricing.PricePer1KOutputTokens;
+                        usage.FreeTierExceeded = usage.InputTokensUsed > pricing.FreeInputTokens;
+                    }
+                    else
+                    {
+                        usage.EstimatedSpendUSD = 0;
+                        usage.FreeTierExceeded = false;
+                    }
                 }
 
                 if (App.Logger != null) App.Logger.Log($"Parsing AI response for {item.FileName}");

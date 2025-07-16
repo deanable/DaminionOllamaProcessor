@@ -76,6 +76,18 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        // --- GCP/BigQuery Billing Export Selectors ---
+        public ObservableCollection<string> GcpProjects { get; } = new ObservableCollection<string>();
+        public ObservableCollection<string> BigQueryDatasets { get; } = new ObservableCollection<string>();
+        public ObservableCollection<string> BigQueryTables { get; } = new ObservableCollection<string>();
+
+        private string _billingExportInstructions = string.Empty;
+        public string BillingExportInstructions
+        {
+            get => _billingExportInstructions;
+            set { _billingExportInstructions = value; OnPropertyChanged(nameof(BillingExportInstructions)); }
+        }
+
         public AppSettings Settings
         {
             get => _settings;
@@ -259,6 +271,10 @@ namespace DaminionOllamaApp.ViewModels
         public ICommand TestDaminionConnectionCommand { get; }
         public ICommand VerifyOpenRouterConnectionCommand { get; }
         public ICommand VerifyGemmaConnectionCommand { get; }
+        public ICommand RefreshProjectsCommand { get; }
+        public ICommand RefreshDatasetsCommand { get; }
+        public ICommand RefreshTablesCommand { get; }
+        public ICommand CheckBillingExportTableCommand { get; }
 
         // Actions for View Interaction
         public Action? CloseAction { get; set; }
@@ -280,6 +296,10 @@ namespace DaminionOllamaApp.ViewModels
             TestDaminionConnectionCommand = new RelayCommand(async param => await TestDaminionConnectionAsync(), param => CanTestDaminionConnection());
             VerifyOpenRouterConnectionCommand = new RelayCommand(async param => await VerifyAndFetchOpenRouterModelsAsync(), param => CanVerifyOpenRouterConnection());
             VerifyGemmaConnectionCommand = new RelayCommand(async param => await VerifyAndFetchGemmaModelsAsync(), param => CanVerifyGemmaConnection());
+            RefreshProjectsCommand = new AsyncRelayCommand(_ => RefreshProjectsAsync());
+            RefreshDatasetsCommand = new AsyncRelayCommand(_ => RefreshDatasetsAsync());
+            RefreshTablesCommand = new AsyncRelayCommand(_ => RefreshTablesAsync());
+            CheckBillingExportTableCommand = new AsyncRelayCommand(_ => CheckBillingExportTableAsync());
         }
 
         public void SetDaminionPassword(string password)
@@ -606,6 +626,55 @@ namespace DaminionOllamaApp.ViewModels
             finally
             {
                 IsVerifyingGemmaConnection = false;
+            }
+        }
+
+        private async Task RefreshProjectsAsync()
+        {
+            GcpProjects.Clear();
+            if (string.IsNullOrWhiteSpace(Settings.GemmaServiceAccountJsonPath)) return;
+            var projects = await GoogleCloudResourceHelper.ListProjectsAsync(Settings.GemmaServiceAccountJsonPath);
+            foreach (var p in projects) GcpProjects.Add(p);
+        }
+        private async Task RefreshDatasetsAsync()
+        {
+            BigQueryDatasets.Clear();
+            if (string.IsNullOrWhiteSpace(Settings.GemmaServiceAccountJsonPath) || string.IsNullOrWhiteSpace(Settings.BigQueryProjectId)) return;
+            var datasets = await GoogleCloudResourceHelper.ListDatasetsAsync(Settings.BigQueryProjectId, Settings.GemmaServiceAccountJsonPath);
+            foreach (var d in datasets) BigQueryDatasets.Add(d);
+        }
+        private async Task RefreshTablesAsync()
+        {
+            BigQueryTables.Clear();
+            if (string.IsNullOrWhiteSpace(Settings.GemmaServiceAccountJsonPath) || string.IsNullOrWhiteSpace(Settings.BigQueryProjectId) || string.IsNullOrWhiteSpace(Settings.BigQueryDataset)) return;
+            var tables = await GoogleCloudResourceHelper.ListTablesAsync(Settings.BigQueryProjectId, Settings.BigQueryDataset, Settings.GemmaServiceAccountJsonPath);
+            foreach (var t in tables) BigQueryTables.Add(t);
+        }
+        private async Task CheckBillingExportTableAsync()
+        {
+            BillingExportInstructions = string.Empty;
+            if (string.IsNullOrWhiteSpace(Settings.GemmaServiceAccountJsonPath) || string.IsNullOrWhiteSpace(Settings.BigQueryProjectId) || string.IsNullOrWhiteSpace(Settings.BigQueryDataset) || string.IsNullOrWhiteSpace(Settings.BigQueryTable))
+            {
+                BillingExportInstructions = "Please select a project, dataset, and table.";
+                return;
+            }
+            bool isBilling = false;
+            try
+            {
+                isBilling = await GoogleCloudResourceHelper.IsBillingExportTableAsync(Settings.BigQueryProjectId, Settings.BigQueryDataset, Settings.BigQueryTable, Settings.GemmaServiceAccountJsonPath);
+            }
+            catch
+            {
+                BillingExportInstructions = "Could not access table. Check permissions and selections.";
+                return;
+            }
+            if (!isBilling)
+            {
+                BillingExportInstructions = "The selected table is not a GCP Billing Export table.\nTo enable billing export, go to the GCP Console > Billing > Reports > Export > Enable BigQuery Export.";
+            }
+            else
+            {
+                BillingExportInstructions = "Billing export table detected.";
             }
         }
 

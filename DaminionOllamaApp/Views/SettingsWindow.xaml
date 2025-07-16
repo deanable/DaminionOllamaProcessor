@@ -186,6 +186,27 @@
                         <GroupBox Header="Gemma Model Name (Manual Entry)" Margin="0,5,0,5" Padding="5">
                             <TextBox Text="{Binding Settings.GemmaModelName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,3" />
                         </GroupBox>
+                        <GroupBox Header="BigQuery Billing Export (for Spend Tracking)" Margin="0,5,0,5" Padding="5">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <Label Content="Project:" Width="60"/>
+                                    <ComboBox ItemsSource="{Binding GcpProjects}" SelectedItem="{Binding Settings.BigQueryProjectId, Mode=TwoWay}" Width="220" Margin="0,0,5,0"/>
+                                    <Button Content="Refresh" Command="{Binding RefreshProjectsCommand}" Width="70"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <Label Content="Dataset:" Width="60"/>
+                                    <ComboBox ItemsSource="{Binding BigQueryDatasets}" SelectedItem="{Binding Settings.BigQueryDataset, Mode=TwoWay}" Width="220" Margin="0,0,5,0"/>
+                                    <Button Content="Refresh" Command="{Binding RefreshDatasetsCommand}" Width="70"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <Label Content="Table:" Width="60"/>
+                                    <ComboBox ItemsSource="{Binding BigQueryTables}" SelectedItem="{Binding Settings.BigQueryTable, Mode=TwoWay}" Width="220" Margin="0,0,5,0"/>
+                                    <Button Content="Refresh" Command="{Binding RefreshTablesCommand}" Width="70"/>
+                                    <Button Content="Check" Command="{Binding CheckBillingExportTableCommand}" Width="60" Margin="5,0,0,0"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding BillingExportInstructions}" Foreground="DarkRed" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

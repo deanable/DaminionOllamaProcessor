@@ -39,11 +39,29 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <GroupBox Grid.Row="0" Header="AI Provider" Padding="5" Margin="0,0,0,10">
+                    <!-- Real spend alert -->
+                    <TextBlock Grid.Row="0" Text="Actual spend this month exceeds the free tier! Paid usage in effect."
+                               Foreground="Red" FontWeight="Bold" Margin="0,0,0,5"
+                               Visibility="{Binding ShowActualSpendAlert, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                    <!-- Actual spend and refresh -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,5">
+                        <TextBlock Text="Actual spend this month: " FontWeight="Bold"/>
+                        <TextBlock Text="{Binding ActualSpendUSD, StringFormat=$\u200E{0:F2}}" Margin="5,0,0,0"/>
+                        <Button Content="Refresh Spend" Command="{Binding RefreshActualSpendCommand}" Margin="10,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Free tier exceeded alert (estimate) -->
+                    <TextBlock Grid.Row="2" Text="Warning: Free tier exceeded for the selected model! Paid usage in effect."
+                               Foreground="Red" FontWeight="Bold" Margin="0,0,0,10"
+                               Visibility="{Binding FreeTierExceededForSelectedModel, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                    <GroupBox Grid.Row="3" Header="AI Provider" Padding="5" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton GroupName="LocalProvider" Content="Ollama" Margin="0,0,20,0"
                                          IsChecked="{Binding Settings.SelectedAiProvider, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter={x:Static models:AiProvider.Ollama}}"/>

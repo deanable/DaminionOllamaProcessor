@@ -41,6 +41,7 @@ namespace DaminionOllamaApp.ViewModels
         private bool _isProcessingQueue;
         private CancellationTokenSource? _cancellationTokenSource;
         private FileQueueItem? _selectedFile;
+        private double _actualSpendUSD = -1;
 
         private readonly ProcessingService _processingService;
         private readonly SettingsService _settingsService;
@@ -52,6 +53,42 @@ namespace DaminionOllamaApp.ViewModels
         /// This allows the ViewModel to react to global settings changes.
         /// </summary>
         public AppSettings Settings { get; }
+
+        // Add property for free tier alert
+        public bool FreeTierExceededForSelectedModel
+        {
+            get
+            {
+                var modelName = Settings.SelectedAiProvider switch
+                {
+                    AiProvider.Gemma => Settings.GemmaModelName,
+                    AiProvider.OpenRouter => Settings.OpenRouterModelName,
+                    AiProvider.Ollama => Settings.OllamaModelName,
+                    _ => null
+                };
+                if (string.IsNullOrEmpty(modelName)) return false;
+                var usage = Settings.GetOrCreateModelUsage(modelName);
+                return usage.FreeTierExceeded;
+            }
+        }
+
+        public double ActualSpendUSD
+        {
+            get => _actualSpendUSD;
+            set { _actualSpendUSD = value; OnPropertyChanged(nameof(ActualSpendUSD)); OnPropertyChanged(nameof(ShowActualSpendAlert)); }
+        }
+
+        public bool ShowActualSpendAlert
+        {
+            get
+            {
+                // Use actual spend if available, else fallback to estimate
+                double freeTier = GetFreeTierForSelectedModel();
+                return ActualSpendUSD >= 0 && ActualSpendUSD > freeTier;
+            }
+        }
+
+        public ICommand RefreshActualSpendCommand { get; }
 
         /// <summary>
         /// A collection of files that are queued for processing. This is bound to the ListView in the UI.
@@ -142,8 +179,7 @@ namespace DaminionOllamaApp.ViewModels
             // Store the shared settings instance
             Settings = settings;
             _settingsService = settingsService;
-
-            FilesToProcess = new ObservableCollection<FileQueueItem>();
+            _filesToProcess = new ObservableCollection<FileQueueItem>();
             _processingService = new ProcessingService();
 
             // Initialize commands
@@ -153,6 +189,7 @@ namespace DaminionOllamaApp.ViewModels
             RemoveSelectedFileCommand = new RelayCommand(param => RemoveSelectedFile(), param => CanRemoveSelectedFile());
             ClearProcessedFilesCommand = new RelayCommand(param => ClearProcessedFiles(), param => CanClearProcessedFiles());
             ClearAllFilesCommand = new RelayCommand(param => ClearAllFiles(), param => CanClearAllFiles());
+            RefreshActualSpendCommand = new AsyncRelayCommand(_ => RefreshActualSpendAsync());
         }
 
         private bool CanAddFiles() => !IsProcessingQueue;
@@ -291,6 +328,45 @@ namespace DaminionOllamaApp.ViewModels
             ((RelayCommand)ClearAllFilesCommand).RaiseCanExecuteChanged();
             ((RelayCommand)ClearProcessedFilesCommand).RaiseCanExecuteChanged();
             LogFileQueueChange("ClearAllFiles", new { Count = count });
+        }
+
+        private async Task RefreshActualSpendAsync()
+        {
+            if (string.IsNullOrWhiteSpace(Settings.BigQueryProjectId) ||
+                string.IsNullOrWhiteSpace(Settings.BigQueryDataset) ||
+                string.IsNullOrWhiteSpace(Settings.BigQueryTable) ||
+                string.IsNullOrWhiteSpace(Settings.GemmaServiceAccountJsonPath))
+            {
+                ActualSpendUSD = -1;
+                return;
+            }
+            var client = new BigQueryBillingClient(Settings.BigQueryProjectId, Settings.BigQueryDataset, Settings.BigQueryTable, Settings.GemmaServiceAccountJsonPath);
+            try
+            {
+                ActualSpendUSD = await client.GetCurrentMonthSpendUSDAsync();
+            }
+            catch
+            {
+                ActualSpendUSD = -1;
+            }
+        }
+
+        private double GetFreeTierForSelectedModel()
+        {
+            var modelName = Settings.SelectedAiProvider switch
+            {
+                AiProvider.Gemma => Settings.GemmaModelName,
+                AiProvider.OpenRouter => Settings.OpenRouterModelName,
+                AiProvider.Ollama => Settings.OllamaModelName,
+                _ => null
+            };
+            if (string.IsNullOrEmpty(modelName)) return 0;
+            if (ModelPricingTable.Pricing.TryGetValue(modelName, out var pricing))
+            {
+                // Free tier is for input tokens; convert to $ using input token price
+                return (pricing.FreeInputTokens / 1000.0) * pricing.PricePer1KInputTokens;
+            }
+            return 0;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

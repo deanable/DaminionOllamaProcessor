@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using DaminionOllamaApp.Services; // Add this for App.Logger
+using System.Collections.Generic; // Add this for Dictionary
 
 namespace DaminionOllamaApp.Services
 {
@@ -69,5 +70,29 @@ namespace DaminionOllamaApp.Services
                 // Optionally, re-throw or notify the user
             }
         }
+    }
+
+    // Add this class to hold pricing and free tier info for supported models
+    public static class ModelPricingTable
+    {
+        // Example: Update with real values as needed
+        public static readonly Dictionary<string, ModelPricingInfo> Pricing = new Dictionary<string, ModelPricingInfo>
+        {
+            // Gemini 1.5 Pro
+            { "gemini-1.5-pro", new ModelPricingInfo { PricePer1KInputTokens = 0.005, PricePer1KOutputTokens = 0.015, FreeInputTokens = 1500000, FreeOutputTokens = 0 } },
+            // Gemini 1.5 Flash
+            { "gemini-1.5-flash", new ModelPricingInfo { PricePer1KInputTokens = 0.003, PricePer1KOutputTokens = 0.009, FreeInputTokens = 5000000, FreeOutputTokens = 0 } },
+            // Gemma (always free)
+            { "gemma-2-9b-it", new ModelPricingInfo { PricePer1KInputTokens = 0, PricePer1KOutputTokens = 0, FreeInputTokens = int.MaxValue, FreeOutputTokens = int.MaxValue } },
+            { "gemma-2-27b-it", new ModelPricingInfo { PricePer1KInputTokens = 0, PricePer1KOutputTokens = 0, FreeInputTokens = int.MaxValue, FreeOutputTokens = int.MaxValue } },
+        };
+    }
+
+    public class ModelPricingInfo
+    {
+        public double PricePer1KInputTokens { get; set; }
+        public double PricePer1KOutputTokens { get; set; }
+        public int FreeInputTokens { get; set; }
+        public int FreeOutputTokens { get; set; }
     }
 }

@@ -1,6 +1,7 @@
 ﻿// DaminionOllamaApp/Models/AppSettings.cs
 using System.ComponentModel;
 using System.Security; // Required for SecureString if you choose to use it later
+using System.Collections.Generic;
 
 namespace DaminionOllamaApp.Models
 {
@@ -10,6 +11,14 @@ namespace DaminionOllamaApp.Models
         Ollama,
         OpenRouter,
         Gemma
+    }
+
+    public class ModelUsageInfo
+    {
+        public int InputTokensUsed { get; set; }
+        public int OutputTokensUsed { get; set; }
+        public double EstimatedSpendUSD { get; set; }
+        public bool FreeTierExceeded { get; set; }
     }
 
     public class AppSettings : INotifyPropertyChanged
@@ -348,8 +357,44 @@ namespace DaminionOllamaApp.Models
             }
         }
 
+        // --- Usage/Spend Tracking ---
+        // Key: Model name, Value: Usage info
+        private Dictionary<string, ModelUsageInfo> _modelUsage = new Dictionary<string, ModelUsageInfo>();
+        public Dictionary<string, ModelUsageInfo> ModelUsage
+        {
+            get => _modelUsage;
+            set { if (_modelUsage != value) { _modelUsage = value; OnPropertyChanged(nameof(ModelUsage)); } }
+        }
+        // Helper to get usage for a model (creates if missing)
+        public ModelUsageInfo GetOrCreateModelUsage(string modelName)
+        {
+            if (!_modelUsage.ContainsKey(modelName))
+                _modelUsage[modelName] = new ModelUsageInfo();
+            return _modelUsage[modelName];
+        }
+
         // --- Alias Properties for Compatibility ---
         public string OllamaModel => OllamaModelName;
         public string OpenRouterModel => OpenRouterModelName;
+
+        // --- BigQuery Billing Export Settings ---
+        private string _bigQueryProjectId = string.Empty;
+        private string _bigQueryDataset = string.Empty;
+        private string _bigQueryTable = string.Empty;
+        public string BigQueryProjectId
+        {
+            get => _bigQueryProjectId;
+            set { if (_bigQueryProjectId != value) { _bigQueryProjectId = value; OnPropertyChanged(nameof(BigQueryProjectId)); } }
+        }
+        public string BigQueryDataset
+        {
+            get => _bigQueryDataset;
+            set { if (_bigQueryDataset != value) { _bigQueryDataset = value; OnPropertyChanged(nameof(BigQueryDataset)); } }
+        }
+        public string BigQueryTable
+        {
+            get => _bigQueryTable;
+            set { if (_bigQueryTable != value) { _bigQueryTable = value; OnPropertyChanged(nameof(BigQueryTable)); } }
+        }
     }
 }
