@@ -5,7 +5,6 @@ namespace DaminionOllamaApp.Services
 {
     public class LogService : IDisposable
     {
-        private static readonly string AppName = "DaminionOllamaApp";
         private readonly string _logFilePath;
         private readonly StreamWriter _writer;
         private bool _disposed = false;

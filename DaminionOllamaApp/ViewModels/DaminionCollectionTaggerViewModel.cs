@@ -407,7 +407,10 @@ namespace DaminionOllamaApp.ViewModels
                         };
 
                         // Add to the processing queue
-                        DaminionFilesToProcess.Add(queueItem);
+                        if (queueItem != null)
+                        {
+                            DaminionFilesToProcess.Add(queueItem);
+                        }
                     }
 
                     DaminionStatus = $"Loaded {DaminionFilesToProcess.Count} items from Daminion.";

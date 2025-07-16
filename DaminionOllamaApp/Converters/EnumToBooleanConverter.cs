@@ -21,11 +21,13 @@ namespace DaminionOllamaApp.Converters
         /// <returns>True if the value matches the parameter; otherwise, false.</returns>
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value == null || parameter == null)
+            if (value is null || parameter is null)
                 return false;
 
-            string enumValue = value.ToString();
-            string targetValue = parameter.ToString();
+            string? enumValue = value?.ToString();
+            string? targetValue = parameter?.ToString();
+            if (enumValue is null || targetValue is null)
+                return false;
 
             return enumValue.Equals(targetValue, StringComparison.OrdinalIgnoreCase);
         }
@@ -41,9 +43,9 @@ namespace DaminionOllamaApp.Converters
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
             // If the RadioButton is checked (value is true), return the enum value it represents.
-            if (value is bool isChecked && isChecked)
+            if (value is bool isChecked && isChecked && parameter is not null)
             {
-                return Enum.Parse(targetType, parameter.ToString());
+                return Enum.Parse(targetType, parameter.ToString()!);
             }
             // Otherwise, do nothing.
             return Binding.DoNothing;

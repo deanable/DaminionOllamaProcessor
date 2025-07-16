@@ -57,7 +57,6 @@ namespace DaminionOllamaApp.ViewModels
 
         // --- Gemma Settings ---
         private ObservableCollection<string> _gemmaModels = new ObservableCollection<string>();
-        private string? _selectedGemmaModelName;
         private string _gemmaConnectionStatus = "Gemma connection not verified.";
         private bool _isVerifyingGemmaConnection;
 

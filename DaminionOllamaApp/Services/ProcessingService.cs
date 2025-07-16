@@ -79,7 +79,7 @@ namespace DaminionOllamaApp.Services
                 if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
 
                 // 2. Call AI API (Ollama, OpenRouter, or Gemma)
-                string aiResponse;
+                string? aiResponse;
                 string usedModelName = null;
                 int inputTokens = 0; // Placeholder, update with real token count if available
                 int outputTokens = 0; // Placeholder, update with real token count if available
@@ -89,7 +89,8 @@ namespace DaminionOllamaApp.Services
                     {
                         if (App.Logger != null) App.Logger.Log($"Sending request to Gemma for {item.FileName} (Model: {settings.GemmaModelName}, MimeType: {item.MimeType ?? "image/jpeg"})");
                         var gemmaClient = new GemmaApiClient(settings.GemmaServiceAccountJsonPath, settings.GemmaModelName);
-                        aiResponse = await gemmaClient.GenerateContentAsync(settings.OllamaPrompt, imageBytes, item.MimeType ?? "image/jpeg");
+                        var gemmaResult = await gemmaClient.GenerateContentAsync(settings.OllamaPrompt, imageBytes, item.MimeType ?? "image/jpeg");
+                        aiResponse = gemmaResult != null ? gemmaResult : string.Empty;
                         usedModelName = settings.GemmaModelName;
                         // TODO: Parse token usage from response if available
                         if (App.Logger != null) App.Logger.Log($"Gemma response for {item.FileName}: {aiResponse.Substring(0, Math.Min(aiResponse.Length, 500))}");
@@ -127,7 +128,7 @@ namespace DaminionOllamaApp.Services
                         {
                             App.Logger.Log($"OpenRouter response for {item.FileName}: StatusCode={openRouterResult.StatusCode}, ContentSnippet={openRouterResult.Content?.Substring(0, Math.Min(openRouterResult.Content?.Length ?? 0, 200))}, ErrorMessage={openRouterResult.ErrorMessage}, RawResponseSnippet={openRouterResult.RawResponse?.Substring(0, Math.Min(openRouterResult.RawResponse?.Length ?? 0, 500))}");
                         }
-                        aiResponse = openRouterResult.Content;
+                        aiResponse = openRouterResult.Content ?? string.Empty;
                         if (string.IsNullOrWhiteSpace(aiResponse))
                         {
                             throw new Exception("OpenRouter returned an empty response");
