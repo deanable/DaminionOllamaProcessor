@@ -50,12 +50,12 @@ namespace DaminionOllamaApp.Services
         public async Task<double> GetCurrentMonthSpendUSDAsync()
         {
             // Log: Starting billing fetch
-            System.Diagnostics.Debug.WriteLine("[BigQueryBillingClient] Starting GetCurrentMonthSpendUSDAsync");
+            if (App.Logger != null) App.Logger.Log("[BigQueryBillingClient] Starting GetCurrentMonthSpendUSDAsync");
             // Authenticate using the service account JSON
             GoogleCredential credential;
             try
             {
-                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Opening service account JSON: {_serviceAccountJsonPath}");
+                if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Opening service account JSON: {_serviceAccountJsonPath}");
                 using (var stream = new FileStream(_serviceAccountJsonPath, FileMode.Open, FileAccess.Read))
                 {
                     credential = GoogleCredential.FromStream(stream);
@@ -63,18 +63,18 @@ namespace DaminionOllamaApp.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Failed to load service account JSON: {ex.Message}");
+                if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Failed to load service account JSON: {ex.Message}");
                 throw;
             }
             BigQueryClient client;
             try
             {
-                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Creating BigQueryClient for project: {_projectId}");
+                if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Creating BigQueryClient for project: {_projectId}");
                 client = await BigQueryClient.CreateAsync(_projectId, credential);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Failed to create BigQueryClient: {ex.Message}");
+                if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Failed to create BigQueryClient: {ex.Message}");
                 throw;
             }
 
@@ -91,25 +91,25 @@ namespace DaminionOllamaApp.Services
                   AND usage_start_time < TIMESTAMP('{nextMonth:yyyy-MM-dd}')
                   AND cost_type = 'regular'
             ";
-            System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Executing query: {query.Replace("\n", " ").Replace("  ", " ")}");
+            if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Executing query: {query.Replace("\n", " ").Replace("  ", " ")}");
             try
             {
                 var result = await client.ExecuteQueryAsync(query, parameters: null);
                 foreach (var row in result)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Query result row: total_cost={row["total_cost"]}");
+                    if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Query result row: total_cost={row["total_cost"]}");
                     if (row["total_cost"] != null && double.TryParse(row["total_cost"].ToString(), out double cost))
                     {
-                        System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Parsed total_cost: {cost}");
+                        if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Parsed total_cost: {cost}");
                         return cost;
                     }
                 }
-                System.Diagnostics.Debug.WriteLine("[BigQueryBillingClient] No rows returned or total_cost is null.");
+                if (App.Logger != null) App.Logger.Log("[BigQueryBillingClient] No rows returned or total_cost is null.");
                 return 0.0;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Query execution failed: {ex.Message}");
+                if (App.Logger != null) App.Logger.Log($"[BigQueryBillingClient] Query execution failed: {ex.Message}");
                 throw;
             }
         }
