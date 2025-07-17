@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace DaminionOllamaInteractionLib.Daminion
 {
     /// <summary>
-    /// Represents the result of a Daminion path operation. 
+    /// Represents the result of a Daminion path operation, including the returned paths, success status, and error message.
     /// </summary>
-    public class DaminionPathResult // Must be public
+    public class DaminionPathResult
     {
         /// <summary>
         /// Gets or sets the paths returned by the Daminion operation.

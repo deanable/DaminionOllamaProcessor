@@ -8,6 +8,10 @@ using System.Collections.Generic; // Add this for Dictionary
 
 namespace DaminionOllamaApp.Services
 {
+    /// <summary>
+    /// Service for loading and saving application settings to disk as JSON.
+    /// Handles file I/O and error logging for settings persistence.
+    /// </summary>
     public class SettingsService
     {
         private static readonly string AppName = "DaminionOllamaApp";
@@ -23,6 +27,10 @@ namespace DaminionOllamaApp.Services
             _settingsFilePath = Path.Combine(appSpecificFolder, SettingsFileName);
         }
 
+        /// <summary>
+        /// Loads application settings from the settings file. Returns default settings if the file does not exist or is invalid.
+        /// </summary>
+        /// <returns>The loaded <see cref="AppSettings"/> instance.</returns>
         public AppSettings LoadSettings()
         {
             try
@@ -49,6 +57,10 @@ namespace DaminionOllamaApp.Services
             return new AppSettings(); // Return default settings if file doesn't exist or error occurs
         }
 
+        /// <summary>
+        /// Saves the given application settings to disk as JSON.
+        /// </summary>
+        /// <param name="settings">The <see cref="AppSettings"/> instance to save.</param>
         public void SaveSettings(AppSettings settings)
         {
             try
@@ -72,7 +84,9 @@ namespace DaminionOllamaApp.Services
         }
     }
 
-    // Add this class to hold pricing and free tier info for supported models
+    /// <summary>
+    /// Static table containing pricing and free tier information for supported AI models.
+    /// </summary>
     public static class ModelPricingTable
     {
         // Example: Update with real values as needed
@@ -88,11 +102,18 @@ namespace DaminionOllamaApp.Services
         };
     }
 
+    /// <summary>
+    /// Represents pricing information for a single AI model.
+    /// </summary>
     public class ModelPricingInfo
     {
+        /// <summary>Price per 1,000 input tokens (USD).</summary>
         public double PricePer1KInputTokens { get; set; }
+        /// <summary>Price per 1,000 output tokens (USD).</summary>
         public double PricePer1KOutputTokens { get; set; }
+        /// <summary>Number of free input tokens available.</summary>
         public int FreeInputTokens { get; set; }
+        /// <summary>Number of free output tokens available.</summary>
         public int FreeOutputTokens { get; set; }
     }
 }

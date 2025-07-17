@@ -10,8 +10,16 @@ using System.Linq;
 
 namespace DaminionOllamaApp.Services
 {
+    /// <summary>
+    /// Provides helper methods for interacting with Google Cloud resources, such as listing projects, datasets, and tables.
+    /// </summary>
     public static class GoogleCloudResourceHelper
     {
+        /// <summary>
+        /// Lists all active Google Cloud projects accessible with the given service account.
+        /// </summary>
+        /// <param name="serviceAccountJsonPath">Path to the service account JSON file.</param>
+        /// <returns>A list of active project IDs.</returns>
         public static async Task<List<string>> ListProjectsAsync(string serviceAccountJsonPath)
         {
             GoogleCredential credential;
@@ -38,6 +46,12 @@ namespace DaminionOllamaApp.Services
             return projects;
         }
 
+        /// <summary>
+        /// Lists all datasets in the specified project using the given service account.
+        /// </summary>
+        /// <param name="projectId">The Google Cloud project ID.</param>
+        /// <param name="serviceAccountJsonPath">Path to the service account JSON file.</param>
+        /// <returns>A list of dataset IDs.</returns>
         public static async Task<List<string>> ListDatasetsAsync(string projectId, string serviceAccountJsonPath)
         {
             GoogleCredential credential;
@@ -54,6 +68,13 @@ namespace DaminionOllamaApp.Services
             return datasets;
         }
 
+        /// <summary>
+        /// Lists all tables in the specified dataset using the given service account.
+        /// </summary>
+        /// <param name="projectId">The Google Cloud project ID.</param>
+        /// <param name="datasetId">The dataset ID.</param>
+        /// <param name="serviceAccountJsonPath">Path to the service account JSON file.</param>
+        /// <returns>A list of table IDs.</returns>
         public static async Task<List<string>> ListTablesAsync(string projectId, string datasetId, string serviceAccountJsonPath)
         {
             GoogleCredential credential;
@@ -70,6 +91,14 @@ namespace DaminionOllamaApp.Services
             return tables;
         }
 
+        /// <summary>
+        /// Determines if the specified table is a GCP billing export table by checking for required schema fields.
+        /// </summary>
+        /// <param name="projectId">The Google Cloud project ID.</param>
+        /// <param name="datasetId">The dataset ID.</param>
+        /// <param name="tableId">The table ID.</param>
+        /// <param name="serviceAccountJsonPath">Path to the service account JSON file.</param>
+        /// <returns>True if the table is a billing export table; otherwise, false.</returns>
         public static async Task<bool> IsBillingExportTableAsync(string projectId, string datasetId, string tableId, string serviceAccountJsonPath)
         {
             GoogleCredential credential;

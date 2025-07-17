@@ -6,17 +6,16 @@ using System.Windows.Data;
 namespace DaminionOllamaApp.Converters
 {
     /// <summary>
-    /// Converts a specific enum value to a boolean (true if the value matches the parameter) and back.
-    /// This is used to bind RadioButtons to an enum property.
+    /// Converts between an enum value and a boolean for use with RadioButton binding in WPF.
     /// </summary>
     public class EnumToBooleanConverter : IValueConverter
     {
         /// <summary>
-        /// Converts the enum value to a boolean.
+        /// Converts an enum value to a boolean (true if the value matches the parameter).
         /// </summary>
         /// <param name="value">The enum value from the binding source.</param>
         /// <param name="targetType">The type of the binding target property.</param>
-        /// <param name="parameter">The specific enum value to check for (e.g., "Ollama" or "OpenRouter").</param>
+        /// <param name="parameter">The specific enum value to check for.</param>
         /// <param name="culture">The culture to use in the converter.</param>
         /// <returns>True if the value matches the parameter; otherwise, false.</returns>
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

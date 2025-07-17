@@ -8,6 +8,10 @@ namespace DaminionOllamaApp.Models
     // If it's not accessible due to namespace/file structure, you might need to move it
     // to a more common location or redeclare it here. For now, assume it's accessible.
 
+    /// <summary>
+    /// Represents an item in the Daminion processing queue, including its Daminion ID, file path, name, status, and status message.
+    /// Implements INotifyPropertyChanged for data binding.
+    /// </summary>
     public class DaminionQueueItem : INotifyPropertyChanged
     {
         private long _daminionItemId;
@@ -16,9 +20,14 @@ namespace DaminionOllamaApp.Models
         private ProcessingStatus _status = ProcessingStatus.Unprocessed;
         private string _statusMessage = string.Empty;
 
-        // Alias property for compatibility with existing code
+        /// <summary>
+        /// Gets the Daminion item ID (alias for DaminionItemId).
+        /// </summary>
         public long Id => DaminionItemId;
 
+        /// <summary>
+        /// Gets or sets the Daminion item ID associated with this queue item.
+        /// </summary>
         public long DaminionItemId
         {
             get => _daminionItemId;
@@ -32,6 +41,9 @@ namespace DaminionOllamaApp.Models
             }
         }
 
+        /// <summary>
+        /// Gets or sets the file path for this item. Setting this will also update FileName if not set.
+        /// </summary>
         public string FilePath
         {
             get => _filePath;
@@ -49,6 +61,9 @@ namespace DaminionOllamaApp.Models
             }
         }
 
+        /// <summary>
+        /// Gets or sets the file name (could be Daminion item's title or filename).
+        /// </summary>
         public string FileName // Could be Daminion item's title or filename
         {
             get => _fileName;
@@ -62,6 +77,9 @@ namespace DaminionOllamaApp.Models
             }
         }
 
+        /// <summary>
+        /// Gets or sets the current processing status of the item.
+        /// </summary>
         public ProcessingStatus Status
         {
             get => _status;
@@ -75,6 +93,9 @@ namespace DaminionOllamaApp.Models
             }
         }
 
+        /// <summary>
+        /// Gets or sets a status message describing the current state or error.
+        /// </summary>
         public string StatusMessage
         {
             get => _statusMessage;
@@ -90,11 +111,19 @@ namespace DaminionOllamaApp.Models
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
+        /// <summary>
+        /// Raises the PropertyChanged event for the specified property.
+        /// </summary>
         protected virtual void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
+        /// <summary>
+        /// Constructor for a Daminion queue item. Initializes with the given Daminion ID and optional initial name.
+        /// </summary>
+        /// <param name="daminionId">The Daminion item ID.</param>
+        /// <param name="initialName">The initial name or placeholder for the item.</param>
         public DaminionQueueItem(long daminionId, string initialName = "Loading...")
         {
             DaminionItemId = daminionId;

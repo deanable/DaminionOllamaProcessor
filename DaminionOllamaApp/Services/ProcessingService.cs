@@ -12,14 +12,26 @@ using DaminionOllamaApp;
 
 namespace DaminionOllamaApp.Services
 {
+    /// <summary>
+    /// Provides methods for processing local files using AI services (Ollama, OpenRouter, or Gemma).
+    /// Handles reading file bytes, sending requests to AI providers, and updating processing status.
+    /// </summary>
     public class ProcessingService
     {
+        /// <summary>
+        /// Processes a local file asynchronously using the selected AI provider and updates its status.
+        /// </summary>
+        /// <param name="item">The file queue item to process.</param>
+        /// <param name="settings">The application settings, including AI provider configuration.</param>
+        /// <param name="reportProgress">Callback to report progress messages.</param>
+        /// <param name="cancellationToken">Token to support cancellation.</param>
         public async Task ProcessLocalFileAsync(
             FileQueueItem item,
             AppSettings settings,
             Action<string> reportProgress,
             CancellationToken cancellationToken)
         {
+            // Validate input arguments
             if (item == null || settings == null)
             {
                 reportProgress?.Invoke($"Error: File item or settings are null for {item?.FileName ?? "Unknown File"}.");
@@ -30,6 +42,7 @@ namespace DaminionOllamaApp.Services
 
             try
             {
+                // Log settings and update status
                 if (App.Logger != null)
                 {
                     App.Logger.Log($"Settings at processing start for {item.FileName}: UseOpenRouter={settings.UseOpenRouter}, OpenRouterModelName={settings.OpenRouterModelName}, OllamaModelName={settings.OllamaModelName}, OllamaServerUrl={settings.OllamaServerUrl}");
@@ -39,6 +52,7 @@ namespace DaminionOllamaApp.Services
                 reportProgress?.Invoke($"Processing: {item.FileName} - Reading file...");
                 if (App.Logger != null) App.Logger.Log($"Processing started for {item.FileName}");
 
+                // Check for cancellation before starting
                 if (cancellationToken.IsCancellationRequested)
                 {
                     item.Status = ProcessingStatus.Cancelled;
@@ -48,7 +62,7 @@ namespace DaminionOllamaApp.Services
                     return;
                 }
 
-                // 1. Read image bytes
+                // Read image bytes from file
                 if (App.Logger != null) App.Logger.Log($"Reading file bytes for {item.FileName}");
                 byte[] imageBytes;
                 try
@@ -65,6 +79,7 @@ namespace DaminionOllamaApp.Services
                     return;
                 }
 
+                // Prepare and send request to the selected AI provider
                 if (settings.UseOpenRouter)
                 {
                     if (App.Logger != null) App.Logger.Log($"Preparing OpenRouter request payload for {item.FileName}");

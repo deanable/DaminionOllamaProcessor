@@ -4,62 +4,98 @@ using System.Text.Json.Serialization;
 
 namespace DaminionOllamaInteractionLib.Daminion
 {
-    // This class corresponds to the 'Item' structure described on page 16
-    // of the "API v4 original by Yuri.pdf" document.
+    /// <summary>
+    /// Represents a media item in the Daminion system, as described in the Daminion API documentation.
+    /// </summary>
     public class DaminionMediaItem
     {
+        /// <summary>
+        /// Gets or sets the unique ID of the media item.
+        /// </summary>
         [JsonPropertyName("id")]
-        public long Id { get; set; } // [cite: 84]
-
+        public long Id { get; set; }
+        /// <summary>
+        /// Gets or sets the hash code of the media item (optional).
+        /// </summary>
         [JsonPropertyName("hashCode")]
-        public long? HashCode { get; set; } // [cite: 84]
-
+        public long? HashCode { get; set; }
+        /// <summary>
+        /// Gets or sets the name of the media item.
+        /// </summary>
         [JsonPropertyName("name")]
-        public string? Name { get; set; } // [cite: 85]
-
+        public string? Name { get; set; }
+        /// <summary>
+        /// Gets or sets the file name of the media item.
+        /// </summary>
         [JsonPropertyName("fileName")]
-        public string? FileName { get; set; } // [cite: 86]
-
+        public string? FileName { get; set; }
+        /// <summary>
+        /// Gets or sets the media format (e.g., image, video).
+        /// </summary>
         [JsonPropertyName("mediaFormat")]
-        public string? MediaFormat { get; set; } // [cite: 86]
-
+        public string? MediaFormat { get; set; }
+        /// <summary>
+        /// Gets or sets the version control state of the media item.
+        /// </summary>
         [JsonPropertyName("versionControlState")]
-        public int? VersionControlState { get; set; } // [cite: 87]
-
+        public int? VersionControlState { get; set; }
+        /// <summary>
+        /// Gets or sets the color label ID for the media item.
+        /// </summary>
         [JsonPropertyName("colorLabel")]
-        public long? ColorLabel { get; set; } // ID of the value, [cite: 89]
-
+        public long? ColorLabel { get; set; }
+        /// <summary>
+        /// Gets or sets the width of the media item (pixels).
+        /// </summary>
         [JsonPropertyName("width")]
-        public int? Width { get; set; } // [cite: 90]
-
+        public int? Width { get; set; }
+        /// <summary>
+        /// Gets or sets the height of the media item (pixels).
+        /// </summary>
         [JsonPropertyName("height")]
-        public int? Height { get; set; } // [cite: 91]
-
+        public int? Height { get; set; }
+        /// <summary>
+        /// Gets or sets the file size of the media item (bytes).
+        /// </summary>
         [JsonPropertyName("fileSize")]
-        public long? FileSize { get; set; } // [cite: 92]
-
+        public long? FileSize { get; set; }
+        /// <summary>
+        /// Gets or sets the format type of the media item.
+        /// </summary>
         [JsonPropertyName("formatType")]
-        public string? FormatType { get; set; } // [cite: 92]
-
+        public string? FormatType { get; set; }
+        /// <summary>
+        /// Gets or sets the expiration date of the media item (if any).
+        /// </summary>
         [JsonPropertyName("expirationDate")]
-        public string? ExpirationDate { get; set; } // [cite: 92]
+        public string? ExpirationDate { get; set; }
     }
 
-    // This class is a wrapper for the response from the GET /api/mediaItems/get endpoint
-    // as described on page 15 of the "API v4 original by Yuri.pdf" document.
+    /// <summary>
+    /// Represents the response from the Daminion API for searching media items.
+    /// </summary>
     public class DaminionSearchMediaItemsResponse
     {
+        /// <summary>
+        /// Gets or sets the list of media items returned by the search.
+        /// </summary>
         [JsonPropertyName("mediaItems")]
-        public List<DaminionMediaItem>? MediaItems { get; set; } // [cite: 83]
-
+        public List<DaminionMediaItem>? MediaItems { get; set; }
+        /// <summary>
+        /// Gets or sets the error message, if any.
+        /// </summary>
         [JsonPropertyName("error")]
-        public string? Error { get; set; } // [cite: 82]
-
+        public string? Error { get; set; }
+        /// <summary>
+        /// Gets or sets the error code, if any.
+        /// </summary>
         [JsonPropertyName("errorCode")]
-        public int ErrorCode { get; set; } // [cite: 82]
-
+        public int ErrorCode { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether the search was successful.
+        /// </summary>
         [JsonPropertyName("success")]
-        public bool Success { get; set; } // [cite: 83]
+        public bool Success { get; set; }
 
         // The API documentation for /api/mediaItems/get (page 15) does not explicitly show "totalCount".
         // However, /api/mediaItems/getSort (page 13) does. If you find "totalCount" in the actual

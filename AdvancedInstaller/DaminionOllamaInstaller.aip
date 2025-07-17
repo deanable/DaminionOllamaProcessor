@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PROJECT SourcePath="..\DaminionOllamaApp\bin\Debug\net8.0-windows10.0.26100.0" ProjectType="Professional" Name="Daminion Ollama Processor Installer" Language="en" Version="1.0.0" Manufacturer="YourCompany">
+  <COMPONENTS>
+    <COMPONENT Id="AppFiles" Directory="INSTALLDIR">
+      <FILES>
+        <FILE Source="DaminionOllamaApp.exe" />
+        <FILE Source="DaminionOllamaApp.dll" />
+        <FILE Source="DaminionOllamaApp.pdb" />
+        <FILE Source="DaminionOllamaApp.deps.json" />
+        <FILE Source="DaminionOllamaApp.runtimeconfig.json" />
+        <FILE Source="DaminionOllamaInteractionLib.dll" />
+        <FILE Source="DaminionOllamaInteractionLib.pdb" />
+        <FILE Source="Google.Apis.CloudResourceManager.v1.dll" />
+        <FILE Source="Google.Apis.Auth.dll" />
+        <FILE Source="Google.Apis.dll" />
+        <FILE Source="Google.Apis.Core.dll" />
+        <FILE Source="Serilog.dll" />
+        <FILE Source="Serilog.Sinks.File.dll" />
+        <FILE Source="System.Text.Json.dll" />
+        <FILE Source="System.Text.Encodings.Web.dll" />
+        <FILE Source="System.IO.Pipelines.dll" />
+        <FILE Source="Magick.NET-Q16-AnyCPU.dll" />
+        <FILE Source="Magick.NET.Core.dll" />
+        <FILE Source="Google.Cloud.BigQuery.V2.dll" />
+        <FILE Source="Microsoft.Windows.SDK.NET.dll" />
+        <FILE Source="WinRT.Runtime.dll" />
+        <FILE Source="Google.Api.Gax.Rest.dll" />
+        <FILE Source="Google.Api.Gax.dll" />
+        <FILE Source="Google.Apis.Bigquery.v2.dll" />
+        <FILE Source="System.Management.dll" />
+        <FILE Source="Newtonsoft.Json.dll" />
+        <FILE Source="Microsoft.Extensions.DependencyInjection.Abstractions.dll" />
+        <FILE Source="Microsoft.Bcl.AsyncInterfaces.dll" />
+        <!-- Native DLLs for Windows runtimes -->
+        <FILE Source="runtimes\win-x64\native\Magick.Native-Q16-x64.dll" />
+        <FILE Source="runtimes\win-x86\native\Magick.Native-Q16-x86.dll" />
+        <FILE Source="runtimes\win-arm64\native\Magick.Native-Q16-arm64.dll" />
+      </FILES>
+    </COMPONENT>
+  </COMPONENTS>
+  <DIRECTORIES>
+    <DIRECTORY Id="TARGETDIR" Name="SourceDir">
+      <DIRECTORY Id="ProgramFilesFolder">
+        <DIRECTORY Id="INSTALLDIR" Name="DaminionOllamaApp" />
+      </DIRECTORY>
+    </DIRECTORY>
+  </DIRECTORIES>
+  <PRODUCT_DETAILS>
+    <ICON Path="..\DaminionOllamaApp\Daminion-Llama.ico" />
+    <NAME>Daminion Ollama Processor</NAME>
+    <VERSION>1.0.0</VERSION>
+    <MANUFACTURER>YourCompany</MANUFACTURER>
+    <DESCRIPTION>Daminion Ollama Processor Installer</DESCRIPTION>
+  </PRODUCT_DETAILS>
+  <SHORTCUTS>
+    <SHORTCUT Name="Daminion Ollama Processor" Target="[INSTALLDIR]DaminionOllamaApp.exe" Icon="..\DaminionOllamaApp\Daminion-Llama.ico" />
+  </SHORTCUTS>
+</PROJECT> 

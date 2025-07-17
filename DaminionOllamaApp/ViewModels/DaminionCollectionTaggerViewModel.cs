@@ -399,6 +399,9 @@ namespace DaminionOllamaApp.ViewModels
                             ? pathResult.Paths[item.Id.ToString()]
                             : null;
 
+                        if (App.Logger != null)
+                            App.Logger.Log($"[DEBUG] Daminion item {item.Id}: filePath='{filePath}'");
+
                         var queueItem = new DaminionQueueItem(item.Id, item.FileName ?? item.Name ?? $"Item {item.Id}")
                         {
                             FilePath = filePath,
@@ -484,6 +487,8 @@ namespace DaminionOllamaApp.ViewModels
                         UpdateOverallDaminionStatus($"Processing item {processedCount + 1} of {totalCount}: {item.FileName}");
 
                         // Validate file exists
+                        if (App.Logger != null)
+                            App.Logger.Log($"[DEBUG] About to check existence and read file for item {item.Id}: filePath='{item.FilePath}'");
                         if (!File.Exists(item.FilePath))
                         {
                             item.Status = ProcessingStatus.Error;

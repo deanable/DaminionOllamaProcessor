@@ -6,13 +6,35 @@ using System.IO;
 
 namespace DaminionOllamaApp.Services
 {
+    /// <summary>
+    /// Provides methods to query Google BigQuery billing export tables for current month spend.
+    /// </summary>
     public class BigQueryBillingClient
     {
+        /// <summary>
+        /// The Google Cloud project ID.
+        /// </summary>
         private readonly string _projectId;
+        /// <summary>
+        /// The BigQuery dataset name.
+        /// </summary>
         private readonly string _dataset;
+        /// <summary>
+        /// The BigQuery table name.
+        /// </summary>
         private readonly string _table;
+        /// <summary>
+        /// Path to the service account JSON file for authentication.
+        /// </summary>
         private readonly string _serviceAccountJsonPath;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BigQueryBillingClient"/> class.
+        /// </summary>
+        /// <param name="projectId">The Google Cloud project ID.</param>
+        /// <param name="dataset">The BigQuery dataset name.</param>
+        /// <param name="table">The BigQuery table name.</param>
+        /// <param name="serviceAccountJsonPath">Path to the service account JSON file.</param>
         public BigQueryBillingClient(string projectId, string dataset, string table, string serviceAccountJsonPath)
         {
             _projectId = projectId;
@@ -21,6 +43,10 @@ namespace DaminionOllamaApp.Services
             _serviceAccountJsonPath = serviceAccountJsonPath;
         }
 
+        /// <summary>
+        /// Gets the total spend in USD for the current month from the billing export table.
+        /// </summary>
+        /// <returns>The total spend in USD for the current month.</returns>
         public async Task<double> GetCurrentMonthSpendUSDAsync()
         {
             // Authenticate using the service account JSON

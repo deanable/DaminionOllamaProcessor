@@ -21,6 +21,12 @@ using DaminionOllamaApp;
 
 namespace DaminionOllamaApp.ViewModels
 {
+    /// <summary>
+    /// ViewModel for the application settings window.
+    /// Manages configuration for AI providers, Daminion server, billing, and model selection.
+    /// Handles connection verification, model discovery, and settings persistence.
+    /// Implements INotifyPropertyChanged for data binding.
+    /// </summary>
     public class SettingsViewModel : INotifyPropertyChanged
     {
         private static readonly ILogger Logger;
@@ -62,6 +68,9 @@ namespace DaminionOllamaApp.ViewModels
 
         // --- Free Model Filter ---
         private bool _onlyShowFreeGeminiGemmaModels = false;
+        /// <summary>
+        /// Gets or sets whether only free Gemini/Gemma models should be shown in the model selector.
+        /// </summary>
         public bool OnlyShowFreeGeminiGemmaModels
         {
             get => _onlyShowFreeGeminiGemmaModels;
@@ -76,17 +85,32 @@ namespace DaminionOllamaApp.ViewModels
         }
 
         // --- GCP/BigQuery Billing Export Selectors ---
+        /// <summary>
+        /// Gets the list of available GCP projects for billing export selection.
+        /// </summary>
         public ObservableCollection<string> GcpProjects { get; } = new ObservableCollection<string>();
+        /// <summary>
+        /// Gets the list of available BigQuery datasets for billing export selection.
+        /// </summary>
         public ObservableCollection<string> BigQueryDatasets { get; } = new ObservableCollection<string>();
+        /// <summary>
+        /// Gets the list of available BigQuery tables for billing export selection.
+        /// </summary>
         public ObservableCollection<string> BigQueryTables { get; } = new ObservableCollection<string>();
 
         private string _billingExportInstructions = string.Empty;
+        /// <summary>
+        /// Gets or sets the instructions for configuring billing export.
+        /// </summary>
         public string BillingExportInstructions
         {
             get => _billingExportInstructions;
             set { _billingExportInstructions = value; OnPropertyChanged(nameof(BillingExportInstructions)); }
         }
 
+        /// <summary>
+        /// Gets or sets the application settings instance being edited.
+        /// </summary>
         public AppSettings Settings
         {
             get => _settings;
@@ -94,12 +118,18 @@ namespace DaminionOllamaApp.ViewModels
         }
 
         // --- Ollama Properties ---
+        /// <summary>
+        /// Gets or sets the connection status for the Ollama server.
+        /// </summary>
         public string OllamaConnectionStatus
         {
             get => _ollamaConnectionStatus;
             private set { SetProperty(ref _ollamaConnectionStatus, value); }
         }
 
+        /// <summary>
+        /// Gets or sets whether the Ollama connection is being verified.
+        /// </summary>
         public bool IsVerifyingOllamaConnection
         {
             get => _isVerifyingOllamaConnection;
@@ -113,18 +143,27 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        /// <summary>
+        /// Gets or sets whether Ollama models are being fetched.
+        /// </summary>
         public bool IsFetchingOllamaModels
         {
             get => _isFetchingOllamaModels;
             private set { SetProperty(ref _isFetchingOllamaModels, value); }
         }
 
+        /// <summary>
+        /// Gets the list of available Ollama models.
+        /// </summary>
         public ObservableCollection<string> OllamaModels
         {
             get => _ollamaModels;
             private set { SetProperty(ref _ollamaModels, value); }
         }
 
+        /// <summary>
+        /// Gets or sets the selected Ollama model name.
+        /// </summary>
         public string? SelectedOllamaModelName
         {
             get => Settings?.OllamaModelName;
@@ -139,12 +178,18 @@ namespace DaminionOllamaApp.ViewModels
         }
 
         // --- OpenRouter Properties ---
+        /// <summary>
+        /// Gets or sets the connection status for the OpenRouter service.
+        /// </summary>
         public string OpenRouterConnectionStatus
         {
             get => _openRouterConnectionStatus;
             private set { SetProperty(ref _openRouterConnectionStatus, value); }
         }
 
+        /// <summary>
+        /// Gets or sets whether the OpenRouter connection is being verified.
+        /// </summary>
         public bool IsVerifyingOpenRouterConnection
         {
             get => _isVerifyingOpenRouterConnection;
@@ -158,18 +203,27 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        /// <summary>
+        /// Gets or sets whether OpenRouter models are being fetched.
+        /// </summary>
         public bool IsFetchingOpenRouterModels
         {
             get => _isFetchingOpenRouterModels;
             private set { SetProperty(ref _isFetchingOpenRouterModels, value); }
         }
 
+        /// <summary>
+        /// Gets the list of available OpenRouter models.
+        /// </summary>
         public ObservableCollection<string> OpenRouterModels
         {
             get => _openRouterModels;
             private set { SetProperty(ref _openRouterModels, value); }
         }
 
+        /// <summary>
+        /// Gets or sets the selected OpenRouter model name.
+        /// </summary>
         public string? SelectedOpenRouterModelName
         {
             get => Settings?.OpenRouterModelName;
@@ -184,6 +238,9 @@ namespace DaminionOllamaApp.ViewModels
         }
 
         // Daminion GUID Discovery Properties
+        /// <summary>
+        /// Gets or sets whether the ViewModel is currently discovering Daminion tag GUIDs.
+        /// </summary>
         public bool IsDiscoveringGuids
         {
             get => _isDiscoveringGuids;
@@ -197,6 +254,9 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
+        /// <summary>
+        /// Gets or sets the status message for Daminion GUID discovery.
+        /// </summary>
         public string DiscoveryStatusMessage
         {
             get => _discoveryStatusMessage;
@@ -279,6 +339,10 @@ namespace DaminionOllamaApp.ViewModels
         public Action? CloseAction { get; set; }
         public Action<string>? UpdatePasswordBoxAction { get; set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SettingsViewModel"/> class.
+        /// </summary>
+        /// <param name="settings">The AppSettings instance to edit.</param>
         public SettingsViewModel(AppSettings settings)
         {
             _settings = settings;

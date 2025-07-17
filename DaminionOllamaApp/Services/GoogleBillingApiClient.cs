@@ -8,18 +8,41 @@ using System.Net.Http.Headers;
 
 namespace DaminionOllamaApp.Services
 {
+    /// <summary>
+    /// Provides methods to interact with the Google Cloud Billing API for retrieving billing information.
+    /// </summary>
     public class GoogleBillingApiClient
     {
+        /// <summary>
+        /// Path to the service account JSON file for authentication.
+        /// </summary>
         private readonly string _serviceAccountJsonPath;
+        /// <summary>
+        /// Cached access token for API requests.
+        /// </summary>
         private string? _accessToken;
+        /// <summary>
+        /// Expiry time for the cached access token.
+        /// </summary>
         private DateTime _accessTokenExpiry;
+        /// <summary>
+        /// Required OAuth scopes for the Cloud Billing API.
+        /// </summary>
         private static readonly string[] Scopes = new[] { "https://www.googleapis.com/auth/cloud-billing.readonly" };
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GoogleBillingApiClient"/> class.
+        /// </summary>
+        /// <param name="serviceAccountJsonPath">Path to the service account JSON file.</param>
         public GoogleBillingApiClient(string serviceAccountJsonPath)
         {
             _serviceAccountJsonPath = serviceAccountJsonPath;
         }
 
+        /// <summary>
+        /// Gets an OAuth access token for the Cloud Billing API, caching it until expiry.
+        /// </summary>
+        /// <returns>The access token string.</returns>
         private async Task<string> GetAccessTokenAsync()
         {
             if (!string.IsNullOrEmpty(_accessToken) && DateTime.UtcNow < _accessTokenExpiry)
