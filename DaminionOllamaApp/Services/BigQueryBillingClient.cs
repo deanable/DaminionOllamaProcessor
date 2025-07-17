@@ -49,13 +49,34 @@ namespace DaminionOllamaApp.Services
         /// <returns>The total spend in USD for the current month.</returns>
         public async Task<double> GetCurrentMonthSpendUSDAsync()
         {
+            // Log: Starting billing fetch
+            System.Diagnostics.Debug.WriteLine("[BigQueryBillingClient] Starting GetCurrentMonthSpendUSDAsync");
             // Authenticate using the service account JSON
             GoogleCredential credential;
-            using (var stream = new FileStream(_serviceAccountJsonPath, FileMode.Open, FileAccess.Read))
+            try
             {
-                credential = GoogleCredential.FromStream(stream);
+                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Opening service account JSON: {_serviceAccountJsonPath}");
+                using (var stream = new FileStream(_serviceAccountJsonPath, FileMode.Open, FileAccess.Read))
+                {
+                    credential = GoogleCredential.FromStream(stream);
+                }
             }
-            var client = await BigQueryClient.CreateAsync(_projectId, credential);
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Failed to load service account JSON: {ex.Message}");
+                throw;
+            }
+            BigQueryClient client;
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Creating BigQueryClient for project: {_projectId}");
+                client = await BigQueryClient.CreateAsync(_projectId, credential);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Failed to create BigQueryClient: {ex.Message}");
+                throw;
+            }
 
             // Get the first and last day of the current month
             var now = DateTime.UtcNow;
@@ -70,16 +91,27 @@ namespace DaminionOllamaApp.Services
                   AND usage_start_time < TIMESTAMP('{nextMonth:yyyy-MM-dd}')
                   AND cost_type = 'regular'
             ";
-
-            var result = await client.ExecuteQueryAsync(query, parameters: null);
-            foreach (var row in result)
+            System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Executing query: {query.Replace("\n", " ").Replace("  ", " ")}");
+            try
             {
-                if (row["total_cost"] != null && double.TryParse(row["total_cost"].ToString(), out double cost))
+                var result = await client.ExecuteQueryAsync(query, parameters: null);
+                foreach (var row in result)
                 {
-                    return cost;
+                    System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Query result row: total_cost={row["total_cost"]}");
+                    if (row["total_cost"] != null && double.TryParse(row["total_cost"].ToString(), out double cost))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Parsed total_cost: {cost}");
+                        return cost;
+                    }
                 }
+                System.Diagnostics.Debug.WriteLine("[BigQueryBillingClient] No rows returned or total_cost is null.");
+                return 0.0;
             }
-            return 0.0;
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[BigQueryBillingClient] Query execution failed: {ex.Message}");
+                throw;
+            }
         }
     }
 } 
