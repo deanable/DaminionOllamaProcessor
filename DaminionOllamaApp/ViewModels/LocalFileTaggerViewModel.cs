@@ -332,22 +332,38 @@ namespace DaminionOllamaApp.ViewModels
 
         private async Task RefreshActualSpendAsync()
         {
+            string provider = Settings.SelectedAiProvider switch
+            {
+                AiProvider.Gemma => "Google (Gemma/BigQuery)",
+                AiProvider.OpenRouter => "OpenRouter",
+                AiProvider.Ollama => "Ollama",
+                _ => "Unknown Provider"
+            };
+            Logger.Information("Billing fetch initiated. Provider: {Provider}", provider);
+            CurrentOperationStatus = $"Fetching spend from {provider}...";
             if (string.IsNullOrWhiteSpace(Settings.BigQueryProjectId) ||
                 string.IsNullOrWhiteSpace(Settings.BigQueryDataset) ||
                 string.IsNullOrWhiteSpace(Settings.BigQueryTable) ||
                 string.IsNullOrWhiteSpace(Settings.GemmaServiceAccountJsonPath))
             {
+                Logger.Warning("Billing fetch failed: Missing BigQuery settings.");
                 ActualSpendUSD = -1;
+                CurrentOperationStatus = $"Billing fetch failed: Missing BigQuery settings.";
                 return;
             }
             var client = new BigQueryBillingClient(Settings.BigQueryProjectId, Settings.BigQueryDataset, Settings.BigQueryTable, Settings.GemmaServiceAccountJsonPath);
             try
             {
-                ActualSpendUSD = await client.GetCurrentMonthSpendUSDAsync();
+                double spend = await client.GetCurrentMonthSpendUSDAsync();
+                ActualSpendUSD = spend;
+                Logger.Information("Billing fetch succeeded. Spend: ${Spend:F2}", spend);
+                CurrentOperationStatus = $"Current Google Cloud spend: ${spend:F2}";
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.Error(ex, "Billing fetch failed.");
                 ActualSpendUSD = -1;
+                CurrentOperationStatus = $"Billing fetch failed: {ex.Message}";
             }
         }
 

@@ -89,8 +89,16 @@ namespace DaminionOllamaApp.Services
                     if (App.Logger != null) App.Logger.Log($"Preparing Ollama request payload for {item.FileName}");
                 }
 
-                reportProgress?.Invoke($"Processing: {item.FileName} - Sending to Ollama...");
-                if (App.Logger != null) App.Logger.Log($"Sending {item.FileName} to AI provider: {(settings.UseOpenRouter ? "OpenRouter" : "Ollama")}");
+                string providerName = settings.SelectedAiProvider switch
+                {
+                    AiProvider.Gemma => "Google (Gemma)",
+                    AiProvider.OpenRouter => "OpenRouter",
+                    AiProvider.Ollama => "Ollama",
+                    _ => "Unknown Provider"
+                };
+                item.StatusMessage = $"Processing: {item.FileName} - Sending to {providerName}...";
+                reportProgress?.Invoke(item.StatusMessage);
+                if (App.Logger != null) App.Logger.Log($"Sending {item.FileName} to AI provider: {providerName}");
                 if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
 
                 // 2. Call AI API (Ollama, OpenRouter, or Gemma)
