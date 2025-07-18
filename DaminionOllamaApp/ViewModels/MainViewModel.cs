@@ -59,6 +59,129 @@ namespace DaminionOllamaApp.ViewModels
         /// This instance is shared across all ViewModels to ensure consistency.
         /// </summary>
         public AppSettings AppSettings { get; }
+
+        private int _activeTabIndex;
+        /// <summary>
+        /// The index of the currently selected tab in the main window.
+        /// 0 = Local File Tagger, 1 = Daminion Query Tagger, 2 = Metadata Tidy-up
+        /// </summary>
+        public int ActiveTabIndex
+        {
+            get => _activeTabIndex;
+            set
+            {
+                if (_activeTabIndex != value)
+                {
+                    _activeTabIndex = value;
+                    OnPropertyChanged(nameof(ActiveTabIndex));
+                    // Also update billing info properties
+                    OnPropertyChanged(nameof(BillingProvider));
+                    OnPropertyChanged(nameof(ActualSpendUSD));
+                    OnPropertyChanged(nameof(FreeTierLimit));
+                    OnPropertyChanged(nameof(FreeTierExceeded));
+                    OnPropertyChanged(nameof(RefreshBillingCommand));
+                }
+            }
+        }
+
+        private LocalFileTaggerViewModel GetActiveLocalFileTaggerVM() => LocalFileTaggerVM;
+        private DaminionCollectionTaggerViewModel GetActiveDaminionCollectionTaggerVM() => DaminionCollectionTaggerVM;
+        private MetadataTidyUpViewModel GetActiveMetadataTidyUpVM() => MetadataTidyUpVM;
+
+        /// <summary>
+        /// The provider currently used for billing (Gemma/Google, OpenRouter, Ollama).
+        /// </summary>
+        public string BillingProvider
+        {
+            get
+            {
+                switch (ActiveTabIndex)
+                {
+                    case 0: // Local File Tagger
+                        return LocalFileTaggerVM?.Settings?.SelectedAiProvider switch
+                        {
+                            Models.AiProvider.Gemma => "Google (Gemma/BigQuery)",
+                            Models.AiProvider.OpenRouter => "OpenRouter",
+                            Models.AiProvider.Ollama => "Ollama",
+                            _ => "Unknown"
+                        };
+                    case 1: // Daminion Query Tagger
+                        return DaminionCollectionTaggerVM?.Settings?.SelectedAiProvider switch
+                        {
+                            Models.AiProvider.Gemma => "Google (Gemma/BigQuery)",
+                            Models.AiProvider.OpenRouter => "OpenRouter",
+                            Models.AiProvider.Ollama => "Ollama",
+                            _ => "Unknown"
+                        };
+                    case 2: // Metadata Tidy-up
+                        return MetadataTidyUpVM?.Settings?.SelectedAiProvider switch
+                        {
+                            Models.AiProvider.Gemma => "Google (Gemma/BigQuery)",
+                            Models.AiProvider.OpenRouter => "OpenRouter",
+                            Models.AiProvider.Ollama => "Ollama",
+                            _ => "Unknown"
+                        };
+                    default:
+                        return "Unknown";
+                }
+            }
+        }
+
+        public double ActualSpendUSD
+        {
+            get
+            {
+                switch (ActiveTabIndex)
+                {
+                    case 0: return LocalFileTaggerVM?.ActualSpendUSD ?? -1;
+                    case 1: return DaminionCollectionTaggerVM?.ActualSpendUSD ?? -1;
+                    case 2: return MetadataTidyUpVM?.ActualSpendUSD ?? -1;
+                    default: return -1;
+                }
+            }
+        }
+
+        public double FreeTierLimit
+        {
+            get
+            {
+                switch (ActiveTabIndex)
+                {
+                    case 0: return LocalFileTaggerVM?.GetFreeTierForSelectedModel() ?? 0;
+                    case 1: return DaminionCollectionTaggerVM?.GetFreeTierForSelectedModel() ?? 0;
+                    case 2: return MetadataTidyUpVM?.GetFreeTierForSelectedModel() ?? 0;
+                    default: return 0;
+                }
+            }
+        }
+
+        public bool FreeTierExceeded
+        {
+            get
+            {
+                switch (ActiveTabIndex)
+                {
+                    case 0: return LocalFileTaggerVM?.ShowActualSpendAlert ?? false;
+                    case 1: return DaminionCollectionTaggerVM?.ShowActualSpendAlert ?? false;
+                    case 2: return MetadataTidyUpVM?.ShowActualSpendAlert ?? false;
+                    default: return false;
+                }
+            }
+        }
+
+        public System.Windows.Input.ICommand RefreshBillingCommand
+        {
+            get
+            {
+                switch (ActiveTabIndex)
+                {
+                    case 0: return LocalFileTaggerVM?.RefreshActualSpendCommand;
+                    case 1: return DaminionCollectionTaggerVM?.RefreshActualSpendCommand;
+                    case 2: return MetadataTidyUpVM?.RefreshActualSpendCommand;
+                    default: return null;
+                }
+            }
+        }
         #endregion
 
         #region Constructor

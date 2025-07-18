@@ -7,6 +7,7 @@
         xmlns:viewModels="clr-namespace:DaminionOllamaApp.ViewModels"
         xmlns:models="clr-namespace:DaminionOllamaApp.Models"
         xmlns:converters="clr-namespace:DaminionOllamaApp.Converters"
+        xmlns:views="clr-namespace:DaminionOllamaApp.Views"
         mc:Ignorable="d"
         Title="Daminion Llama Processor" Height="600" Width="900">
     <Window.Resources>
@@ -22,6 +23,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" /> <!-- Billing Info Panel -->
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -33,7 +35,10 @@
             </MenuItem>
         </Menu>
 
-        <TabControl Grid.Row="1" Margin="5">
+        <!-- Billing Info Panel -->
+        <views:BillingInfoPanel Grid.Row="1" DataContext="{Binding}" />
+
+        <TabControl Grid.Row="2" Margin="5" SelectedIndex="{Binding ActiveTabIndex, Mode=TwoWay}">
             <TabItem Header="Local File Tagger">
                 <Grid Margin="5" DataContext="{Binding LocalFileTaggerVM}">
                     <Grid.RowDefinitions>
