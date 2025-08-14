@@ -30,6 +30,7 @@
         <Menu Grid.Row="0">
             <MenuItem Header="_File">
                 <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
+                <MenuItem Header="_Training Form" Command="{Binding OpenTrainingFormCommand}" />
                 <Separator />
                 <MenuItem Header="E_xit" Command="{Binding ExitCommand}" />
             </MenuItem>

@@ -161,6 +161,48 @@ namespace DaminionOllamaApp.ViewModels
             set { SetProperty(ref _descriptionPrefixToTrim, value); }
         }
 
+        /// <summary>
+        /// Gets the actual spend in USD for the current billing period.
+        /// </summary>
+        public double ActualSpendUSD
+        {
+            get => -1; // Placeholder - implement actual billing logic if needed
+        }
+
+        /// <summary>
+        /// Gets whether the free tier has been exceeded for the selected model.
+        /// </summary>
+        public bool ShowActualSpendAlert
+        {
+            get => false; // Placeholder - implement actual logic if needed
+        }
+
+        /// <summary>
+        /// Command to refresh the actual spend information.
+        /// </summary>
+        public ICommand RefreshActualSpendCommand { get; }
+
+        /// <summary>
+        /// Gets the free tier limit for the selected model.
+        /// </summary>
+        public double GetFreeTierForSelectedModel()
+        {
+            var modelName = Settings.SelectedAiProvider switch
+            {
+                AiProvider.Gemma => Settings.GemmaModelName,
+                AiProvider.OpenRouter => Settings.OpenRouterModelName,
+                AiProvider.Ollama => Settings.OllamaModelName,
+                _ => null
+            };
+            if (string.IsNullOrEmpty(modelName)) return 0;
+            if (ModelPricingTable.Pricing.TryGetValue(modelName, out var pricing))
+            {
+                // Free tier is for input tokens; convert to $ using input token price
+                return (pricing.FreeInputTokens / 1000.0) * pricing.PricePer1KInputTokens;
+            }
+            return 0;
+        }
+
         public ICommand AddFilesCommand { get; }
         public ICommand DaminionLoginCommand { get; }
         public ICommand LoadDaminionItemsCommand { get; }
@@ -186,6 +228,7 @@ namespace DaminionOllamaApp.ViewModels
             LoadDaminionItemsCommand = new RelayCommand(async param => await LoadDaminionItemsByQueryAsync(), param => CanLoadDaminionItems());
             StartCleanupCommand = new RelayCommand(async param => await StartCleanupAsync(), param => CanStartCleanup());
             StopCleanupCommand = new RelayCommand(param => StopCleanup(), param => CanStopCleanup());
+            RefreshActualSpendCommand = new RelayCommand(param => { /* Placeholder - implement actual refresh logic if needed */ });
         }
 
         private void UpdateCommandStates()

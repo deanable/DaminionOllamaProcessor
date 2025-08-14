@@ -1,0 +1,40 @@
+{
+  "ModelName": "DaminionTorchSharpModel",
+  "Version": "1.0",
+  "CreatedAt": "2025-08-14T22:37:03.0446512+02:00",
+  "Framework": "TorchSharp",
+  "InputShape": [
+    1,
+    128
+  ],
+  "OutputShape": [
+    1,
+    10
+  ],
+  "TrainingConfig": {
+    "learningRate": 0.001,
+    "epochs": 100,
+    "batchSize": 32,
+    "validationSplit": 0.2,
+    "featureDimension": 128,
+    "hiddenDimensions": [
+      256,
+      128,
+      64
+    ],
+    "outputDimension": 10,
+    "dropoutRate": 0.2,
+    "weightDecay": 0.0001,
+    "useEarlyStopping": true,
+    "earlyStoppingPatience": 10,
+    "earlyStoppingMinDelta": 0.001,
+    "modelArchitecture": "FeedForward",
+    "optimizer": "Adam",
+    "lossFunction": "BCE",
+    "outputPath": "models/",
+    "modelName": "daminion_classifier",
+    "saveOnnx": true,
+    "saveTorchScript": false,
+    "device": "System.Windows.Controls.ComboBoxItem: CUDA"
+  }
+}

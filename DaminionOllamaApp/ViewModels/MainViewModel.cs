@@ -4,6 +4,7 @@ using DaminionOllamaApp.Services;
 using DaminionOllamaApp.Utils;
 using DaminionOllamaApp.Views;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 
@@ -25,6 +26,11 @@ namespace DaminionOllamaApp.ViewModels
         /// Command to open the settings window for configuring application preferences.
         /// </summary>
         public ICommand OpenSettingsCommand { get; }
+        
+        /// <summary>
+        /// Command to open the training form for ONNX model training.
+        /// </summary>
+        public ICommand OpenTrainingFormCommand { get; }
         
         /// <summary>
         /// Command to gracefully exit the application.
@@ -197,6 +203,7 @@ namespace DaminionOllamaApp.ViewModels
 
             // Initialize commands with their respective handlers
             OpenSettingsCommand = new RelayCommand(param => OpenSettingsWindow());
+            OpenTrainingFormCommand = new RelayCommand(param => OpenTrainingForm());
             ExitCommand = new RelayCommand(param => ExitApplication());
 
             // Initialize child ViewModels with shared settings and services
@@ -242,6 +249,235 @@ namespace DaminionOllamaApp.ViewModels
 
             // Show the settings window as a modal dialog
             settingsWindow.ShowDialog();
+        }
+
+        /// <summary>
+        /// Opens the DaminionTorchTrainer application for ONNX model training.
+        /// Launches the training form as a separate process.
+        /// </summary>
+        private void OpenTrainingForm()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[DEBUG] OpenTrainingForm method called");
+                
+                // Get the path to the DaminionTorchTrainer executable
+                // Use a simple relative path approach
+                var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                var assemblyDirectory = System.IO.Path.GetDirectoryName(assemblyLocation);
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Assembly directory: {assemblyDirectory}");
+                
+                // Simple approach: go up 4 levels from the current assembly location to reach solution root
+                var solutionRoot = assemblyDirectory;
+                for (int i = 0; i < 4; i++)
+                {
+                    solutionRoot = System.IO.Directory.GetParent(solutionRoot)?.FullName;
+                    if (string.IsNullOrEmpty(solutionRoot))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] Could not go up {i + 1} levels from assembly directory");
+                        break;
+                    }
+                }
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Solution root: {solutionRoot}");
+                
+                if (string.IsNullOrEmpty(solutionRoot))
+                {
+                    System.Diagnostics.Debug.WriteLine("[DEBUG] Could not determine solution root directory");
+                    MessageBox.Show("Could not determine solution root directory.", 
+                                  "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+                
+                var trainerPath = System.IO.Path.Combine(solutionRoot, "DaminionTorchTrainer", "bin", "Debug", "net8.0-windows10.0.26100.0", "DaminionTorchTrainer.exe");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Trainer path: {trainerPath}");
+                
+                // Check if the executable exists
+                var fileExists = System.IO.File.Exists(trainerPath);
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] File exists: {fileExists}");
+                
+                if (!fileExists)
+                {
+                    System.Diagnostics.Debug.WriteLine("[DEBUG] Training form executable not found at calculated path, trying to find it...");
+                    
+                    // Try to find the executable by searching common locations
+                    var possiblePaths = new List<string>();
+                    
+                    // Try relative to current assembly - go up 4 levels to solution root, then to DaminionTorchTrainer
+                    if (!string.IsNullOrEmpty(assemblyDirectory))
+                    {
+                        var currentDir = assemblyDirectory;
+                        for (int i = 0; i < 4; i++)
+                        {
+                            currentDir = System.IO.Directory.GetParent(currentDir)?.FullName;
+                            if (string.IsNullOrEmpty(currentDir)) break;
+                        }
+                        if (!string.IsNullOrEmpty(currentDir))
+                        {
+                            possiblePaths.Add(System.IO.Path.Combine(currentDir, "DaminionTorchTrainer", "bin", "Debug", "net8.0-windows10.0.26100.0", "DaminionTorchTrainer.exe"));
+                        }
+                    }
+                    
+                    // Try relative to solution root if we found it
+                    if (!string.IsNullOrEmpty(solutionRoot))
+                    {
+                        possiblePaths.Add(System.IO.Path.Combine(solutionRoot, "DaminionTorchTrainer", "bin", "Debug", "net8.0-windows10.0.26100.0", "DaminionTorchTrainer.exe"));
+                        possiblePaths.Add(System.IO.Path.Combine(solutionRoot, "DaminionTorchTrainer", "bin", "Release", "net8.0-windows10.0.26100.0", "DaminionTorchTrainer.exe"));
+                    }
+                    
+                    // Try to find any DaminionTorchTrainer.exe in the solution directory
+                    if (!string.IsNullOrEmpty(solutionRoot))
+                    {
+                        try
+                        {
+                            var allExes = System.IO.Directory.GetFiles(solutionRoot, "DaminionTorchTrainer.exe", System.IO.SearchOption.AllDirectories);
+                            possiblePaths.AddRange(allExes);
+                        }
+                        catch (Exception searchEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[DEBUG] Error searching for executable: {searchEx.Message}");
+                        }
+                    }
+                    
+                    // Try each possible path
+                    foreach (var path in possiblePaths)
+                    {
+                        var normalizedPath = System.IO.Path.GetFullPath(path);
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] Trying path: {normalizedPath}");
+                        
+                        if (System.IO.File.Exists(normalizedPath))
+                        {
+                            trainerPath = normalizedPath;
+                            fileExists = true;
+                            System.Diagnostics.Debug.WriteLine($"[DEBUG] Found executable at: {trainerPath}");
+                            break;
+                        }
+                    }
+                    
+                    if (!fileExists)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[DEBUG] Training form executable not found in any location");
+                        MessageBox.Show($"Training form executable not found at: {trainerPath}\nPlease ensure the DaminionTorchTrainer project has been built.", 
+                                      "Training Form Not Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine("[DEBUG] Launching training form...");
+                
+                // Try multiple approaches to launch the process
+                Process process = null;
+                
+                // Approach 1: Use Process.Start with ProcessStartInfo
+                try
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = trainerPath,
+                        UseShellExecute = true,
+                        WorkingDirectory = System.IO.Path.GetDirectoryName(trainerPath)
+                    };
+
+                    // Pass authentication credentials as command line arguments
+                    if (!string.IsNullOrEmpty(AppSettings.DaminionServerUrl) &&
+                        !string.IsNullOrEmpty(AppSettings.DaminionUsername) &&
+                        !string.IsNullOrEmpty(AppSettings.DaminionPassword))
+                    {
+                        startInfo.Arguments = $"--daminion-url \"{AppSettings.DaminionServerUrl}\" " +
+                                             $"--daminion-username \"{AppSettings.DaminionUsername}\" " +
+                                             $"--daminion-password \"{AppSettings.DaminionPassword}\"";
+                        System.Diagnostics.Debug.WriteLine("[DEBUG] Passing authentication credentials to training form");
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] Using ProcessStartInfo with WorkingDirectory: {startInfo.WorkingDirectory}");
+                    process = Process.Start(startInfo);
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] Process started successfully with ID: {process?.Id}");
+                    
+                    // Try to bring the window to the foreground
+                    if (process != null)
+                    {
+                        try
+                        {
+                            // Wait a moment for the window to appear
+                            System.Threading.Thread.Sleep(500);
+                            process.WaitForInputIdle(3000); // Wait for the process to be ready for input
+                            
+                            // Try to bring the window to the foreground
+                            if (!process.HasExited)
+                            {
+                                System.Diagnostics.Debug.WriteLine("[DEBUG] Attempting to bring window to foreground");
+                                // Note: SetForegroundWindow requires the process to be in the foreground
+                                // This is a limitation of Windows security
+                            }
+                        }
+                        catch (Exception foregroundEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[DEBUG] Could not bring window to foreground: {foregroundEx.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex1)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] Approach 1 failed: {ex1.Message}");
+                    
+                    // Approach 2: Try without UseShellExecute
+                    try
+                    {
+                        var startInfo2 = new ProcessStartInfo
+                        {
+                            FileName = trainerPath,
+                            UseShellExecute = false,
+                            WorkingDirectory = System.IO.Path.GetDirectoryName(trainerPath)
+                        };
+                        
+                        System.Diagnostics.Debug.WriteLine("[DEBUG] Trying Approach 2 without UseShellExecute");
+                        process = Process.Start(startInfo2);
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] Process started successfully with ID: {process?.Id}");
+                    }
+                    catch (Exception ex2)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] Approach 2 failed: {ex2.Message}");
+                        
+                        // Approach 3: Try with just the filename
+                        try
+                        {
+                            System.Diagnostics.Debug.WriteLine("[DEBUG] Trying Approach 3 with just filename");
+                            process = Process.Start(trainerPath);
+                            System.Diagnostics.Debug.WriteLine($"[DEBUG] Process started successfully with ID: {process?.Id}");
+                        }
+                        catch (Exception ex3)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[DEBUG] Approach 3 failed: {ex3.Message}");
+                            throw new Exception($"All launch approaches failed. Last error: {ex3.Message}");
+                        }
+                    }
+                }
+                
+                if (process != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] Process launched successfully. ID: {process.Id}, HasExited: {process.HasExited}");
+                    
+                    // Wait a moment to see if it exits immediately
+                    if (!process.WaitForExit(2000)) // Wait 2 seconds
+                    {
+                        System.Diagnostics.Debug.WriteLine("[DEBUG] Process is still running after 2 seconds");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] Process exited with code: {process.ExitCode}");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[DEBUG] Process.Start returned null");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Exception occurred: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] Stack trace: {ex.StackTrace}");
+                MessageBox.Show($"Error launching training form: {ex.Message}", 
+                              "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         /// <summary>

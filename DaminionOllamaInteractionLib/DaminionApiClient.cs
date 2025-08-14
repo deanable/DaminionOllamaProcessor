@@ -48,7 +48,17 @@ namespace DaminionOllamaInteractionLib
         }
 
         /// <summary>
-        /// Checks if the Ollama server is running and reachable.
+        /// Sets the API base URL for the Daminion server.
+        /// </summary>
+        /// <param name="apiBaseUrl">The base URL of the Daminion API</param>
+        public void SetApiBaseUrl(string apiBaseUrl)
+        {
+            _apiBaseUrl = apiBaseUrl?.TrimEnd('/');
+            Console.WriteLine($"[DaminionApiClient] API base URL set to: {_apiBaseUrl}");
+        }
+
+        /// <summary>
+        /// Checks if the Daminion server is running and reachable.
         /// </summary>
         /// <returns>True if the server responds positively, false otherwise.</returns>
         public async Task<bool> CheckConnectionAsync()

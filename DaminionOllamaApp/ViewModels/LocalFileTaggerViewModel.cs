@@ -367,7 +367,7 @@ namespace DaminionOllamaApp.ViewModels
             }
         }
 
-        private double GetFreeTierForSelectedModel()
+        public double GetFreeTierForSelectedModel()
         {
             var modelName = Settings.SelectedAiProvider switch
             {
