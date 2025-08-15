@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
 using DaminionOllamaInteractionLib;
 using DaminionTorchTrainer.Models;
@@ -55,6 +56,11 @@ namespace DaminionTorchTrainer.ViewModels
         private string _localImageFolder = "";
         private bool _includeSubfolders = true;
         private DataSourceType _selectedDataSource = DataSourceType.API;
+        
+        // Training log and threshold properties
+        private ObservableCollection<string> _trainingLogs = new ObservableCollection<string>();
+        private double _resultThreshold = 50.0; // Default to 50%
+        private ObservableCollection<TrainingResult> _trainingResults = new ObservableCollection<TrainingResult>();
 
         public MainViewModel()
         {
@@ -90,6 +96,8 @@ namespace DaminionTorchTrainer.ViewModels
             BrowseImageCommand = new RelayCommand(BrowseImage);
             TestModelCommand = new RelayCommand(TestModel, CanTestModel);
             RefreshModelsCommand = new AsyncRelayCommand(RefreshModelsAsync);
+            ClearLogsCommand = new RelayCommand(ClearTrainingLogs);
+            ExportLogsCommand = new RelayCommand(ExportTrainingLogs);
 
             // Initialize model list
             _ = RefreshModelsAsync();
@@ -254,6 +262,46 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
+        // Training log and threshold properties
+        public ObservableCollection<string> TrainingLogs
+        {
+            get => _trainingLogs;
+            set => SetProperty(ref _trainingLogs, value);
+        }
+
+        public double ResultThreshold
+        {
+            get => _resultThreshold;
+            set 
+            { 
+                if (SetProperty(ref _resultThreshold, value))
+                {
+                    SaveSettingsToRegistry();
+                    // Trigger re-filter if we have current predictions to filter
+                    if (_currentPredictions.Count > 0)
+                    {
+                        // Ensure we're on the UI thread
+                        if (Application.Current?.Dispatcher != null)
+                        {
+                            Application.Current.Dispatcher.BeginInvoke(new Action(FilterCurrentPredictions));
+                        }
+                        else
+                        {
+                            FilterCurrentPredictions();
+                        }
+                    }
+                }
+            }
+        }
+
+        public ObservableCollection<TrainingResult> TrainingResults
+        {
+            get => _trainingResults;
+            set => SetProperty(ref _trainingResults, value);
+        }
+
+
+
         #endregion
 
         #region Commands
@@ -273,6 +321,8 @@ namespace DaminionTorchTrainer.ViewModels
         public ICommand BrowseImageCommand { get; }
         public ICommand TestModelCommand { get; }
         public ICommand RefreshModelsCommand { get; }
+        public ICommand ClearLogsCommand { get; }
+        public ICommand ExportLogsCommand { get; }
 
         // Model Testing Properties
         private string? _selectedModel;
@@ -316,12 +366,24 @@ namespace DaminionTorchTrainer.ViewModels
             set => SetProperty(ref _testStatus, value);
         }
 
+        public ObservableCollection<string> TestResults
+        {
+            get => _testResults;
+            set => SetProperty(ref _testResults, value);
+        }
+
         private List<string> _availableModels = new();
         public List<string> AvailableModels
         {
             get => _availableModels;
             set => SetProperty(ref _availableModels, value);
         }
+
+        // Store current predictions for re-filtering
+        private List<(string term, float probability)> _currentPredictions = new();
+        
+        // Test results collection
+        private ObservableCollection<string> _testResults = new ObservableCollection<string>();
 
         #endregion
 
@@ -469,6 +531,20 @@ namespace DaminionTorchTrainer.ViewModels
                 _cancellationTokenSource = new CancellationTokenSource();
                 Status = "Starting training...";
 
+                // Add initial log entry
+                var startLog = $"[{DateTime.Now:HH:mm:ss}] Training started - Dataset: {CurrentDataset.Name}, Samples: {CurrentDataset.TotalSamples}";
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TrainingLogs.Add(startLog);
+                    });
+                }
+                else
+                {
+                    TrainingLogs.Add(startLog);
+                }
+
                 // Create trainer
                 _trainer = new TorchSharpTrainer(TrainingConfig, OnTrainingProgress);
 
@@ -476,6 +552,20 @@ namespace DaminionTorchTrainer.ViewModels
                 var results = await Task.Run(() => _trainer.TrainAsync(CurrentDataset, _cancellationTokenSource.Token));
 
                 Status = $"Training completed. Final accuracy: {results.FinalValidationAccuracy:F4}";
+
+                // Add completion log entry
+                var completionLog = $"[{DateTime.Now:HH:mm:ss}] Training completed - Final accuracy: {results.FinalValidationAccuracy:F4}";
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TrainingLogs.Add(completionLog);
+                    });
+                }
+                else
+                {
+                    TrainingLogs.Add(completionLog);
+                }
 
                 // Auto-export ONNX model if enabled
                 if (AutoExportOnnx && _trainer != null)
@@ -500,10 +590,34 @@ namespace DaminionTorchTrainer.ViewModels
             catch (OperationCanceledException)
             {
                 Status = "Training was cancelled.";
+                var cancelLog = $"[{DateTime.Now:HH:mm:ss}] Training was cancelled.";
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TrainingLogs.Add(cancelLog);
+                    });
+                }
+                else
+                {
+                    TrainingLogs.Add(cancelLog);
+                }
             }
             catch (Exception ex)
             {
                 Status = $"Error during training: {ex.Message}";
+                var errorLog = $"[{DateTime.Now:HH:mm:ss}] Training error: {ex.Message}";
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TrainingLogs.Add(errorLog);
+                    });
+                }
+                else
+                {
+                    TrainingLogs.Add(errorLog);
+                }
             }
             finally
             {
@@ -519,18 +633,125 @@ namespace DaminionTorchTrainer.ViewModels
             {
                 _cancellationTokenSource?.Cancel();
                 Status = "Stopping training...";
+                var stopLog = $"[{DateTime.Now:HH:mm:ss}] Training stop requested.";
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TrainingLogs.Add(stopLog);
+                    });
+                }
+                else
+                {
+                    TrainingLogs.Add(stopLog);
+                }
             }
             catch (Exception ex)
             {
                 Status = $"Error stopping training: {ex.Message}";
+                var errorLog = $"[{DateTime.Now:HH:mm:ss}] Error stopping training: {ex.Message}";
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TrainingLogs.Add(errorLog);
+                    });
+                }
+                else
+                {
+                    TrainingLogs.Add(errorLog);
+                }
             }
         }
 
         private void OnTrainingProgress(TrainingProgress progress)
         {
+            // Ensure we're on the UI thread for all UI updates
+            if (Application.Current?.Dispatcher != null)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    UpdateTrainingProgress(progress);
+                });
+            }
+            else
+            {
+                UpdateTrainingProgress(progress);
+            }
+        }
+
+        private void UpdateTrainingProgress(TrainingProgress progress)
+        {
             CurrentProgress = progress;
             Status = $"Training - Epoch {progress.CurrentEpoch}/{progress.TotalEpochs} - " +
                     $"Loss: {progress.TrainingLoss:F4}, Acc: {progress.TrainingAccuracy:F4}";
+
+            // Add to training logs
+            var logEntry = $"[{DateTime.Now:HH:mm:ss}] Epoch {progress.CurrentEpoch}/{progress.TotalEpochs} - " +
+                          $"Train Loss: {progress.TrainingLoss:F4}, Train Acc: {progress.TrainingAccuracy:F4}, " +
+                          $"Val Loss: {progress.ValidationLoss:F4}, Val Acc: {progress.ValidationAccuracy:F4}";
+            
+            TrainingLogs.Add(logEntry);
+
+            // Add training result
+            var result = new TrainingResult
+            {
+                Epoch = progress.CurrentEpoch,
+                TrainingLoss = progress.TrainingLoss,
+                ValidationLoss = progress.ValidationLoss,
+                TrainingAccuracy = progress.TrainingAccuracy,
+                ValidationAccuracy = progress.ValidationAccuracy,
+                ConfidenceScore = progress.ValidationAccuracy, // Use validation accuracy as confidence
+                Timestamp = DateTime.Now,
+                Details = $"Epoch {progress.CurrentEpoch} completed"
+            };
+
+            TrainingResults.Add(result);
+
+            // Keep only last 1000 log entries to prevent memory issues
+            if (TrainingLogs.Count > 1000)
+            {
+                TrainingLogs.RemoveAt(0);
+            }
+
+            // Keep only last 500 results
+            if (TrainingResults.Count > 500)
+            {
+                TrainingResults.RemoveAt(0);
+            }
+        }
+
+
+
+        private void ClearTrainingLogs()
+        {
+            TrainingLogs.Clear();
+            TrainingResults.Clear();
+            Status = "Training logs cleared.";
+        }
+
+        private void ExportTrainingLogs()
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                    DefaultExt = "txt",
+                    FileName = $"training_logs_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    var logContent = string.Join(Environment.NewLine, TrainingLogs);
+                    System.IO.File.WriteAllText(dialog.FileName, logContent);
+                    Status = "Training logs exported successfully.";
+                }
+            }
+            catch (Exception ex)
+            {
+                Status = $"Error exporting logs: {ex.Message}";
+            }
         }
 
         private void SaveTrainingConfig()
@@ -678,6 +899,15 @@ namespace DaminionTorchTrainer.ViewModels
                 TrainingConfig.BatchSize = RegistryService.LoadInt("BatchSize", 32);
                 TrainingConfig.Device = RegistryService.LoadString("Device") ?? "CPU";
                 
+                // Load threshold setting (convert from old decimal format if needed)
+                var savedThreshold = RegistryService.LoadDouble("ResultThreshold", 50.0);
+                // If the saved value is less than 1, it's in the old decimal format, convert to percentage
+                if (savedThreshold < 1.0)
+                {
+                    savedThreshold = savedThreshold * 100.0;
+                }
+                ResultThreshold = savedThreshold;
+                
                 Console.WriteLine("[DEBUG] Settings loaded from registry successfully");
                 Status = "Settings loaded successfully.";
             }
@@ -713,6 +943,9 @@ namespace DaminionTorchTrainer.ViewModels
                 RegistryService.SaveInt("Epochs", TrainingConfig.Epochs);
                 RegistryService.SaveInt("BatchSize", TrainingConfig.BatchSize);
                 RegistryService.SaveString("Device", TrainingConfig.Device);
+                
+                // Save threshold setting
+                RegistryService.SaveDouble("ResultThreshold", ResultThreshold);
                 
                 Console.WriteLine("[DEBUG] Settings saved to registry successfully");
                 Status = "Settings saved successfully.";
@@ -815,18 +1048,54 @@ namespace DaminionTorchTrainer.ViewModels
         {
             if (string.IsNullOrEmpty(SelectedImagePath) || string.IsNullOrEmpty(SelectedModel))
             {
+                var errorResults = new ObservableCollection<string> { "Please select both a model and an image." };
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TestResults = errorResults;
+                    });
+                }
+                else
+                {
+                    TestResults = errorResults;
+                }
                 TestStatus = "Please select both a model and an image.";
                 return;
             }
 
             try
             {
+                var loadingResults = new ObservableCollection<string> { "Loading model and preprocessing image..." };
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TestResults = loadingResults;
+                    });
+                }
+                else
+                {
+                    TestResults = loadingResults;
+                }
                 TestStatus = "Loading model and preprocessing image...";
                 
                 // Get the model path
                 var modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "model.pt");
                 if (!File.Exists(modelPath))
                 {
+                    var modelNotFoundResults = new ObservableCollection<string> { $"Model file not found: {modelPath}" };
+                    if (Application.Current?.Dispatcher != null)
+                    {
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            TestResults = modelNotFoundResults;
+                        });
+                    }
+                    else
+                    {
+                        TestResults = modelNotFoundResults;
+                    }
                     TestStatus = $"Model file not found: {modelPath}";
                     return;
                 }
@@ -834,6 +1103,18 @@ namespace DaminionTorchTrainer.ViewModels
                 // Load and preprocess the image
                 var imageFeatures = await PreprocessImageAsync(SelectedImagePath);
                 
+                var inferenceResults = new ObservableCollection<string> { "Running inference..." };
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TestResults = inferenceResults;
+                    });
+                }
+                else
+                {
+                    TestResults = inferenceResults;
+                }
                 TestStatus = "Running inference...";
                 
                 // For now, create a simple mock prediction since loading the full model is complex
@@ -844,29 +1125,68 @@ namespace DaminionTorchTrainer.ViewModels
                 var vocabularyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "vocabulary.json");
                 var metadataTerms = await LoadMetadataVocabularyAsync(vocabularyPath);
                 
-                // Format results
-                var results = new List<string>();
+                // Store current predictions for re-filtering
+                _currentPredictions.Clear();
                 for (int i = 0; i < mockPredictions.Length && i < metadataTerms.Count; i++)
                 {
-                    var probability = mockPredictions[i];
-                    var term = metadataTerms[i];
-                    if (probability > 0.1) // Only show terms with >10% probability
+                    _currentPredictions.Add((metadataTerms[i], mockPredictions[i]));
+                }
+                
+                // Format results using threshold (convert percentage to decimal)
+                var thresholdDecimal = ResultThreshold / 100.0;
+                var results = new List<string>();
+                foreach (var (term, probability) in _currentPredictions)
+                {
+                    if (probability >= thresholdDecimal) // Only show terms above threshold
                     {
                         results.Add($"{term}: {probability:P1}");
                     }
                 }
                 
+                // Create new collection to avoid binding issues
+                var newResults = new ObservableCollection<string>();
                 if (results.Count > 0)
                 {
-                    TestStatus = $"Predictions:\n{string.Join("\n", results)}";
+                    newResults.Add($"Predictions (threshold: {ResultThreshold:F0}%):");
+                    foreach (var result in results)
+                    {
+                        newResults.Add(result);
+                    }
+                    TestStatus = $"Found {results.Count} predictions above threshold ({ResultThreshold:F0}%)";
                 }
                 else
                 {
-                    TestStatus = "No significant predictions found (all probabilities < 10%)";
+                    newResults.Add($"No predictions found above threshold ({ResultThreshold:F0}%)");
+                    TestStatus = $"No predictions found above threshold ({ResultThreshold:F0}%)";
+                }
+                
+                // Use dispatcher to ensure UI thread safety
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TestResults = newResults;
+                    });
+                }
+                else
+                {
+                    TestResults = newResults;
                 }
             }
             catch (Exception ex)
             {
+                var errorResults = new ObservableCollection<string> { $"Error testing model: {ex.Message}" };
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TestResults = errorResults;
+                    });
+                }
+                else
+                {
+                    TestResults = errorResults;
+                }
                 TestStatus = $"Error testing model: {ex.Message}";
                 Log.Error(ex, "Error during model testing");
             }
@@ -973,6 +1293,79 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
+        private void FilterCurrentPredictions()
+        {
+            if (_currentPredictions.Count == 0) return;
+
+            try
+            {
+                // Convert percentage to decimal
+                var thresholdDecimal = ResultThreshold / 100.0;
+                var results = new List<string>();
+                
+                Console.WriteLine($"[DEBUG] Filtering predictions with threshold: {ResultThreshold:F0}% ({thresholdDecimal:F3})");
+                Console.WriteLine($"[DEBUG] Total predictions to filter: {_currentPredictions.Count}");
+                
+                foreach (var (term, probability) in _currentPredictions)
+                {
+                    if (probability >= thresholdDecimal)
+                    {
+                        results.Add($"{term}: {probability:P1}");
+                    }
+                }
+                
+                Console.WriteLine($"[DEBUG] Predictions above threshold: {results.Count}");
+                
+                // Create a new collection to avoid UI binding issues
+                var newResults = new ObservableCollection<string>();
+                
+                if (results.Count > 0)
+                {
+                    newResults.Add($"Predictions (threshold: {ResultThreshold:F0}%):");
+                    foreach (var result in results)
+                    {
+                        newResults.Add(result);
+                    }
+                    TestStatus = $"Found {results.Count} predictions above threshold ({ResultThreshold:F0}%)";
+                }
+                else
+                {
+                    newResults.Add($"No predictions found above threshold ({ResultThreshold:F0}%)");
+                    TestStatus = $"No predictions found above threshold ({ResultThreshold:F0}%)";
+                }
+                
+                // Use dispatcher to ensure UI thread safety
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TestResults = newResults;
+                    });
+                }
+                else
+                {
+                    TestResults = newResults;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DEBUG] Error in FilterCurrentPredictions: {ex.Message}");
+                // Fallback: create a simple error message
+                var errorResults = new ObservableCollection<string> { $"Error filtering predictions: {ex.Message}" };
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        TestResults = errorResults;
+                    });
+                }
+                else
+                {
+                    TestResults = errorResults;
+                }
+            }
+        }
+
         #endregion
 
         #region INotifyPropertyChanged
@@ -1062,3 +1455,4 @@ namespace DaminionTorchTrainer.ViewModels
         }
     }
 }
+

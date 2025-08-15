@@ -452,6 +452,51 @@
                     </Grid>
                 </GroupBox>
 
+                <!-- Training Status and Results -->
+                <GroupBox Header="Training Status &amp; Results" Style="{StaticResource ModernGroupBox}" Height="238">
+                    <StackPanel>
+                        <!-- Training Logs -->
+                        <Label Content="Training Logs:" Style="{StaticResource ModernLabel}"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      MaxHeight="200"
+                                      Margin="3">
+                            <ListBox ItemsSource="{Binding TrainingLogs}"
+                                     Background="White"
+                                     BorderThickness="1"
+                                     BorderBrush="#BDBDBD"
+                                     FontFamily="Consolas"
+                                     FontSize="10" Height="93">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" 
+                                                   TextWrapping="Wrap"
+                                                   Margin="2"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </ScrollViewer>
+
+                        <!-- Results Count -->
+                        <StackPanel Orientation="Horizontal" Margin="3" Height="23">
+                            <TextBlock Text="{Binding TrainingResults.Count, StringFormat='Total training results: {0}'}" 
+                                       FontWeight="SemiBold"
+                                       Foreground="#666"/>
+                        </StackPanel>
+                        
+                        <!-- Log Action Buttons -->
+                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                            <Button Content="Clear Logs" 
+                                    Command="{Binding ClearLogsCommand}" 
+                                    Style="{StaticResource ModernButton}"
+                                    Margin="0,0,5,0"/>
+                            <Button Content="Export Logs" 
+                                    Command="{Binding ExportLogsCommand}" 
+                                    Style="{StaticResource ModernButton}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+
                 <!-- Settings -->
                 <GroupBox Header="Settings" Style="{StaticResource ModernGroupBox}">
                     <StackPanel>
@@ -464,7 +509,7 @@
 
             <!-- Column 4 - Model Testing -->
             <StackPanel Grid.Column="3" Margin="7,0,0,0">
-                <GroupBox Header="Model Testing" Style="{StaticResource ModernGroupBox}">
+                <GroupBox Header="Model Testing" Style="{StaticResource ModernGroupBox}" Height="807">
                     <StackPanel>
                         <Label Content="Select Model:" Style="{StaticResource ModernLabel}"/>
                         <StackPanel Orientation="Horizontal" Margin="3">
@@ -496,15 +541,49 @@
                                Margin="0,10,0,10" 
                                Stretch="UniformToFill"/>
 
-                        <Button Content="Test Model" 
-                                Command="{Binding TestModelCommand}" 
-                                Style="{StaticResource ModernButton}" 
-                                Margin="0,8,0,0"/>
+                        <!-- Prediction Threshold Filter -->
+                        <Label Content="Prediction Threshold:" Style="{StaticResource ModernLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="3">
+                            <Slider Value="{Binding ResultThreshold, UpdateSourceTrigger=PropertyChanged}" 
+                                    Minimum="0" 
+                                    Maximum="100" 
+                                    TickFrequency="10" 
+                                    TickPlacement="BottomRight"
+                                    Width="150"
+                                    VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding ResultThreshold, StringFormat='{}{0:F0}%'}" 
+                                       Margin="10,0,0,0" 
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       MinWidth="40"/>
+                        </StackPanel>
 
-                        <TextBlock Text="{Binding TestStatus}" 
-                                   Margin="3" 
-                                   TextWrapping="Wrap" 
-                                   Foreground="#666"/>
+                                                 <Button Content="Test Model" 
+                                 Command="{Binding TestModelCommand}" 
+                                 Style="{StaticResource ModernButton}" 
+                                 Margin="0,8,0,0"/>
+
+                         <!-- Test Results Display -->
+                         <Label Content="Test Results:" Style="{StaticResource ModernLabel}" Margin="3,10,3,1"/>
+                         <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                                       HorizontalScrollBarVisibility="Disabled"
+                                       MaxHeight="300"
+                                       Margin="3" Height="465">
+                             <ListBox ItemsSource="{Binding TestResults}"
+                                      Background="White"
+                                      BorderThickness="1"
+                                      BorderBrush="#BDBDBD"
+                                      FontFamily="Consolas"
+                                      FontSize="10" Height="440" ScrollViewer.CanContentScroll="True">
+                                 <ListBox.ItemTemplate>
+                                     <DataTemplate>
+                                         <TextBlock Text="{Binding}" 
+                                                    TextWrapping="Wrap"
+                                                    Margin="2"/>
+                                     </DataTemplate>
+                                 </ListBox.ItemTemplate>
+                             </ListBox>
+                         </ScrollViewer>
                     </StackPanel>
                 </GroupBox>
             </StackPanel>
