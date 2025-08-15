@@ -432,7 +432,15 @@ namespace DaminionOllamaInteractionLib
             int pageSize = 100, // Defaulting to a reasonable page size
             int pageIndex = 0)
         {
-            Console.WriteLine($"[DaminionApiClient] Attempting SearchMediaItemsAsync with queryLine: '{queryLine}' and f_operators: '{f_operators}'");
+            Console.WriteLine($"[DaminionApiClient] ===== SEARCH MEDIA ITEMS DEBUG START =====");
+            Console.WriteLine($"[DaminionApiClient] Input parameters:");
+            Console.WriteLine($"[DaminionApiClient]   - queryLine: '{queryLine}'");
+            Console.WriteLine($"[DaminionApiClient]   - f_operators: '{f_operators}'");
+            Console.WriteLine($"[DaminionApiClient]   - pageSize: {pageSize}");
+            Console.WriteLine($"[DaminionApiClient]   - pageIndex: {pageIndex}");
+            Console.WriteLine($"[DaminionApiClient]   - IsAuthenticated: {IsAuthenticated}");
+            Console.WriteLine($"[DaminionApiClient]   - _apiBaseUrl: '{_apiBaseUrl}'");
+            
             if (!IsAuthenticated || string.IsNullOrEmpty(_apiBaseUrl))
             {
                 Console.Error.WriteLine("[DaminionApiClient] SearchMediaItems Error: Client is not authenticated or API base URL is not set.");
@@ -457,16 +465,26 @@ namespace DaminionOllamaInteractionLib
 
             string queryString = await new FormUrlEncodedContent(queryParams).ReadAsStringAsync();
             string searchUrl = $"{_apiBaseUrl}/api/mediaItems/get?{queryString}"; // [cite: 69]
-            Console.WriteLine($"[DaminionApiClient] SearchMediaItems URL: {searchUrl}");
+            
+            Console.WriteLine($"[DaminionApiClient] Query parameters:");
+            foreach (var param in queryParams)
+            {
+                Console.WriteLine($"[DaminionApiClient]   - {param.Key}: '{param.Value}'");
+            }
+            Console.WriteLine($"[DaminionApiClient] Full URL: {searchUrl}");
 
             try
             {
                 _httpClient.DefaultRequestHeaders.Accept.Clear();
                 _httpClient.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
+                Console.WriteLine($"[DaminionApiClient] Sending HTTP GET request...");
                 HttpResponseMessage response = await _httpClient.GetAsync(searchUrl);
                 string responseBody = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[DaminionApiClient] SearchMediaItems Response Status Code: {response.StatusCode}");
+                Console.WriteLine($"[DaminionApiClient] Response received:");
+                Console.WriteLine($"[DaminionApiClient]   - Status Code: {response.StatusCode}");
+                Console.WriteLine($"[DaminionApiClient]   - Response Body Length: {responseBody.Length}");
+                Console.WriteLine($"[DaminionApiClient]   - Response Body (first 500 chars): {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}");
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -474,6 +492,7 @@ namespace DaminionOllamaInteractionLib
                     try
                     {
                         searchResponse = System.Text.Json.JsonSerializer.Deserialize<DaminionSearchMediaItemsResponse>(responseBody);
+                        Console.WriteLine($"[DaminionApiClient] JSON deserialization successful");
                     }
                     catch (System.Text.Json.JsonException jsonEx)
                     {
@@ -483,6 +502,21 @@ namespace DaminionOllamaInteractionLib
 
                     if (searchResponse != null && searchResponse.Success) // [cite: 83]
                     {
+                        Console.WriteLine($"[DaminionApiClient] ===== SEARCH RESPONSE ANALYSIS =====");
+                        Console.WriteLine($"[DaminionApiClient] Search successful:");
+                        Console.WriteLine($"[DaminionApiClient]   - Success: {searchResponse.Success}");
+                        Console.WriteLine($"[DaminionApiClient]   - Error: '{searchResponse.Error}'");
+                        Console.WriteLine($"[DaminionApiClient]   - ErrorCode: {searchResponse.ErrorCode}");
+                        Console.WriteLine($"[DaminionApiClient]   - MediaItems count: {searchResponse.MediaItems?.Count ?? 0}");
+                        
+                        if (searchResponse.MediaItems != null && searchResponse.MediaItems.Count > 0)
+                        {
+                            Console.WriteLine($"[DaminionApiClient] First item ID: {searchResponse.MediaItems.First().Id}");
+                            Console.WriteLine($"[DaminionApiClient] Last item ID: {searchResponse.MediaItems.Last().Id}");
+                            Console.WriteLine($"[DaminionApiClient] Item ID range: {searchResponse.MediaItems.First().Id} to {searchResponse.MediaItems.Last().Id}");
+                        }
+                        Console.WriteLine($"[DaminionApiClient] ===== END SEARCH RESPONSE ANALYSIS =====");
+                        
                         Console.WriteLine($"[DaminionApiClient] Successfully fetched {searchResponse.MediaItems?.Count ?? 0} media items.");
                         return searchResponse; // [cite: 83]
                     }
@@ -508,6 +542,10 @@ namespace DaminionOllamaInteractionLib
             {
                 Console.Error.WriteLine($"[DaminionApiClient] An unexpected error occurred during SearchMediaItems: {ex.Message}");
                 return new DaminionSearchMediaItemsResponse { Success = false, Error = $"Unexpected Exception: {ex.Message}" };
+            }
+            finally
+            {
+                Console.WriteLine($"[DaminionApiClient] ===== SEARCH MEDIA ITEMS DEBUG END =====");
             }
         }
 

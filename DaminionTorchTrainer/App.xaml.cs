@@ -60,7 +60,11 @@ public partial class App : Application
     {
         // Get the application directory (where the executable is located)
         var appDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        var logPath = Path.Combine(appDirectory, "Logs", "daminion-trainer-.log");
+        
+        // Create a unique log file name for each run with timestamp
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var logFileName = $"daminion-trainer-{timestamp}.log";
+        var logPath = Path.Combine(appDirectory, "Logs", logFileName);
 
         // Ensure log directory exists
         var logDir = Path.GetDirectoryName(logPath);
@@ -69,14 +73,51 @@ public partial class App : Application
             Directory.CreateDirectory(logDir);
         }
 
+        // Clean up old log files (keep only last 10)
+        CleanupOldLogFiles(logDir);
+
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug() // Capture all levels including debug
-            .WriteTo.File(logPath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
-            .WriteTo.Console() // Also output to console
+            .WriteTo.File(logPath, outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}") // Also output to console
             .CreateLogger();
 
-        Log.Information("Daminion TorchSharp Trainer starting up");
-        Console.WriteLine($"[DEBUG] Logging initialized. Log files will be saved to: {logPath}");
+        Log.Information("Daminion TorchSharp Trainer starting up - Log file: {LogFile}", logFileName);
+        Console.WriteLine($"[DEBUG] Logging initialized. Log file: {logPath}");
+    }
+
+    /// <summary>
+    /// Cleans up old log files, keeping only the most recent 10 files
+    /// </summary>
+    private void CleanupOldLogFiles(string? logDirectory)
+    {
+        if (string.IsNullOrEmpty(logDirectory) || !Directory.Exists(logDirectory))
+            return;
+
+        try
+        {
+            var logFiles = Directory.GetFiles(logDirectory, "daminion-trainer-*.log")
+                                   .OrderByDescending(f => File.GetLastWriteTime(f))
+                                   .Skip(10) // Keep only the 10 most recent files
+                                   .ToArray();
+
+            foreach (var oldFile in logFiles)
+            {
+                try
+                {
+                    File.Delete(oldFile);
+                    Console.WriteLine($"[DEBUG] Deleted old log file: {Path.GetFileName(oldFile)}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[DEBUG] Failed to delete old log file {Path.GetFileName(oldFile)}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DEBUG] Error during log cleanup: {ex.Message}");
+        }
     }
 
     private void InitializeTorchSharp()

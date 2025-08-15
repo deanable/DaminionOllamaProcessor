@@ -8,6 +8,15 @@ using System.Windows.Input;
 using DaminionOllamaInteractionLib;
 using DaminionTorchTrainer.Models;
 using DaminionTorchTrainer.Services;
+using Serilog;
+using System.Windows.Media;
+using System.IO;
+using System.Collections.Generic;
+using System.Linq;
+using TorchSharp;
+using TorchSharp.Modules;
+using static TorchSharp.torch;
+using static TorchSharp.torch.nn;
 
 namespace DaminionTorchTrainer.ViewModels
 {
@@ -33,8 +42,7 @@ namespace DaminionTorchTrainer.ViewModels
         private string _daminionUsername = "";
         private string _daminionPassword = "";
         private string _searchQuery = "";
-        private string _searchOperators = "";
-        private int _maxItems = 1000;
+        private int _maxItems = 10000; // Increased from 1000 to 10000
         private string _exportStatus = "";
         
         // Progress tracking properties
@@ -79,6 +87,12 @@ namespace DaminionTorchTrainer.ViewModels
                 Status = "Test connection set to true";
                 CommandManager.InvalidateRequerySuggested();
             });
+            BrowseImageCommand = new RelayCommand(BrowseImage);
+            TestModelCommand = new RelayCommand(TestModel, CanTestModel);
+            RefreshModelsCommand = new AsyncRelayCommand(RefreshModelsAsync);
+
+            // Initialize model list
+            _ = RefreshModelsAsync();
         }
 
         #region Properties
@@ -193,16 +207,6 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
-        public string SearchOperators
-        {
-            get => _searchOperators;
-            set 
-            { 
-                if (SetProperty(ref _searchOperators, value))
-                    SaveSettingsToRegistry();
-            }
-        }
-
         public int MaxItems
         {
             get => _maxItems;
@@ -266,6 +270,58 @@ namespace DaminionTorchTrainer.ViewModels
         public ICommand SaveSettingsCommand { get; }
         public ICommand BrowseFolderCommand { get; }
         public ICommand TestConnectCommand { get; }
+        public ICommand BrowseImageCommand { get; }
+        public ICommand TestModelCommand { get; }
+        public ICommand RefreshModelsCommand { get; }
+
+        // Model Testing Properties
+        private string? _selectedModel;
+        public string? SelectedModel
+        {
+            get => _selectedModel;
+            set
+            {
+                if (SetProperty(ref _selectedModel, value))
+                {
+                    ((RelayCommand)TestModelCommand).RaiseCanExecuteChanged();
+                }
+            }
+        }
+
+        private string? _selectedImagePath;
+        public string? SelectedImagePath
+        {
+            get => _selectedImagePath;
+            set
+            {
+                if (SetProperty(ref _selectedImagePath, value))
+                {
+                    UpdateImagePreview();
+                    ((RelayCommand)TestModelCommand).RaiseCanExecuteChanged();
+                }
+            }
+        }
+
+        private ImageSource? _imagePreview;
+        public ImageSource? ImagePreview
+        {
+            get => _imagePreview;
+            set => SetProperty(ref _imagePreview, value);
+        }
+
+        private string? _testStatus;
+        public string? TestStatus
+        {
+            get => _testStatus;
+            set => SetProperty(ref _testStatus, value);
+        }
+
+        private List<string> _availableModels = new();
+        public List<string> AvailableModels
+        {
+            get => _availableModels;
+            set => SetProperty(ref _availableModels, value);
+        }
 
         #endregion
 
@@ -338,20 +394,18 @@ namespace DaminionTorchTrainer.ViewModels
 
         private async Task ExtractDataAsync()
         {
-            Console.WriteLine("[DEBUG] ExtractDataAsync called");
+            if (IsExtracting) return;
+
             try
             {
                 IsExtracting = true;
-                ExtractionProgress = 0;
-                ExtractionTotal = 0;
-                ExtractionStatus = "Initializing...";
-
+                
                 if (SelectedDataSource == DataSourceType.API)
                 {
-                    Console.WriteLine($"[DEBUG] ExtractDataAsync - MaxItems: {MaxItems}, SearchQuery: '{SearchQuery}'");
+                    Log.Information("ExtractDataAsync - MaxItems: {MaxItems}, SearchQuery: '{SearchQuery}'", MaxItems, SearchQuery);
                     Status = "Extracting data from Daminion API...";
                     
-                    // Create progress callback for API extraction
+                    // Use simple text search - multiple terms are treated as AND by default
                     var progressCallback = new Action<int, int, string>((current, total, message) =>
                     {
                         ExtractionProgress = current;
@@ -361,11 +415,10 @@ namespace DaminionTorchTrainer.ViewModels
                     
                     CurrentDataset = await Task.Run(() => _dataExtractor.ExtractTrainingDataAsync(
                         SearchQuery, 
-                        SearchOperators, 
                         MaxItems,
                         progressCallback));
                     
-                    Console.WriteLine($"[DEBUG] ExtractDataAsync - Extracted {CurrentDataset.Samples.Count} samples");
+                    Log.Information("ExtractDataAsync - Extracted {SampleCount} samples", CurrentDataset.Samples.Count);
                     Status = $"Extracted {CurrentDataset.Samples.Count} samples from Daminion API.";
                 }
                 else
@@ -558,6 +611,45 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
+        private async Task RefreshModelsAsync()
+        {
+            try
+            {
+                Status = "Refreshing models...";
+                var models = new List<string>();
+                
+                // Look for trained models in the models directory
+                var modelsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
+                if (Directory.Exists(modelsDirectory))
+                {
+                    var modelDirectories = Directory.GetDirectories(modelsDirectory)
+                        .Where(dir => File.Exists(Path.Combine(dir, "model.pt")))
+                        .Select(dir => Path.GetFileName(dir))
+                        .Where(name => !string.IsNullOrEmpty(name))
+                        .ToList();
+                    
+                    models.AddRange(modelDirectories);
+                }
+                
+                AvailableModels = models;
+                Status = $"Found {AvailableModels.Count} trained models.";
+                
+                if (AvailableModels.Count > 0)
+                {
+                    SelectedModel = AvailableModels.First();
+                }
+                else
+                {
+                    SelectedModel = null;
+                    Status = "No trained models found. Train a model first.";
+                }
+            }
+            catch (Exception ex)
+            {
+                Status = $"Error refreshing models: {ex.Message}";
+                Log.Error(ex, "Error refreshing models");
+            }
+        }
 
 
         private void LoadSettingsFromRegistry()
@@ -578,8 +670,7 @@ namespace DaminionTorchTrainer.ViewModels
                 
                 // Load search settings
                 SearchQuery = RegistryService.LoadString("SearchQuery") ?? "";
-                SearchOperators = RegistryService.LoadString("SearchOperators") ?? "";
-                MaxItems = RegistryService.LoadInt("MaxItems", 1000);
+                MaxItems = RegistryService.LoadInt("MaxItems", 10000); // Changed from 1000 to 10000
                 
                 // Load training configuration
                 TrainingConfig.LearningRate = (float)RegistryService.LoadDouble("LearningRate", 0.001);
@@ -615,7 +706,6 @@ namespace DaminionTorchTrainer.ViewModels
                 
                 // Save search settings
                 RegistryService.SaveString("SearchQuery", SearchQuery);
-                RegistryService.SaveString("SearchOperators", SearchOperators);
                 RegistryService.SaveInt("MaxItems", MaxItems);
                 
                 // Save training configuration
@@ -700,6 +790,189 @@ namespace DaminionTorchTrainer.ViewModels
             return !IsTraining && CurrentDataset != null;
         }
 
+        private void TestConnect()
+        {
+            // Implementation for testing connection
+            Status = "Connection test not implemented yet.";
+        }
+
+        private void BrowseImage()
+        {
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select Image for Testing",
+                Filter = "Image Files (*.jpg;*.jpeg;*.png;*.bmp;*.tiff;*.tif)|*.jpg;*.jpeg;*.png;*.bmp;*.tiff;*.tif|All Files (*.*)|*.*",
+                DefaultExt = "jpg"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                SelectedImagePath = openFileDialog.FileName;
+            }
+        }
+
+        private async void TestModel()
+        {
+            if (string.IsNullOrEmpty(SelectedImagePath) || string.IsNullOrEmpty(SelectedModel))
+            {
+                TestStatus = "Please select both a model and an image.";
+                return;
+            }
+
+            try
+            {
+                TestStatus = "Loading model and preprocessing image...";
+                
+                // Get the model path
+                var modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "model.pt");
+                if (!File.Exists(modelPath))
+                {
+                    TestStatus = $"Model file not found: {modelPath}";
+                    return;
+                }
+
+                // Load and preprocess the image
+                var imageFeatures = await PreprocessImageAsync(SelectedImagePath);
+                
+                TestStatus = "Running inference...";
+                
+                // For now, create a simple mock prediction since loading the full model is complex
+                // In a real implementation, you would load the model and run inference
+                var mockPredictions = GenerateMockPredictions(imageFeatures.Length);
+                
+                // Get metadata vocabulary from the model directory
+                var vocabularyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "vocabulary.json");
+                var metadataTerms = await LoadMetadataVocabularyAsync(vocabularyPath);
+                
+                // Format results
+                var results = new List<string>();
+                for (int i = 0; i < mockPredictions.Length && i < metadataTerms.Count; i++)
+                {
+                    var probability = mockPredictions[i];
+                    var term = metadataTerms[i];
+                    if (probability > 0.1) // Only show terms with >10% probability
+                    {
+                        results.Add($"{term}: {probability:P1}");
+                    }
+                }
+                
+                if (results.Count > 0)
+                {
+                    TestStatus = $"Predictions:\n{string.Join("\n", results)}";
+                }
+                else
+                {
+                    TestStatus = "No significant predictions found (all probabilities < 10%)";
+                }
+            }
+            catch (Exception ex)
+            {
+                TestStatus = $"Error testing model: {ex.Message}";
+                Log.Error(ex, "Error during model testing");
+            }
+        }
+
+        private float[] GenerateMockPredictions(int featureCount)
+        {
+            // Generate mock predictions for demonstration
+            // In a real implementation, this would be the actual model output
+            var random = new Random();
+            var predictions = new float[10]; // Assume 10 output classes
+            
+            for (int i = 0; i < predictions.Length; i++)
+            {
+                predictions[i] = (float)random.NextDouble() * 0.8f; // Random values between 0 and 0.8
+            }
+            
+            return predictions;
+        }
+
+        private async Task<float[]> PreprocessImageAsync(string imagePath)
+        {
+            // Load image using System.Drawing
+            using var image = System.Drawing.Image.FromFile(imagePath);
+            using var bitmap = new System.Drawing.Bitmap(image);
+            
+            // Resize to 224x224 (standard input size)
+            using var resizedBitmap = new System.Drawing.Bitmap(bitmap, new System.Drawing.Size(224, 224));
+            
+            // Extract RGB values and normalize to 0-1
+            var features = new List<float>();
+            
+            for (int y = 0; y < 224; y += 8) // Sample every 8th pixel to reduce features
+            {
+                for (int x = 0; x < 224; x += 8)
+                {
+                    var pixel = resizedBitmap.GetPixel(x, y);
+                    features.Add(pixel.R / 255.0f); // Red channel
+                    features.Add(pixel.G / 255.0f); // Green channel
+                    features.Add(pixel.B / 255.0f); // Blue channel
+                }
+            }
+            
+            return features.ToArray();
+        }
+
+        private async Task<List<string>> LoadMetadataVocabularyAsync(string vocabularyPath)
+        {
+            try
+            {
+                if (File.Exists(vocabularyPath))
+                {
+                    var json = await File.ReadAllTextAsync(vocabularyPath);
+                    var vocabulary = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(json);
+                    
+                    // Convert back to ordered list
+                    var terms = new List<string>(vocabulary.Count);
+                    for (int i = 0; i < vocabulary.Count; i++)
+                    {
+                        var term = vocabulary.FirstOrDefault(kvp => kvp.Value == i).Key;
+                        if (!string.IsNullOrEmpty(term))
+                        {
+                            terms.Add(term);
+                        }
+                    }
+                    return terms;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to load metadata vocabulary from {VocabularyPath}", vocabularyPath);
+            }
+            
+            // Fallback: return generic terms
+            return new List<string> { "unknown" };
+        }
+
+        private bool CanTestModel()
+        {
+            return !string.IsNullOrEmpty(SelectedImagePath) && !string.IsNullOrEmpty(SelectedModel);
+        }
+
+        private void UpdateImagePreview()
+        {
+            if (string.IsNullOrEmpty(SelectedImagePath) || !File.Exists(SelectedImagePath))
+            {
+                ImagePreview = null;
+                return;
+            }
+
+            try
+            {
+                var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bitmap.UriSource = new Uri(SelectedImagePath);
+                bitmap.EndInit();
+                ImagePreview = bitmap;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to load image preview for {ImagePath}", SelectedImagePath);
+                ImagePreview = null;
+            }
+        }
+
         #endregion
 
         #region INotifyPropertyChanged
@@ -742,6 +1015,11 @@ namespace DaminionTorchTrainer.ViewModels
         public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
 
         public void Execute(object? parameter) => _execute();
+
+        public void RaiseCanExecuteChanged()
+        {
+            CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary>

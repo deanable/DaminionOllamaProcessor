@@ -156,6 +156,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <!-- Column 1 - Data Source and Connection -->
@@ -276,20 +277,15 @@
                             <Label Content="Search Query:" Style="{StaticResource ModernLabel}"/>
                             <TextBox Text="{Binding SearchQuery}" 
                                      Style="{StaticResource ModernTextBox}" 
-                                     ToolTip="Enter Daminion search query (optional)"/>
-
-                            <Label Content="Search Operators:" Style="{StaticResource ModernLabel}"/>
-                            <TextBox Text="{Binding SearchOperators}" 
-                                     Style="{StaticResource ModernTextBox}" 
-                                     ToolTip="Enter search operators (optional)"/>
+                                     ToolTip="Enter keywords to search for (e.g., 'city interior'). Multiple terms will be searched inclusively (AND logic)."/>
                         </StackPanel>
 
                         <Label Content="Max Items:" Style="{StaticResource ModernLabel}"/>
                         <StackPanel Orientation="Horizontal" Margin="3">
                             <Slider Value="{Binding MaxItems}" 
                                     Minimum="100" 
-                                    Maximum="1000" 
-                                    TickFrequency="100" 
+                                    Maximum="10000" 
+                                    TickFrequency="1000" 
                                     TickPlacement="BottomRight"
                                     Width="150"
                                     VerticalAlignment="Center"/>
@@ -462,6 +458,53 @@
                         <Button Content="Save Settings" 
                                 Command="{Binding SaveSettingsCommand}" 
                                 Style="{StaticResource ModernButton}"/>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+
+            <!-- Column 4 - Model Testing -->
+            <StackPanel Grid.Column="3" Margin="7,0,0,0">
+                <GroupBox Header="Model Testing" Style="{StaticResource ModernGroupBox}">
+                    <StackPanel>
+                        <Label Content="Select Model:" Style="{StaticResource ModernLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="3">
+                            <ComboBox SelectedItem="{Binding SelectedModel}" 
+                                      ItemsSource="{Binding AvailableModels}"
+                                      Margin="0,0,5,0" 
+                                      Padding="6,4"
+                                      MinWidth="150"/>
+                            <Button Content="Refresh" 
+                                    Command="{Binding RefreshModelsCommand}" 
+                                    Style="{StaticResource ModernButton}"/>
+                        </StackPanel>
+
+                        <Label Content="Select Image:" Style="{StaticResource ModernLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="3">
+                            <TextBox Text="{Binding SelectedImagePath}" 
+                                     Style="{StaticResource ModernTextBox}" 
+                                     IsReadOnly="True"
+                                     ToolTip="Selected image path"/>
+                            <Button Content="Browse" 
+                                    Command="{Binding BrowseImageCommand}" 
+                                    Style="{StaticResource ModernButton}"
+                                    Margin="5,0,0,0"/>
+                        </StackPanel>
+
+                        <Image Grid.Row="1" Grid.ColumnSpan="2" 
+                               Source="{Binding ImagePreview}" 
+                               MaxHeight="200" 
+                               Margin="0,10,0,10" 
+                               Stretch="UniformToFill"/>
+
+                        <Button Content="Test Model" 
+                                Command="{Binding TestModelCommand}" 
+                                Style="{StaticResource ModernButton}" 
+                                Margin="0,8,0,0"/>
+
+                        <TextBlock Text="{Binding TestStatus}" 
+                                   Margin="3" 
+                                   TextWrapping="Wrap" 
+                                   Foreground="#666"/>
                     </StackPanel>
                 </GroupBox>
             </StackPanel>

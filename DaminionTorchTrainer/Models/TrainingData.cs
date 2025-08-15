@@ -185,5 +185,11 @@ namespace DaminionTorchTrainer.Models
         /// </summary>
         [JsonPropertyName("sourcePath")]
         public string? SourcePath { get; set; }
+
+        /// <summary>
+        /// Gets or sets the metadata vocabulary (term to index mapping) for logging purposes
+        /// </summary>
+        [JsonPropertyName("metadataVocabulary")]
+        public Dictionary<string, int>? MetadataVocabulary { get; set; }
     }
 }
