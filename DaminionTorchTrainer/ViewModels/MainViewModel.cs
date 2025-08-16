@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using DaminionOllamaInteractionLib;
+using DaminionOllamaInteractionLib.Daminion;
 using DaminionTorchTrainer.Models;
 using DaminionTorchTrainer.Services;
 using Serilog;
@@ -61,6 +62,13 @@ namespace DaminionTorchTrainer.ViewModels
         private ObservableCollection<string> _trainingLogs = new ObservableCollection<string>();
         private double _resultThreshold = 50.0; // Default to 50%
         private ObservableCollection<TrainingResult> _trainingResults = new ObservableCollection<TrainingResult>();
+        
+        // Collection-related properties
+        private bool _useSearchQuery = true;
+        private bool _useCollection = false;
+        private ObservableCollection<CollectionSelectionItem> _availableCollections = new ObservableCollection<CollectionSelectionItem>();
+        private CollectionSelectionItem? _selectedCollection;
+        private string _selectedCollectionText = "";
 
         public MainViewModel()
         {
@@ -98,6 +106,7 @@ namespace DaminionTorchTrainer.ViewModels
             RefreshModelsCommand = new AsyncRelayCommand(RefreshModelsAsync);
             ClearLogsCommand = new RelayCommand(ClearTrainingLogs);
             ExportLogsCommand = new RelayCommand(ExportTrainingLogs);
+            RefreshCollectionsCommand = new AsyncRelayCommand(RefreshCollectionsAsync, () => IsConnected);
 
             // Initialize model list
             _ = RefreshModelsAsync();
@@ -300,6 +309,58 @@ namespace DaminionTorchTrainer.ViewModels
             set => SetProperty(ref _trainingResults, value);
         }
 
+        // Collection-related properties
+        public bool UseSearchQuery
+        {
+            get => _useSearchQuery;
+            set 
+            { 
+                if (SetProperty(ref _useSearchQuery, value))
+                {
+                    if (value) UseCollection = false;
+                    SaveSettingsToRegistry();
+                }
+            }
+        }
+
+        public bool UseCollection
+        {
+            get => _useCollection;
+            set 
+            { 
+                if (SetProperty(ref _useCollection, value))
+                {
+                    if (value) UseSearchQuery = false;
+                    SaveSettingsToRegistry();
+                }
+            }
+        }
+
+        public ObservableCollection<CollectionSelectionItem> AvailableCollections
+        {
+            get => _availableCollections;
+            set => SetProperty(ref _availableCollections, value);
+        }
+
+        public CollectionSelectionItem? SelectedCollection
+        {
+            get => _selectedCollection;
+            set 
+            { 
+                if (SetProperty(ref _selectedCollection, value))
+                {
+                    UpdateSelectedCollectionText();
+                    SaveSettingsToRegistry();
+                }
+            }
+        }
+
+        public string SelectedCollectionText
+        {
+            get => _selectedCollectionText;
+            set => SetProperty(ref _selectedCollectionText, value);
+        }
+
 
 
         #endregion
@@ -323,6 +384,7 @@ namespace DaminionTorchTrainer.ViewModels
         public ICommand RefreshModelsCommand { get; }
         public ICommand ClearLogsCommand { get; }
         public ICommand ExportLogsCommand { get; }
+        public ICommand RefreshCollectionsCommand { get; }
 
         // Model Testing Properties
         private string? _selectedModel;
@@ -428,6 +490,9 @@ namespace DaminionTorchTrainer.ViewModels
                 // Manually trigger command refresh
                 CommandManager.InvalidateRequerySuggested();
                 Console.WriteLine("[DEBUG] Command refresh triggered");
+                
+                // Automatically refresh collections when connected
+                await RefreshCollectionsAsync();
             }
             catch (Exception ex)
             {
@@ -464,24 +529,47 @@ namespace DaminionTorchTrainer.ViewModels
                 
                 if (SelectedDataSource == DataSourceType.API)
                 {
-                    Log.Information("ExtractDataAsync - MaxItems: {MaxItems}, SearchQuery: '{SearchQuery}'", MaxItems, SearchQuery);
-                    Status = "Extracting data from Daminion API...";
-                    
-                    // Use simple text search - multiple terms are treated as AND by default
                     var progressCallback = new Action<int, int, string>((current, total, message) =>
                     {
                         ExtractionProgress = current;
                         ExtractionTotal = total;
                         ExtractionStatus = message;
                     });
-                    
-                    CurrentDataset = await Task.Run(() => _dataExtractor.ExtractTrainingDataAsync(
-                        SearchQuery, 
-                        MaxItems,
-                        progressCallback));
-                    
-                    Log.Information("ExtractDataAsync - Extracted {SampleCount} samples", CurrentDataset.Samples.Count);
-                    Status = $"Extracted {CurrentDataset.Samples.Count} samples from Daminion API.";
+
+                    if (UseSearchQuery)
+                    {
+                        Log.Information("ExtractDataAsync - Using Search Query - MaxItems: {MaxItems}, SearchQuery: '{SearchQuery}'", MaxItems, SearchQuery);
+                        Status = "Extracting data from Daminion API using search query...";
+                        
+                        // Use simple text search - multiple terms are treated as AND by default
+                        CurrentDataset = await Task.Run(() => _dataExtractor.ExtractTrainingDataAsync(
+                            SearchQuery, 
+                            MaxItems,
+                            progressCallback));
+                        
+                        Log.Information("ExtractDataAsync - Extracted {SampleCount} samples from search query", CurrentDataset.Samples.Count);
+                        Status = $"Extracted {CurrentDataset.Samples.Count} samples from Daminion API using search query.";
+                    }
+                    else if (UseCollection && SelectedCollection != null)
+                    {
+                        Log.Information("ExtractDataAsync - Using Collection - MaxItems: {MaxItems}, Collection: '{CollectionName}' (ID: {CollectionId})", 
+                            MaxItems, SelectedCollection.Text, SelectedCollection.Value);
+                        Status = $"Extracting data from Daminion API using collection '{SelectedCollection.Text}'...";
+                        
+                        // Use collection-based extraction
+                        CurrentDataset = await Task.Run(() => _dataExtractor.ExtractTrainingDataFromCollectionAsync(
+                            SelectedCollection.Value,
+                            MaxItems,
+                            progressCallback));
+                        
+                        Log.Information("ExtractDataAsync - Extracted {SampleCount} samples from collection", CurrentDataset.Samples.Count);
+                        Status = $"Extracted {CurrentDataset.Samples.Count} samples from Daminion API using collection '{SelectedCollection.Text}'.";
+                    }
+                    else
+                    {
+                        Status = "Please select either a search query or a collection for data extraction.";
+                        return;
+                    }
                 }
                 else
                 {
@@ -507,6 +595,7 @@ namespace DaminionTorchTrainer.ViewModels
             catch (Exception ex)
             {
                 Status = $"Error extracting data: {ex.Message}";
+                Log.Error(ex, "Error in ExtractDataAsync");
             }
             finally
             {
@@ -754,6 +843,107 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
+        #region Collection Management Methods
+
+        /// <summary>
+        /// Refreshes the list of available collections from Daminion
+        /// </summary>
+        private async Task RefreshCollectionsAsync()
+        {
+            if (!IsConnected)
+            {
+                Status = "Must be connected to Daminion to refresh collections.";
+                return;
+            }
+
+            try
+            {
+                Status = "Refreshing collections...";
+                Log.Information("Refreshing collections from Daminion");
+
+                // Step 1: Get all tags to find the Collections tag
+                var tagsResponse = await _daminionClient.GetTagsAsync();
+                if (tagsResponse?.Success != true || tagsResponse.Data == null)
+                {
+                    Status = $"Failed to get tags: {tagsResponse?.Error ?? "Unknown error"}";
+                    return;
+                }
+
+                // Step 2: Find the Collections tag (usually named "Shared Collections" or "Collections")
+                var collectionsTag = tagsResponse.Data.FirstOrDefault(t => 
+                    t.Name.Equals("Shared Collections", StringComparison.OrdinalIgnoreCase) ||
+                    t.Name.Equals("Collections", StringComparison.OrdinalIgnoreCase));
+
+                if (collectionsTag == null)
+                {
+                    Status = "Collections tag not found in Daminion. Available tags: " + 
+                             string.Join(", ", tagsResponse.Data.Select(t => t.Name));
+                    return;
+                }
+
+                Log.Information("Found Collections tag: {TagName} (ID: {TagId})", collectionsTag.Name, collectionsTag.Id);
+
+                // Step 3: Get all collection values
+                var collectionsResponse = await _daminionClient.GetTagValuesAsync(collectionsTag.Id, 1000, 0, 0, "");
+                if (collectionsResponse?.Success != true || collectionsResponse.Values == null)
+                {
+                    Status = $"Failed to get collections: {collectionsResponse?.Error ?? "Unknown error"}";
+                    return;
+                }
+
+                // Step 4: Populate the collections list
+                var newCollections = new ObservableCollection<CollectionSelectionItem>();
+                foreach (var collection in collectionsResponse.Values.OrderBy(c => c.Text))
+                {
+                    newCollections.Add(new CollectionSelectionItem(
+                        collection.Text,
+                        collection.Id,
+                        collection.RawValue, // Use RawValue as GUID
+                        $"ID: {collection.Id}"
+                    ));
+                }
+
+                // Update on UI thread
+                if (Application.Current?.Dispatcher != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        AvailableCollections = newCollections;
+                        Status = $"Loaded {newCollections.Count} collections from Daminion";
+                    });
+                }
+                else
+                {
+                    AvailableCollections = newCollections;
+                    Status = $"Loaded {newCollections.Count} collections from Daminion";
+                }
+
+                Log.Information("Successfully loaded {CollectionCount} collections", newCollections.Count);
+            }
+            catch (Exception ex)
+            {
+                Status = $"Error refreshing collections: {ex.Message}";
+                Log.Error(ex, "Error refreshing collections");
+            }
+        }
+
+        /// <summary>
+        /// Updates the selected collection text display
+        /// </summary>
+        private void UpdateSelectedCollectionText()
+        {
+            if (SelectedCollection != null)
+            {
+                SelectedCollectionText = $"Selected: {SelectedCollection.Text} (ID: {SelectedCollection.Value})";
+            }
+            else
+            {
+                SelectedCollectionText = "No collection selected";
+            }
+        }
+
+        #endregion
+
         private void SaveTrainingConfig()
         {
             try
@@ -893,6 +1083,19 @@ namespace DaminionTorchTrainer.ViewModels
                 SearchQuery = RegistryService.LoadString("SearchQuery") ?? "";
                 MaxItems = RegistryService.LoadInt("MaxItems", 10000); // Changed from 1000 to 10000
                 
+                // Load collection settings
+                UseSearchQuery = RegistryService.LoadBool("UseSearchQuery", true);
+                UseCollection = RegistryService.LoadBool("UseCollection", false);
+                var savedCollectionId = RegistryService.LoadLong("SelectedCollectionId", 0);
+                var savedCollectionText = RegistryService.LoadString("SelectedCollectionText") ?? "";
+                var savedCollectionGuid = RegistryService.LoadString("SelectedCollectionGuid") ?? "";
+                
+                // Restore selected collection if it exists
+                if (savedCollectionId > 0 && !string.IsNullOrEmpty(savedCollectionText))
+                {
+                    SelectedCollection = new CollectionSelectionItem(savedCollectionText, savedCollectionId, savedCollectionGuid);
+                }
+                
                 // Load training configuration
                 TrainingConfig.LearningRate = (float)RegistryService.LoadDouble("LearningRate", 0.001);
                 TrainingConfig.Epochs = RegistryService.LoadInt("Epochs", 100);
@@ -937,6 +1140,13 @@ namespace DaminionTorchTrainer.ViewModels
                 // Save search settings
                 RegistryService.SaveString("SearchQuery", SearchQuery);
                 RegistryService.SaveInt("MaxItems", MaxItems);
+                
+                // Save collection settings
+                RegistryService.SaveBool("UseSearchQuery", UseSearchQuery);
+                RegistryService.SaveBool("UseCollection", UseCollection);
+                RegistryService.SaveLong("SelectedCollectionId", SelectedCollection?.Value ?? 0);
+                RegistryService.SaveString("SelectedCollectionText", SelectedCollection?.Text ?? "");
+                RegistryService.SaveString("SelectedCollectionGuid", SelectedCollection?.Guid ?? "");
                 
                 // Save training configuration
                 RegistryService.SaveDouble("LearningRate", (double)TrainingConfig.LearningRate);
@@ -1006,7 +1216,14 @@ namespace DaminionTorchTrainer.ViewModels
             if (SelectedDataSource == DataSourceType.API)
             {
                 var canExtract = IsConnected;
-                Console.WriteLine($"[DEBUG] CanExtractData - API Mode: IsConnected={IsConnected}, CanExtract={canExtract}");
+                
+                // Additional validation for collection mode
+                if (UseCollection && SelectedCollection == null)
+                {
+                    canExtract = false;
+                }
+                
+                Console.WriteLine($"[DEBUG] CanExtractData - API Mode: IsConnected={IsConnected}, UseCollection={UseCollection}, SelectedCollection={SelectedCollection?.Text}, CanExtract={canExtract}");
                 return canExtract;
             }
             else

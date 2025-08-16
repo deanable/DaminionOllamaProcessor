@@ -274,10 +274,46 @@
                     <StackPanel>
                         <!-- API-specific settings -->
                         <StackPanel Visibility="{Binding SelectedDataSource, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=API}">
-                            <Label Content="Search Query:" Style="{StaticResource ModernLabel}"/>
-                            <TextBox Text="{Binding SearchQuery}" 
-                                     Style="{StaticResource ModernTextBox}" 
-                                     ToolTip="Enter keywords to search for (e.g., 'city interior'). Multiple terms will be searched inclusively (AND logic)."/>
+                            <!-- Data Source Type Selection -->
+                            <Label Content="Data Source Type:" Style="{StaticResource ModernLabel}"/>
+                            <StackPanel Orientation="Horizontal" Margin="3">
+                                <RadioButton Content="Search Query" 
+                                             IsChecked="{Binding UseSearchQuery}" 
+                                             Margin="0,0,15,0"/>
+                                <RadioButton Content="Collection" 
+                                             IsChecked="{Binding UseCollection}"/>
+                            </StackPanel>
+                            
+                            <!-- Search Query Option -->
+                            <StackPanel Visibility="{Binding UseSearchQuery, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Label Content="Search Query:" Style="{StaticResource ModernLabel}"/>
+                                <TextBox Text="{Binding SearchQuery}" 
+                                         Style="{StaticResource ModernTextBox}" 
+                                         ToolTip="Enter keywords to search for (e.g., 'city interior'). Multiple terms will be searched inclusively (AND logic)."/>
+                            </StackPanel>
+                            
+                            <!-- Collection Option -->
+                            <StackPanel Visibility="{Binding UseCollection, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Label Content="Collection:" Style="{StaticResource ModernLabel}"/>
+                                <StackPanel Orientation="Horizontal" Margin="3">
+                                    <ComboBox SelectedItem="{Binding SelectedCollection}" 
+                                              ItemsSource="{Binding AvailableCollections}"
+                                              DisplayMemberPath="Text"
+                                              SelectedValuePath="Value"
+                                              Margin="0,0,5,0" 
+                                              Padding="6,4"
+                                              MinWidth="200"
+                                              ToolTip="Select a collection to use for training data"/>
+                                    <Button Content="Refresh" 
+                                            Command="{Binding RefreshCollectionsCommand}" 
+                                            Style="{StaticResource ModernButton}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedCollectionText}" 
+                                           Margin="3" 
+                                           TextWrapping="Wrap" 
+                                           Foreground="#666"
+                                           FontStyle="Italic"/>
+                            </StackPanel>
                         </StackPanel>
 
                         <Label Content="Max Items:" Style="{StaticResource ModernLabel}"/>

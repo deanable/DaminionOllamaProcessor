@@ -116,6 +116,40 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
+        /// Saves a long value to the registry
+        /// </summary>
+        public static void SaveLong(string name, long value)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.CreateSubKey(RegistryKey);
+                key?.SetValue(name, value);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RegistryService] Error saving long {name}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Loads a long value from the registry
+        /// </summary>
+        public static long LoadLong(string name, long defaultValue = 0)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RegistryKey);
+                var value = key?.GetValue(name);
+                return value is long longValue ? longValue : defaultValue;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RegistryService] Error loading long {name}: {ex.Message}");
+                return defaultValue;
+            }
+        }
+
+        /// <summary>
         /// Saves a boolean value to the registry
         /// </summary>
         public static void SaveBool(string name, bool value)

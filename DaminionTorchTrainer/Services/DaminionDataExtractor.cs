@@ -119,6 +119,122 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
+        /// Extracts training data from Daminion catalog using a specific collection
+        /// </summary>
+        /// <param name="collectionId">ID of the collection to extract from</param>
+        /// <param name="maxItems">Maximum number of items to extract</param>
+        /// <param name="progressCallback">Optional progress callback</param>
+        /// <returns>A training dataset</returns>
+        public async Task<TrainingDataset> ExtractTrainingDataFromCollectionAsync(
+            long collectionId,
+            int maxItems = 1000,
+            Action<int, int, string>? progressCallback = null)
+        {
+            Log.Information("===== COLLECTION-BASED VISUAL CONTENT TRAINING DATA EXTRACTION =====");
+            Log.Information("Collection ID: {CollectionId}, MaxItems: {MaxItems}", collectionId, maxItems);
+
+            // Step 1: Search for media items in the collection
+            progressCallback?.Invoke(0, maxItems, "Searching for media items in collection...");
+            
+            // First, we need to find the Collections tag ID
+            var tagsResponse = await _daminionClient.GetTagsAsync();
+            if (tagsResponse?.Success != true || tagsResponse.Data == null)
+            {
+                Log.Warning("Failed to get tags for collection search");
+                return new TrainingDataset { Samples = new List<TrainingData>(), FeatureDimension = 0, LabelDimension = 0 };
+            }
+
+            // Find the Collections tag
+            var collectionsTag = tagsResponse.Data.FirstOrDefault(t => 
+                t.Name.Equals("Shared Collections", StringComparison.OrdinalIgnoreCase) ||
+                t.Name.Equals("Collections", StringComparison.OrdinalIgnoreCase));
+
+            if (collectionsTag == null)
+            {
+                Log.Warning("Collections tag not found");
+                return new TrainingDataset { Samples = new List<TrainingData>(), FeatureDimension = 0, LabelDimension = 0 };
+            }
+
+            // Create query to search for items in the specific collection
+            // Format: queryLine={collectionsTagId},{collectionId}
+            var queryLine = $"{collectionsTag.Id},{collectionId}";
+            
+            Log.Information("Searching with query: {QueryLine}", queryLine);
+            var searchResponse = await _daminionClient.SearchMediaItemsAsync("", queryLine, maxItems);
+            
+            Log.Information("Collection search response received - Success: {Success}, Error: {Error}, MediaItemsCount: {MediaItemsCount}", 
+                searchResponse?.Success, searchResponse?.Error, searchResponse?.MediaItems?.Count ?? 0);
+            
+            if (searchResponse?.Success != true || searchResponse.MediaItems == null || searchResponse.MediaItems.Count == 0)
+            {
+                Log.Warning("No media items found for collection ID: {CollectionId}", collectionId);
+                return new TrainingDataset { Samples = new List<TrainingData>(), FeatureDimension = 0, LabelDimension = 0 };
+            }
+
+            var mediaItems = searchResponse.MediaItems;
+            Log.Information("Found {MediaItemsCount} media items in collection {CollectionId}", mediaItems.Count, collectionId);
+            
+            // Log first few items to verify they're different
+            var sampleItems = mediaItems.Take(5).ToList();
+            Log.Information("Sample items in collection {CollectionId}:", collectionId);
+            for (int i = 0; i < sampleItems.Count; i++)
+            {
+                var item = sampleItems[i];
+                Log.Information("  [{Index}] ID: {Id}, FileName: '{FileName}'", i, item.Id, item.FileName);
+            }
+
+            // Step 2: Extract metadata and build vocabulary (same as search-based method)
+            progressCallback?.Invoke(0, mediaItems.Count, "Extracting metadata and building vocabulary...");
+            var metadataVocabulary = await BuildMetadataVocabularyAsync(mediaItems);
+            
+            Log.Information("Built metadata vocabulary with {VocabularySize} unique terms", metadataVocabulary.Count);
+
+            // Step 3: Convert media items to training samples with actual image data
+            var samples = new List<TrainingData>();
+            var processedCount = 0;
+
+            foreach (var mediaItem in mediaItems)
+            {
+                try
+                {
+                    progressCallback?.Invoke(processedCount, mediaItems.Count, $"Processing {mediaItem.FileName}...");
+                    
+                    var sample = await ConvertToTrainingSampleAsync(mediaItem, metadataVocabulary);
+                    if (sample != null)
+                    {
+                        samples.Add(sample);
+                        Log.Information("Created training sample for {FileName}: {ImageFeatures} features, {LabelCount} labels", 
+                            mediaItem.FileName, sample.Features.Count, sample.Labels.Count(x => x > 0));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to convert media item {MediaItemId} to training sample", mediaItem.Id);
+                }
+                
+                processedCount++;
+            }
+
+            // Step 4: Create dataset
+            var featureDimension = CalculateFeatureDimension();
+            var labelDimension = metadataVocabulary.Count;
+
+            Log.Information("===== COLLECTION EXTRACTION SUMMARY =====");
+            Log.Information("Collection ID: {CollectionId}", collectionId);
+            Log.Information("Samples: {SampleCount}", samples.Count);
+            Log.Information("Features: {FeatureDimension} (visual features from image pixels)", featureDimension);
+            Log.Information("Labels: {LabelDimension} (metadata terms: {MetadataTerms})", labelDimension, string.Join(", ", metadataVocabulary.Keys));
+
+            return new TrainingDataset
+            {
+                Samples = samples,
+                FeatureDimension = featureDimension,
+                LabelDimension = labelDimension,
+                MetadataVocabulary = metadataVocabulary // Store the vocabulary for logging
+            };
+        }
+
+        /// <summary>
         /// Builds content vocabulary from the search results by extracting unique keywords/tags
         /// </summary>
         private async Task<Dictionary<string, int>> BuildContentVocabularyAsync(List<DaminionMediaItem> mediaItems)
