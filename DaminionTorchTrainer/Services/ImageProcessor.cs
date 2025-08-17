@@ -4,13 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Serilog;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using TorchSharp;
 using static TorchSharp.torch;
 using static TorchSharp.torch.nn;
-using static TorchSharp.torchvision;
 
 namespace DaminionTorchTrainer.Services
 {
@@ -27,10 +26,9 @@ namespace DaminionTorchTrainer.Services
         {
             _device = torch.device(deviceType);
 
-            // Load pre-trained ResNet50 model using the correct static accessor
-            var resnet = models.resnet50(weights: models.ResNet50_Weights.IMAGENET1K_V2);
+            // Load pre-trained ResNet50 model using the fully qualified name
+            var resnet = TorchSharp.torchvision.models.resnet50(weights: TorchSharp.torchvision.models.ResNet50_Weights.IMAGENET1K_V2);
 
-            // Get all layers except the final fully connected layer (fc)
             var modules = resnet.named_modules().ToList();
             var feature_extractor_modules = modules
                 .Where(m => m.name != "fc")
@@ -42,7 +40,6 @@ namespace DaminionTorchTrainer.Services
             _model.to(_device);
             _model.eval();
 
-            // For ResNet50, the output of the layer before 'fc' is 2048
             FeatureDimension = 2048;
 
             Log.Information("ImageProcessor initialized with ResNet50 on device {Device}. Feature dimension: {FeatureDimension}", _device, FeatureDimension);
@@ -81,38 +78,49 @@ namespace DaminionTorchTrainer.Services
         /// <summary>
         /// Loads an image, converts it to a tensor, and preprocesses it.
         /// </summary>
-        private async Task<Tensor> ImageToTensorAsync(string imagePath)
+        private Task<Tensor> ImageToTensorAsync(string imagePath)
         {
-            using var image = await SixLabors.ImageSharp.Image.LoadAsync(imagePath);
-
-            image.Mutate(x => x.Resize(new ResizeOptions
+            return Task.Run(() =>
             {
-                Size = new SixLabors.ImageSharp.Size(224, 224),
-                Mode = ResizeMode.Crop
-            }));
+                using var image = new Bitmap(imagePath);
+                // Resize to 224x224
+                using var resized = new Bitmap(image, new Size(224, 224));
 
-            // Ensure image is in RGB format
-            var rgbImage = image.CloneAs<Rgb24>();
+                var rect = new Rectangle(0, 0, resized.Width, resized.Height);
+                BitmapData bmpData = resized.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
 
-            var memory = new Memory<byte>(new byte[rgbImage.Width * rgbImage.Height * 3]);
-            rgbImage.CopyPixelDataTo(memory.Span);
+                try
+                {
+                    IntPtr ptr = bmpData.Scan0;
+                    int bytes = Math.Abs(bmpData.Stride) * resized.Height;
+                    byte[] rgbValues = new byte[bytes];
 
-            // Create tensor from byte array
-            var tensor = torch.from_buffer(memory, new long[] { rgbImage.Height, rgbImage.Width, 3 }, ScalarType.Byte);
+                    Marshal.Copy(ptr, rgbValues, 0, bytes);
 
-            // Permute dimensions from HWC to CHW
-            tensor = tensor.permute(2, 0, 1);
+                    // The byte array is in BGR order. We need to convert it to RGB for the model.
+                    byte[] rgbCorrected = new byte[bytes];
+                    for (int i = 0; i < rgbValues.Length; i += 3)
+                    {
+                        rgbCorrected[i] = rgbValues[i + 2];     // R
+                        rgbCorrected[i + 1] = rgbValues[i + 1]; // G
+                        rgbCorrected[i + 2] = rgbValues[i];     // B
+                    }
 
-            // Convert to float and scale to [0, 1]
-            tensor = tensor.to(ScalarType.Float32).div(255);
+                    var tensor = torch.from_buffer(rgbCorrected, new long[] { resized.Height, resized.Width, 3 }, ScalarType.Byte);
+                    tensor = tensor.permute(2, 0, 1);
+                    tensor = tensor.to(ScalarType.Float32).div(255);
 
-            // Normalize with ImageNet mean and std
-            var mean = new[] { 0.485f, 0.456f, 0.406f };
-            var std = new[] { 0.229f, 0.224f, 0.225f };
-            tensor = transforms.functional.normalize(tensor, mean, std);
+                    var mean = new[] { 0.485f, 0.456f, 0.406f };
+                    var std = new[] { 0.229f, 0.224f, 0.225f };
+                    tensor = TorchSharp.torchvision.transforms.functional.normalize(tensor, mean, std);
 
-            // Add batch dimension
-            return tensor.unsqueeze(0);
+                    return tensor.unsqueeze(0);
+                }
+                finally
+                {
+                    resized.UnlockBits(bmpData);
+                }
+            });
         }
 
         public void Dispose()
