@@ -6,15 +6,30 @@ using System.Threading.Tasks;
 
 namespace DatabaseExplorer
 {
+    /// <summary>
+    /// Provides functionality to explore a PostgreSQL database, including retrieving table names,
+    /// table structures, and sample data.
+    /// </summary>
     public class DatabaseExplorer
     {
         private readonly string _connectionString;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DatabaseExplorer"/> class.
+        /// </summary>
+        /// <param name="host">The database host.</param>
+        /// <param name="database">The database name.</param>
+        /// <param name="username">The username for authentication.</param>
+        /// <param name="password">The password for authentication.</param>
         public DatabaseExplorer(string host, string database, string username, string password)
         {
             _connectionString = $"Host={host};Database={database};Username={username};Password={password}";
         }
 
+        /// <summary>
+        /// Retrieves a list of table names from the public schema of the database.
+        /// </summary>
+        /// <returns>A list of table names.</returns>
         public async Task<List<string>> GetTableNamesAsync()
         {
             var tables = new List<string>();
@@ -35,6 +50,11 @@ namespace DatabaseExplorer
             return tables;
         }
 
+        /// <summary>
+        /// Retrieves the structure of a specified table.
+        /// </summary>
+        /// <param name="tableName">The name of the table.</param>
+        /// <returns>A <see cref="DataTable"/> containing the table structure.</returns>
         public async Task<DataTable> GetTableStructureAsync(string tableName)
         {
             using var connection = new NpgsqlConnection(_connectionString);
@@ -51,6 +71,12 @@ namespace DatabaseExplorer
             return dataTable;
         }
 
+        /// <summary>
+        /// Retrieves sample data from a specified table.
+        /// </summary>
+        /// <param name="tableName">The name of the table.</param>
+        /// <param name="limit">The maximum number of rows to retrieve.</param>
+        /// <returns>A <see cref="DataTable"/> containing the sample data.</returns>
         public async Task<DataTable> GetSampleDataAsync(string tableName, int limit = 10)
         {
             using var connection = new NpgsqlConnection(_connectionString);
@@ -67,12 +93,15 @@ namespace DatabaseExplorer
             return dataTable;
         }
 
+        /// <summary>
+        /// Finds tables that may contain tag-related data.
+        /// </summary>
+        /// <returns>A <see cref="DataTable"/> containing the names of potential tag tables.</returns>
         public async Task<DataTable> FindTagsAsync()
         {
             using var connection = new NpgsqlConnection(_connectionString);
             await connection.OpenAsync();
             
-            // Try to find tag-related tables
             var query = @"
                 SELECT table_name 
                 FROM information_schema.tables 
@@ -88,12 +117,15 @@ namespace DatabaseExplorer
             return dataTable;
         }
 
+        /// <summary>
+        /// Retrieves sample data from common tag-related table names.
+        /// </summary>
+        /// <returns>A <see cref="DataTable"/> containing sample data from the first found tag table.</returns>
         public async Task<DataTable> GetTagDataAsync()
         {
             using var connection = new NpgsqlConnection(_connectionString);
             await connection.OpenAsync();
             
-            // Try common tag table names
             var possibleTables = new[] { "tags", "tag", "keywords", "keyword", "categories", "category" };
             
             foreach (var tableName in possibleTables)

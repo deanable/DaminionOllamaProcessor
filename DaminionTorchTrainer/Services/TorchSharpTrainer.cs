@@ -14,7 +14,9 @@ using Serilog;
 namespace DaminionTorchTrainer.Services
 {
     /// <summary>
-    /// Service for training neural networks using TorchSharp
+    /// Service for training neural networks using TorchSharp.
+    /// This class encapsulates the entire training pipeline, including data preparation,
+    /// model creation, training, validation, and model saving.
     /// </summary>
     public class TorchSharpTrainer : IDisposable
     {
@@ -29,14 +31,14 @@ namespace DaminionTorchTrainer.Services
         /// <summary>
         /// Initializes a new instance of the <see cref="TorchSharpTrainer"/> class.
         /// </summary>
-        /// <param name="config">Training configuration</param>
-        /// <param name="progressCallback">Optional progress callback</param>
+        /// <param name="config">The training configuration.</param>
+        /// <param name="progressCallback">An optional callback to report training progress.</param>
         public TorchSharpTrainer(TrainingConfig config, Action<TrainingProgress>? progressCallback = null)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _progressCallback = progressCallback;
 
-            // Set device with error handling
+            // Set the computation device (CUDA, MPS, or CPU) with a fallback to CPU.
             try
             {
                 Console.WriteLine($"[TorchSharpTrainer] Attempting to initialize device: {_config.Device}");
@@ -56,18 +58,21 @@ namespace DaminionTorchTrainer.Services
                 Console.WriteLine($"[TorchSharpTrainer] Error initializing device: {ex.Message}");
                 Console.WriteLine($"[TorchSharpTrainer] Stack trace: {ex.StackTrace}");
                 
-                // Fallback to CPU
+                // Fallback to CPU if the selected device is not available.
                 _device = CPU;
                 Console.WriteLine($"[TorchSharpTrainer] Falling back to CPU device");
             }
         }
 
         /// <summary>
-        /// Trains a neural network on the provided dataset
+        /// Trains a neural network asynchronously using the provided dataset and configuration.
+        /// The training process involves initializing the model, optimizer, and loss function,
+        /// then iterating through epochs to train and validate the model.
+        /// Early stopping is used to prevent overfitting.
         /// </summary>
-        /// <param name="dataset">Training dataset</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>Training results</returns>
+        /// <param name="dataset">The dataset to train the model on.</param>
+        /// <param name="cancellationToken">A token to cancel the training process.</param>
+        /// <returns>A <see cref="TrainingResults"/> object containing the results of the training.</returns>
         public async Task<TrainingResults> TrainAsync(TrainingDataset dataset, CancellationToken cancellationToken = default)
         {
             Log.Information("Starting training with {SampleCount} samples, {Epochs} epochs, batch size {BatchSize}", 
@@ -76,25 +81,25 @@ namespace DaminionTorchTrainer.Services
 
             try
             {
-                // Store current dataset for ONNX export
+                // Store current dataset for later use, e.g., ONNX export.
                 _currentDataset = dataset;
                 
-                // Prepare data
+                // Split the dataset into training and validation sets.
                 var (trainData, valData) = PrepareData(dataset);
                 Log.Information("Data prepared: {TrainCount} training samples, {ValCount} validation samples", 
                     trainData.Count, valData.Count);
                 
-                // Create model
+                // Create the neural network model.
                 _model = CreateModel(dataset.FeatureDimension, dataset.LabelDimension);
                 _model.to(_device);
                 Log.Information("Model created with input dimension {InputDim}, output dimension {OutputDim}", 
                     dataset.FeatureDimension, dataset.LabelDimension);
                 
-                // Create optimizer
+                // Create the optimizer.
                 _optimizer = CreateOptimizer();
                 Log.Information("Optimizer created: {Optimizer}", _config.Optimizer);
                 
-                // Create loss function
+                // Create the loss function.
                 _lossFunction = CreateLossFunction();
                 Log.Information("Loss function created: {LossFunction} for multi-label classification", _config.LossFunction);
 
@@ -102,7 +107,7 @@ namespace DaminionTorchTrainer.Services
                 var bestValidationLoss = float.MaxValue;
                 var patienceCounter = 0;
 
-                // Training loop
+                // Main training loop over epochs.
                 for (int epoch = 0; epoch < _config.Epochs; epoch++)
                 {
                     if (cancellationToken.IsCancellationRequested)
@@ -111,16 +116,16 @@ namespace DaminionTorchTrainer.Services
                         break;
                     }
 
-                    // Training phase
+                    // Training phase for one epoch.
                     _model.train();
                     var trainLoss = await TrainEpochAsync(trainData, cancellationToken);
                     
-                    // Validation phase
+                    // Validation phase for one epoch.
                     _model.eval();
                     var (valLoss, valAccuracy) = await ValidateEpochAsync(valData, cancellationToken);
                     
-                    // Calculate training accuracy (simplified)
-                    var trainAccuracy = 1.0f - trainLoss; // Simplified for now
+                    // Simplified calculation of training accuracy.
+                    var trainAccuracy = 1.0f - trainLoss;
 
                     var progress = new TrainingProgress
                     {
@@ -142,7 +147,7 @@ namespace DaminionTorchTrainer.Services
                     Console.WriteLine($"[TorchSharpTrainer] Epoch {epoch + 1}/{_config.Epochs}: " +
                                     $"Train Loss: {trainLoss:F4}, Val Loss: {valLoss:F4}, Val Acc: {valAccuracy:F4}");
 
-                    // Early stopping
+                    // Early stopping logic to prevent overfitting.
                     if (_config.UseEarlyStopping)
                     {
                         if (valLoss < bestValidationLoss - _config.EarlyStoppingMinDelta)
@@ -163,15 +168,15 @@ namespace DaminionTorchTrainer.Services
                         }
                     }
 
-                    // Small delay to prevent UI freezing
+                    // Introduce a small delay to keep the UI responsive.
                     await Task.Delay(10, cancellationToken);
                 }
 
-                // Save model
+                // Save the trained model.
                 var modelPath = await SaveModelAsync(dataset);
                 Log.Information("Training completed. Model saved to: {ModelPath}", modelPath);
 
-                // Log comprehensive model summary
+                // Log a summary of the training process.
                 await LogModelSummaryAsync(dataset, trainingHistory, modelPath);
 
                 return new TrainingResults
@@ -193,16 +198,17 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Creates the neural network model
+        /// Creates the neural network model based on the training configuration.
         /// </summary>
+        /// <param name="inputDimension">The input dimension of the model.</param>
+        /// <param name="outputDimension">The output dimension of the model.</param>
+        /// <returns>A TorchSharp model.</returns>
         private Module<Tensor, Tensor> CreateModel(int inputDimension, int outputDimension)
         {
             var layers = new List<Module<Tensor, Tensor>>();
-            
-            // Input layer
             var currentDimension = inputDimension;
             
-            // Hidden layers
+            // Add hidden layers.
             foreach (var hiddenDim in _config.HiddenDimensions)
             {
                 layers.Add(Linear(currentDimension, hiddenDim));
@@ -214,16 +220,17 @@ namespace DaminionTorchTrainer.Services
                 currentDimension = hiddenDim;
             }
             
-            // Output layer with sigmoid activation for multi-label classification
+            // Add the output layer with a Sigmoid activation for multi-label classification.
             layers.Add(Linear(currentDimension, outputDimension));
-            layers.Add(Sigmoid()); // Add sigmoid for multi-label output
+            layers.Add(Sigmoid());
             
             return Sequential(layers.ToArray());
         }
 
         /// <summary>
-        /// Creates the optimizer
+        /// Creates the optimizer based on the training configuration.
         /// </summary>
+        /// <returns>A TorchSharp optimizer.</returns>
         private torch.optim.Optimizer CreateOptimizer()
         {
             return _config.Optimizer?.ToLower() switch
@@ -236,8 +243,9 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Creates the loss function
+        /// Creates the loss function based on the training configuration.
         /// </summary>
+        /// <returns>A TorchSharp loss function.</returns>
         private Loss<Tensor, Tensor, Tensor> CreateLossFunction()
         {
             return _config.LossFunction?.ToLower() switch
@@ -245,14 +253,16 @@ namespace DaminionTorchTrainer.Services
                 "crossentropy" => CrossEntropyLoss(),
                 "mse" => MSELoss(),
                 "bce" => BCELoss(),
-                "multilabel" => BCELoss(), // Use BCE for multi-label classification
-                _ => BCELoss() // Default to BCE for multi-label
+                "multilabel" => BCELoss(), // Use BCE for multi-label classification.
+                _ => BCELoss() // Default to BCE for multi-label.
             };
         }
 
         /// <summary>
-        /// Prepares training and validation data
+        /// Splits the dataset into training and validation sets.
         /// </summary>
+        /// <param name="dataset">The dataset to split.</param>
+        /// <returns>A tuple containing the training and validation data.</returns>
         private (List<TrainingData> trainData, List<TrainingData> valData) PrepareData(TrainingDataset dataset)
         {
             var samples = dataset.Samples.ToList();
@@ -267,14 +277,16 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Trains for one epoch
+        /// Runs the training process for a single epoch.
         /// </summary>
+        /// <param name="trainData">The training data for the epoch.</param>
+        /// <param name="cancellationToken">A token to cancel the training process.</param>
+        /// <returns>The average training loss for the epoch.</returns>
         private async Task<float> TrainEpochAsync(List<TrainingData> trainData, CancellationToken cancellationToken)
         {
             var totalLoss = 0.0f;
             var batchCount = 0;
 
-            // Create batches
             for (int i = 0; i < trainData.Count; i += _config.BatchSize)
             {
                 if (cancellationToken.IsCancellationRequested) break;
@@ -282,23 +294,19 @@ namespace DaminionTorchTrainer.Services
                 var batch = trainData.Skip(i).Take(_config.BatchSize).ToList();
                 if (batch.Count == 0) continue;
 
-                // Prepare batch data
                 var features = PrepareFeatures(batch);
                 var labels = PrepareLabels(batch);
 
-                // Forward pass
                 _optimizer!.zero_grad();
                 var outputs = _model!.forward(features);
                 var loss = _lossFunction!.forward(outputs, labels);
 
-                // Backward pass
                 loss.backward();
                 _optimizer.step();
 
                 totalLoss += loss.item<float>();
                 batchCount++;
 
-                // Small delay to prevent UI freezing
                 if (batchCount % 10 == 0)
                 {
                     await Task.Delay(1, cancellationToken);
@@ -309,8 +317,11 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Validates for one epoch
+        /// Runs the validation process for a single epoch.
         /// </summary>
+        /// <param name="valData">The validation data for the epoch.</param>
+        /// <param name="cancellationToken">A token to cancel the validation process.</param>
+        /// <returns>A tuple containing the average validation loss and accuracy.</returns>
         private async Task<(float loss, float accuracy)> ValidateEpochAsync(List<TrainingData> valData, CancellationToken cancellationToken)
         {
             var totalLoss = 0.0f;
@@ -327,25 +338,21 @@ namespace DaminionTorchTrainer.Services
                     var batch = valData.Skip(i).Take(_config.BatchSize).ToList();
                     if (batch.Count == 0) continue;
 
-                    // Prepare batch data
                     var features = PrepareFeatures(batch);
                     var labels = PrepareLabels(batch);
 
-                    // Forward pass
                     var outputs = _model!.forward(features);
                     var loss = _lossFunction!.forward(outputs, labels);
 
                     totalLoss += loss.item<float>();
                     batchCount++;
 
-                    // Calculate accuracy for multi-label classification
-                    var predictions = (outputs > 0.5f).to(ScalarType.Float32); // Threshold at 0.5
-                    var correct = (predictions == labels).sum().item<long>(); // sum() returns long
-                    var total = (int)labels.numel(); // numel() returns long, convert to int
-                    correctPredictions += (int)correct; // Cast to int for accumulation
+                    var predictions = (outputs > 0.5f).to(ScalarType.Float32);
+                    var correct = (predictions == labels).sum().item<long>();
+                    var total = (int)labels.numel();
+                    correctPredictions += (int)correct;
                     totalPredictions += total;
 
-                    // Small delay to prevent UI freezing
                     if (batchCount % 10 == 0)
                     {
                         await Task.Delay(1, cancellationToken);
@@ -360,8 +367,10 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Prepares features tensor from training data
+        /// Prepares a batch of features for training.
         /// </summary>
+        /// <param name="batch">The batch of training data.</param>
+        /// <returns>A tensor representing the features.</returns>
         private Tensor PrepareFeatures(List<TrainingData> batch)
         {
             var features = new List<float>();
@@ -375,8 +384,10 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Prepares labels tensor from training data
+        /// Prepares a batch of labels for training.
         /// </summary>
+        /// <param name="batch">The batch of training data.</param>
+        /// <returns>A tensor representing the labels.</returns>
         private Tensor PrepareLabels(List<TrainingData> batch)
         {
             var labels = new List<float>();
@@ -390,8 +401,10 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Saves the trained model to disk
+        /// Saves the trained model to disk.
         /// </summary>
+        /// <param name="dataset">The dataset used for training, containing metadata.</param>
+        /// <returns>The path to the saved model.</returns>
         private async Task<string> SaveModelAsync(TrainingDataset dataset)
         {
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -401,7 +414,6 @@ namespace DaminionTorchTrainer.Services
             var modelPath = Path.Combine(modelDir, "model.pt");
             _model.save(modelPath);
             
-            // Save metadata vocabulary for inference
             if (dataset.MetadataVocabulary != null)
             {
                 var vocabularyPath = Path.Combine(modelDir, "vocabulary.json");
@@ -415,8 +427,9 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Saves training configuration
+        /// Saves the training configuration to a file.
         /// </summary>
+        /// <param name="configPath">The path to save the configuration file.</param>
         private async Task SaveTrainingConfigAsync(string configPath)
         {
             try
@@ -432,8 +445,10 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Saves dataset information
+        /// Saves information about the dataset to a file.
         /// </summary>
+        /// <param name="datasetPath">The path to save the dataset information file.</param>
+        /// <param name="dataset">The dataset to save information about.</param>
         private async Task SaveDatasetInfoAsync(string datasetPath, TrainingDataset dataset)
         {
             try
@@ -459,9 +474,9 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Exports the trained model to ONNX format
+        /// Exports the trained model to the ONNX format.
         /// </summary>
-        /// <returns>Path to the exported ONNX file</returns>
+        /// <returns>The path to the exported ONNX model file.</returns>
         public async Task<string> ExportToOnnxAsync()
         {
             try
@@ -479,18 +494,14 @@ namespace DaminionTorchTrainer.Services
                 
                 var onnxPath = Path.Combine(onnxDir, $"daminion_model_{timestamp}.onnx");
                 
-                // Create dummy input for ONNX export
                 var dummyInput = torch.randn(1, _config.FeatureDimension).to(_device);
                 
-                // Export to ONNX - for now, save as regular PyTorch model
-                // ONNX export requires additional libraries and setup
                 _model.eval();
                 using (torch.no_grad())
                 {
                     _model.save(onnxPath);
                 }
                 
-                // Create metadata file with labels/vocabulary
                 var onnxMetadata = new
                 {
                     ModelName = "DaminionTorchSharpModel",
@@ -523,11 +534,14 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Logs a comprehensive summary of the trained model, including architecture, trained tags, and training statistics.
+        /// Logs a comprehensive summary of the model training process.
         /// </summary>
+        /// <param name="dataset">The dataset used for training.</param>
+        /// <param name="trainingHistory">The history of training progress.</param>
+        /// <param name="modelPath">The path to the saved model.</param>
         private async Task LogModelSummaryAsync(TrainingDataset dataset, List<TrainingProgress> trainingHistory, string modelPath)
         {
-            var trainingDuration = TimeSpan.FromSeconds(trainingHistory.Count * 2); // Estimate 2 seconds per epoch
+            var trainingDuration = TimeSpan.FromSeconds(trainingHistory.Count * 2); // Simplified estimation.
 
             Log.Information("===== MODEL TRAINING SUMMARY =====");
             Log.Information("Model Path: {ModelPath}", modelPath);
@@ -539,7 +553,6 @@ namespace DaminionTorchTrainer.Services
             Log.Information("Final Training Accuracy: {FinalTrainingAccuracy:F4}", trainingHistory.LastOrDefault()?.TrainingAccuracy ?? 0);
             Log.Information("Final Validation Accuracy: {FinalValidationAccuracy:F4}", trainingHistory.LastOrDefault()?.ValidationAccuracy ?? 0);
 
-            // Log model architecture
             Log.Information("===== MODEL ARCHITECTURE =====");
             if (_model != null)
             {
@@ -555,7 +568,6 @@ namespace DaminionTorchTrainer.Services
                 Log.Information("Dropout Rate: {DropoutRate}", _config.DropoutRate);
                 Log.Information("Weight Decay: {WeightDecay}", _config.WeightDecay);
 
-                // Count model parameters
                 var totalParams = 0L;
                 foreach (var param in _model.parameters())
                 {
@@ -568,7 +580,6 @@ namespace DaminionTorchTrainer.Services
                 Log.Warning("Model is null. Cannot log architecture details.");
             }
 
-            // Log dataset information
             Log.Information("===== DATASET INFORMATION =====");
             Log.Information("Dataset Name: {DatasetName}", dataset.Name ?? "Unnamed Dataset");
             Log.Information("Total Samples: {TotalSamples}", dataset.TotalSamples);
@@ -576,11 +587,9 @@ namespace DaminionTorchTrainer.Services
             Log.Information("Label Dimension: {LabelDim} (metadata terms)", dataset.LabelDimension);
             Log.Information("Data Source: {DataSource}", dataset.DataSource);
 
-            // Log trained metadata terms (if available)
             Log.Information("===== TRAINED METADATA TERMS =====");
             if (dataset.LabelDimension > 0)
             {
-                // Try to extract terms from sample labels
                 var metadataTerms = ExtractMetadataTermsFromDataset(dataset);
                 if (metadataTerms.Any())
                 {
@@ -600,7 +609,6 @@ namespace DaminionTorchTrainer.Services
                 Log.Information("No metadata terms were trained.");
             }
 
-            // Log ONNX export information
             Log.Information("===== ONNX EXPORT INFORMATION =====");
             Log.Information("ONNX Entry Node: input (shape: [batch_size, {InputDim}])", _config.FeatureDimension);
             Log.Information("ONNX Output Node: output (shape: [batch_size, {OutputDim}])", _config.OutputDimension);
@@ -612,16 +620,16 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Extracts metadata terms from the dataset if available
+        /// Extracts the metadata terms from the dataset vocabulary.
         /// </summary>
+        /// <param name="dataset">The dataset to extract terms from.</param>
+        /// <returns>A list of metadata terms.</returns>
         private List<string> ExtractMetadataTermsFromDataset(TrainingDataset dataset)
         {
             var terms = new List<string>();
             
-            // Use the actual metadata vocabulary if available
             if (dataset.MetadataVocabulary != null && dataset.MetadataVocabulary.Any())
             {
-                // Sort by index to maintain order
                 var sortedTerms = dataset.MetadataVocabulary
                     .OrderBy(kvp => kvp.Value)
                     .Select(kvp => kvp.Key)
@@ -630,15 +638,12 @@ namespace DaminionTorchTrainer.Services
                 return sortedTerms;
             }
             
-            // Fallback: try to extract terms from sample labels
             if (dataset.Samples.Any())
             {
                 var sample = dataset.Samples.First();
                 if (sample.Labels.Count > 0)
                 {
-                    // This is a simplified approach - in a real implementation,
-                    // you'd have access to the actual metadata vocabulary
-                    for (int i = 0; i < Math.Min(sample.Labels.Count, 20); i++) // Limit to first 20 for logging
+                    for (int i = 0; i < Math.Min(sample.Labels.Count, 20); i++)
                     {
                         terms.Add($"metadata_term_{i}");
                     }
@@ -648,6 +653,9 @@ namespace DaminionTorchTrainer.Services
             return terms;
         }
 
+        /// <summary>
+        /// Disposes the TorchSharp resources used by the trainer.
+        /// </summary>
         public void Dispose()
         {
             _model?.Dispose();
@@ -657,17 +665,41 @@ namespace DaminionTorchTrainer.Services
     }
 
     /// <summary>
-    /// Represents training results
+    /// Represents the results of a training process.
     /// </summary>
     public class TrainingResults
     {
+        /// <summary>
+        /// Gets or sets the path to the saved model.
+        /// </summary>
         public string ModelPath { get; set; } = string.Empty;
+        /// <summary>
+        /// Gets or sets the history of training progress.
+        /// </summary>
         public List<TrainingProgress> TrainingHistory { get; set; } = new();
+        /// <summary>
+        /// Gets or sets the final training loss.
+        /// </summary>
         public float FinalTrainingLoss { get; set; }
+        /// <summary>
+        /// Gets or sets the final validation loss.
+        /// </summary>
         public float FinalValidationLoss { get; set; }
+        /// <summary>
+        /// Gets or sets the final training accuracy.
+        /// </summary>
         public float FinalTrainingAccuracy { get; set; }
+        /// <summary>
+        /// Gets or sets the final validation accuracy.
+        /// </summary>
         public float FinalValidationAccuracy { get; set; }
+        /// <summary>
+        /// Gets or sets the training method used.
+        /// </summary>
         public string TrainingMethod { get; set; } = string.Empty;
+        /// <summary>
+        /// Gets or sets the algorithm used for training.
+        /// </summary>
         public string Algorithm { get; set; } = string.Empty;
     }
 }

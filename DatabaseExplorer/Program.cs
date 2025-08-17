@@ -4,8 +4,20 @@ using System.Threading.Tasks;
 
 namespace DatabaseExplorer
 {
+    /// <summary>
+    /// The main entry point for the Database Explorer application.
+    /// </summary>
     class Program
     {
+        /// <summary>
+        /// The main entry point for the Database Explorer application.
+        /// This application connects to a Daminion database and performs several exploration tasks:
+        /// 1. Retrieves and lists all table names.
+        /// 2. Finds and lists tables that may contain tag-related data.
+        /// 3. Attempts to retrieve and display sample data from common tag-related tables.
+        /// 4. Explores the structure and sample data of other potentially interesting tables.
+        /// </summary>
+        /// <param name="args">Command-line arguments (not used).</param>
         static async Task Main(string[] args)
         {
             Console.WriteLine("Daminion Database Explorer");
@@ -13,6 +25,8 @@ namespace DatabaseExplorer
             
             try
             {
+                // NOTE: Connection details are hardcoded for simplicity.
+                // In a real application, these should be moved to a configuration file.
                 var explorer = new DatabaseExplorer(
                     host: "192.168.60.7",
                     database: "NetCatalog",
@@ -22,7 +36,7 @@ namespace DatabaseExplorer
 
                 Console.WriteLine("Connecting to database...");
                 
-                // Get all table names
+                // 1. Get all table names
                 Console.WriteLine("\n1. Getting all tables...");
                 var tables = await explorer.GetTableNamesAsync();
                 Console.WriteLine($"Found {tables.Count} tables:");
@@ -31,7 +45,7 @@ namespace DatabaseExplorer
                     Console.WriteLine($"  - {table}");
                 }
 
-                // Find tag-related tables
+                // 2. Find tag-related tables
                 Console.WriteLine("\n2. Finding tag-related tables...");
                 var tagTables = await explorer.FindTagsAsync();
                 Console.WriteLine("Tag-related tables:");
@@ -40,7 +54,7 @@ namespace DatabaseExplorer
                     Console.WriteLine($"  - {row["table_name"]}");
                 }
 
-                // Try to get tag data
+                // 3. Try to get tag data
                 Console.WriteLine("\n3. Exploring tag data...");
                 var tagData = await explorer.GetTagDataAsync();
                 if (tagData.Rows.Count > 0)
@@ -62,7 +76,7 @@ namespace DatabaseExplorer
                     }
                 }
 
-                // Look for specific tables that might contain tag information
+                // 4. Look for specific tables that might contain tag information
                 var interestingTables = new[] { "tags", "tag", "keywords", "keyword", "categories", "category", "items", "media", "files" };
                 
                 Console.WriteLine("\n4. Exploring interesting tables...");
