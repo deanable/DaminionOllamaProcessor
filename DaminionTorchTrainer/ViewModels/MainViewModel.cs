@@ -12,7 +12,6 @@ using DaminionTorchTrainer.Models;
 using DaminionTorchTrainer.Services;
 using Serilog;
 using System.IO;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace DaminionTorchTrainer.ViewModels
@@ -20,30 +19,25 @@ namespace DaminionTorchTrainer.ViewModels
     public class MainViewModel : INotifyPropertyChanged
     {
         private readonly DaminionApiClient _daminionClient;
-        private readonly ImageProcessor _imageProcessor;
         private readonly DaminionDataExtractor _dataExtractor;
         private readonly LocalImageDataExtractor _localDataExtractor;
-        private TorchSharpTrainer? _trainer;
+        private readonly MLNetImageClassifierTrainer _mlNetTrainer;
         private CancellationTokenSource? _cancellationTokenSource;
 
         private string _status = "Ready";
         private bool _isConnected = false;
         private bool _isTraining = false;
         private bool _isExtracting = false;
-        private TrainingConfig _trainingConfig;
-        private TrainingProgress _currentProgress;
         private TrainingDataset? _currentDataset;
         private string _daminionUrl = "http://localhost:8080";
         private string _daminionUsername = "";
         private string _daminionPassword = "";
         private string _searchQuery = "";
         private int _maxItems = 1000;
-        private string _exportStatus = "";
         
         private int _extractionProgress = 0;
         private int _extractionTotal = 0;
         private string _extractionStatus = "";
-        private bool _autoExportOnnx = true;
         
         private string _localImageFolder = "";
         private bool _includeSubfolders = true;
@@ -51,18 +45,20 @@ namespace DaminionTorchTrainer.ViewModels
         
         public MainViewModel()
         {
+            // The ImageProcessor is no longer needed here, as ML.NET handles it.
+            // We can't remove it completely yet as the old extractors still need it.
+            // This will be cleaned up in a future step.
+            var tempImageProcessor = new ImageProcessor();
+
             _daminionClient = new DaminionApiClient();
-            _imageProcessor = new ImageProcessor();
-            _dataExtractor = new DaminionDataExtractor(_daminionClient, _imageProcessor);
-            _localDataExtractor = new LocalImageDataExtractor(_imageProcessor);
-            _trainingConfig = new TrainingConfig();
-            _currentProgress = new TrainingProgress();
+            _dataExtractor = new DaminionDataExtractor(_daminionClient, tempImageProcessor);
+            _localDataExtractor = new LocalImageDataExtractor(tempImageProcessor);
+            _mlNetTrainer = new MLNetImageClassifierTrainer();
 
             ConnectCommand = new AsyncRelayCommand(ConnectToDaminionAsync, () => !IsConnected && !IsTraining);
             ExtractDataCommand = new AsyncRelayCommand(ExtractDataAsync, () => CanExtractData());
             StartTrainingCommand = new AsyncRelayCommand(StartTrainingAsync, () => CanStartTraining());
             StopTrainingCommand = new RelayCommand(() => StopTraining(), () => IsTraining);
-            ExportOnnxCommand = new AsyncRelayCommand(ExportOnnxModelAsync, () => !IsTraining && CurrentDataset != null);
             BrowseFolderCommand = new RelayCommand(BrowseLocalFolder);
         }
 
@@ -74,16 +70,12 @@ namespace DaminionTorchTrainer.ViewModels
         public int ExtractionProgress { get => _extractionProgress; set => SetProperty(ref _extractionProgress, value); }
         public int ExtractionTotal { get => _extractionTotal; set => SetProperty(ref _extractionTotal, value); }
         public string ExtractionStatus { get => _extractionStatus; set => SetProperty(ref _extractionStatus, value); }
-        public bool AutoExportOnnx { get => _autoExportOnnx; set => SetProperty(ref _autoExportOnnx, value); }
-        public TrainingConfig TrainingConfig { get => _trainingConfig; set => SetProperty(ref _trainingConfig, value); }
-        public TrainingProgress CurrentProgress { get => _currentProgress; set => SetProperty(ref _currentProgress, value); }
         public TrainingDataset? CurrentDataset { get => _currentDataset; set => SetProperty(ref _currentDataset, value); }
         public string DaminionUrl { get => _daminionUrl; set => SetProperty(ref _daminionUrl, value); }
         public string DaminionUsername { get => _daminionUsername; set => SetProperty(ref _daminionUsername, value); }
         public string DaminionPassword { get => _daminionPassword; set => SetProperty(ref _daminionPassword, value); }
         public string SearchQuery { get => _searchQuery; set => SetProperty(ref _searchQuery, value); }
         public int MaxItems { get => _maxItems; set => SetProperty(ref _maxItems, value); }
-        public string ExportStatus { get => _exportStatus; set => SetProperty(ref _exportStatus, value); }
         public string LocalImageFolder { get => _localImageFolder; set => SetProperty(ref _localImageFolder, value); }
         public bool IncludeSubfolders { get => _includeSubfolders; set => SetProperty(ref _includeSubfolders, value); }
         public DataSourceType SelectedDataSource { get => _selectedDataSource; set => SetProperty(ref _selectedDataSource, value); }
@@ -94,7 +86,6 @@ namespace DaminionTorchTrainer.ViewModels
         public ICommand ExtractDataCommand { get; }
         public ICommand StartTrainingCommand { get; }
         public ICommand StopTrainingCommand { get; }
-        public ICommand ExportOnnxCommand { get; }
         public ICommand BrowseFolderCommand { get; }
         #endregion
 
@@ -118,13 +109,14 @@ namespace DaminionTorchTrainer.ViewModels
             try
             {
                 IsExtracting = true;
-                Status = SelectedDataSource == DataSourceType.API ? "Extracting from Daminion API..." : "Extracting from local folder...";
+                Status = "Extracting data...";
                 var progressCallback = new Action<int, int, string>((curr, total, msg) => { ExtractionProgress = curr; ExtractionTotal = total; ExtractionStatus = msg; });
 
-                CurrentDataset = SelectedDataSource == DataSourceType.API
-                    ? await _dataExtractor.ExtractTrainingDataAsync(SearchQuery, MaxItems, progressCallback)
-                    : await _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback);
-
+                // HACK: The old data extractors still exist but we are not using them for training.
+                // We will just use the local file extractor to get a list of files and labels.
+                // This part of the code needs a major refactoring to align with the new ML.NET approach.
+                // For now, we get the dataset to pass to the ML.NET trainer.
+                CurrentDataset = await _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback);
                 Status = $"Extracted {CurrentDataset.Samples.Count} samples.";
             }
             catch (Exception ex) { Status = $"Error: {ex.Message}"; }
@@ -138,37 +130,24 @@ namespace DaminionTorchTrainer.ViewModels
             {
                 IsTraining = true;
                 _cancellationTokenSource = new CancellationTokenSource();
-                Status = "Training...";
+                Status = "Starting ML.NET Training...";
 
-                _trainer = new TorchSharpTrainer(TrainingConfig, progress => Application.Current.Dispatcher.Invoke(() => CurrentProgress = progress));
-                var results = await Task.Run(() => _trainer.TrainAsync(CurrentDataset, _cancellationTokenSource.Token), _cancellationTokenSource.Token);
-                Status = $"Training complete. Accuracy: {results.FinalValidationAccuracy:P2}";
+                var modelPath = await Task.Run(() => _mlNetTrainer.TrainModelAsync(CurrentDataset, (log) => {
+                    Application.Current.Dispatcher.Invoke(() => Status = log);
+                }), _cancellationTokenSource.Token);
 
-                if (AutoExportOnnx) await ExportOnnxModelAsync();
+                Status = $"ML.NET training complete. Model saved at {modelPath}";
             }
             catch (OperationCanceledException) { Status = "Training canceled."; }
             catch (Exception ex) { Status = $"Error: {ex.Message}"; }
             finally
             {
                 IsTraining = false;
-                _trainer?.Dispose();
                 _cancellationTokenSource?.Dispose();
             }
         }
 
         private void StopTraining() => _cancellationTokenSource?.Cancel();
-
-        private async Task ExportOnnxModelAsync()
-        {
-            if (_trainer == null) { ExportStatus = "No trained model."; return; }
-            try
-            {
-                ExportStatus = "Exporting...";
-                var onnxPath = await _trainer.ExportToOnnxAsync();
-                ExportStatus = $"Exported to {onnxPath}";
-            }
-            catch (Exception ex) { ExportStatus = $"Error: {ex.Message}"; }
-        }
 
         private void BrowseLocalFolder()
         {
@@ -176,7 +155,7 @@ namespace DaminionTorchTrainer.ViewModels
             if (dialog.ShowDialog() == true) LocalImageFolder = dialog.FolderName;
         }
 
-        private bool CanExtractData() => !IsTraining && !IsExtracting && (SelectedDataSource == DataSourceType.API ? IsConnected : Directory.Exists(LocalImageFolder));
+        private bool CanExtractData() => !IsTraining && !IsExtracting && Directory.Exists(LocalImageFolder);
         private bool CanStartTraining() => !IsTraining && CurrentDataset != null && CurrentDataset.Samples.Any();
 
         #endregion
