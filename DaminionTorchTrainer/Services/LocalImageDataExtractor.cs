@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using DaminionTorchTrainer.Models;
 using DaminionOllamaInteractionLib.Services;
-using System.Text.RegularExpressions;
 
 namespace DaminionTorchTrainer.Services
 {
@@ -22,19 +21,8 @@ namespace DaminionTorchTrainer.Services
             _imageProcessor = imageProcessor ?? throw new ArgumentNullException(nameof(imageProcessor));
         }
 
-        /// <summary>
-        /// Supported image file extensions
-        /// </summary>
         private static readonly string[] SupportedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".gif", ".webp" };
 
-        /// <summary>
-        /// Extracts training data from local image files
-        /// </summary>
-        /// <param name="folderPath">Path to the folder containing images</param>
-        /// <param name="includeSubfolders">Whether to include subfolders</param>
-        /// <param name="maxItems">Maximum number of items to extract</param>
-        /// <param name="progressCallback">Optional progress callback</param>
-        /// <returns>A training dataset</returns>
         public async Task<TrainingDataset> ExtractTrainingDataAsync(
             string folderPath,
             bool includeSubfolders = true,

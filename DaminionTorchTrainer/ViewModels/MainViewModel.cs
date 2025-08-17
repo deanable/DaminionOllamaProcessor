@@ -46,49 +46,43 @@ namespace DaminionTorchTrainer.ViewModels
         private string _daminionUsername = "";
         private string _daminionPassword = "";
         private string _searchQuery = "";
-        private int _maxItems = 10000; // Increased from 1000 to 10000
+        private int _maxItems = 10000;
         private string _exportStatus = "";
         
-        // Progress tracking properties
         private int _extractionProgress = 0;
         private int _extractionTotal = 0;
         private string _extractionStatus = "";
         private string _dataManagementStatus = "";
         private bool _autoExportOnnx = true;
         
-        // Local image properties
         private string _localImageFolder = "";
         private bool _includeSubfolders = true;
         private DataSourceType _selectedDataSource = DataSourceType.API;
         
-        // Training log and threshold properties
         private ObservableCollection<string> _trainingLogs = new ObservableCollection<string>();
-        private double _resultThreshold = 50.0; // Default to 50%
+        private double _resultThreshold = 50.0;
         private ObservableCollection<TrainingResult> _trainingResults = new ObservableCollection<TrainingResult>();
         
-        // Collection-related properties
         private bool _useSearchQuery = true;
         private bool _useCollection = false;
         private ObservableCollection<CollectionSelectionItem> _availableCollections = new ObservableCollection<CollectionSelectionItem>();
         private CollectionSelectionItem? _selectedCollection;
         private string _selectedCollectionText = "";
 
-        // MBConfig and ML.NET properties
         private string _mbConfigPath = "";
         private string _mbConfigStatus = "";
         private bool _useTorchSharp = true;
         private bool _useMLNet = false;
         private MbConfig? _currentMbConfig;
 
-        // Hidden dimension presets
         private List<string> _hiddenDimensionPresets = new List<string>
         {
-            "1024, 512, 256", // Default for high-resolution features
-            "2048, 1024, 512, 256", // Deep network for complex patterns
-            "512, 256, 128", // Lighter network
-            "2048, 1024, 512", // Medium depth
-            "1024, 512, 256, 128, 64", // Very deep network
-            "4096, 2048, 1024, 512" // Heavy network for maximum accuracy
+            "1024, 512, 256",
+            "2048, 1024, 512, 256",
+            "512, 256, 128",
+            "2048, 1024, 512",
+            "1024, 512, 256, 128, 64",
+            "4096, 2048, 1024, 512"
         };
         private string _selectedHiddenDimensionPreset = "1024, 512, 256";
 
@@ -102,10 +96,8 @@ namespace DaminionTorchTrainer.ViewModels
             _trainingConfig = new TrainingConfig();
             _currentProgress = new TrainingProgress();
 
-            // Load settings from registry
             LoadSettingsFromRegistry();
 
-            // Initialize commands
             ConnectCommand = new AsyncRelayCommand(ConnectToDaminionAsync, () => !IsConnected && !IsTraining);
             DisconnectCommand = new RelayCommand(() => DisconnectFromDaminion(), () => IsConnected && !IsTraining);
             ExtractDataCommand = new AsyncRelayCommand(ExtractDataAsync, () => CanExtractData());
@@ -118,7 +110,6 @@ namespace DaminionTorchTrainer.ViewModels
             SaveSettingsCommand = new RelayCommand(() => SaveSettingsToRegistry());
             BrowseFolderCommand = new RelayCommand(() => BrowseLocalFolder());
             
-            // Temporary test command to manually set connection state
             TestConnectCommand = new RelayCommand(() => {
                 Console.WriteLine("[DEBUG] Test connect command executed");
                 IsConnected = true;
@@ -132,20 +123,15 @@ namespace DaminionTorchTrainer.ViewModels
             ExportLogsCommand = new RelayCommand(ExportTrainingLogs);
             RefreshCollectionsCommand = new AsyncRelayCommand(RefreshCollectionsAsync, () => IsConnected);
 
-            // MBConfig and ML.NET commands
             BrowseMbConfigCommand = new RelayCommand(BrowseMbConfig);
             LoadMbConfigCommand = new AsyncRelayCommand(LoadMbConfigAsync);
 
-            // Data Management commands
             TestDataExtractionCommand = new AsyncRelayCommand(TestDataExtractionAsync, () => CanExtractData());
             SaveDatasetCommand = new AsyncRelayCommand(SaveDatasetAsync, () => CurrentDataset != null);
             ExportPropertiesCommand = new AsyncRelayCommand(ExportPropertiesAsync, () => CurrentDataset != null);
             LoadDatasetCommand = new AsyncRelayCommand(LoadDatasetAsync);
             OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
 
-
-
-            // Initialize model list
             _ = RefreshModelsAsync();
         }
 
@@ -283,7 +269,6 @@ namespace DaminionTorchTrainer.ViewModels
             set => SetProperty(ref _exportStatus, value);
         }
 
-        // Local image properties
         public string LocalImageFolder
         {
             get => _localImageFolder;
@@ -314,7 +299,6 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
-        // Training log and threshold properties
         public ObservableCollection<string> TrainingLogs
         {
             get => _trainingLogs;
@@ -329,10 +313,8 @@ namespace DaminionTorchTrainer.ViewModels
                 if (SetProperty(ref _resultThreshold, value))
                 {
                     SaveSettingsToRegistry();
-                    // Trigger re-filter if we have current predictions to filter
                     if (_currentPredictions.Count > 0)
                     {
-                        // Ensure we're on the UI thread
                         if (Application.Current?.Dispatcher != null)
                         {
                             Application.Current.Dispatcher.BeginInvoke(new Action(FilterCurrentPredictions));
@@ -352,7 +334,6 @@ namespace DaminionTorchTrainer.ViewModels
             set => SetProperty(ref _trainingResults, value);
         }
 
-        // Collection-related properties
         public bool UseSearchQuery
         {
             get => _useSearchQuery;
@@ -429,21 +410,16 @@ namespace DaminionTorchTrainer.ViewModels
         public ICommand ExportLogsCommand { get; }
         public ICommand RefreshCollectionsCommand { get; }
 
-        // MBConfig and ML.NET commands
         public ICommand BrowseMbConfigCommand { get; }
         public ICommand LoadMbConfigCommand { get; }
 
-        // Data Management commands
         public ICommand TestDataExtractionCommand { get; }
         public ICommand SaveDatasetCommand { get; }
         public ICommand ExportPropertiesCommand { get; }
         public ICommand LoadDatasetCommand { get; }
         public ICommand OpenDataFolderCommand { get; }
 
-        // Database commands
 
-
-        // Model Testing Properties
         private string? _selectedModel;
         public string? SelectedModel
         {
@@ -498,10 +474,8 @@ namespace DaminionTorchTrainer.ViewModels
             set => SetProperty(ref _availableModels, value);
         }
 
-        // Store current predictions for re-filtering
         private List<(string term, float probability)> _currentPredictions = new();
         
-        // Test results collection
         private ObservableCollection<string> _testResults = new ObservableCollection<string>();
 
         #region MBConfig and ML.NET Properties
@@ -544,7 +518,6 @@ namespace DaminionTorchTrainer.ViewModels
 
         #endregion
 
-        // Hidden dimension presets
         public List<string> HiddenDimensionPresets
         {
             get => _hiddenDimensionPresets;
@@ -558,7 +531,6 @@ namespace DaminionTorchTrainer.ViewModels
             { 
                 if (SetProperty(ref _selectedHiddenDimensionPreset, value))
                 {
-                    // Update the training config with the selected preset
                     TrainingConfig.HiddenDimensionsString = value;
                     SaveSettingsToRegistry();
                 }
@@ -572,50 +544,34 @@ namespace DaminionTorchTrainer.ViewModels
 
         private async Task ConnectToDaminionAsync()
         {
-            Console.WriteLine("[DEBUG] ConnectToDaminionAsync called");
             try
             {
                 Status = "Connecting to Daminion...";
-                Console.WriteLine($"[DEBUG] Attempting to connect to: {DaminionUrl}");
-                Console.WriteLine($"[DEBUG] Username: {DaminionUsername}");
-                Console.WriteLine($"[DEBUG] Password length: {DaminionPassword?.Length ?? 0}");
-                
-                // Set the API base URL
                 _daminionClient.SetApiBaseUrl(DaminionUrl);
                 
-                // Authenticate with Daminion
                 if (string.IsNullOrEmpty(DaminionUsername) || string.IsNullOrEmpty(DaminionPassword))
                 {
                     Status = "Username and password are required for authentication.";
-                    Console.WriteLine("[DEBUG] Username or password is empty");
                     return;
                 }
 
-                Console.WriteLine("[DEBUG] Calling LoginAsync...");
                 var loginSuccess = await _daminionClient.LoginAsync(DaminionUrl, DaminionUsername, DaminionPassword);
-                Console.WriteLine($"[DEBUG] LoginAsync result: {loginSuccess}");
                 
                 if (!loginSuccess)
                 {
                     Status = "Failed to authenticate with Daminion. Please check your credentials.";
-                    Console.WriteLine("[DEBUG] Login failed");
                     return;
                 }
 
-                Console.WriteLine("[DEBUG] Login successful, setting IsConnected = true");
                 IsConnected = true;
                 Status = "Connected to Daminion successfully.";
                 
-                // Manually trigger command refresh
                 CommandManager.InvalidateRequerySuggested();
-                Console.WriteLine("[DEBUG] Command refresh triggered");
                 
-                // Automatically refresh collections when connected
                 await RefreshCollectionsAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Exception in ConnectToDaminionAsync: {ex}");
                 Status = $"Error connecting to Daminion: {ex.Message}";
             }
         }
@@ -629,7 +585,6 @@ namespace DaminionTorchTrainer.ViewModels
                 CurrentDataset = null;
                 Status = "Disconnected from Daminion.";
                 
-                // Manually trigger command refresh
                 CommandManager.InvalidateRequerySuggested();
             }
             catch (Exception ex)
@@ -646,21 +601,20 @@ namespace DaminionTorchTrainer.ViewModels
             {
                 IsExtracting = true;
                 
+                var progressCallback = new Action<int, int, string>((current, total, message) =>
+                {
+                    ExtractionProgress = current;
+                    ExtractionTotal = total;
+                    ExtractionStatus = message;
+                });
+
                 if (SelectedDataSource == DataSourceType.API)
                 {
-                    var progressCallback = new Action<int, int, string>((current, total, message) =>
-                    {
-                        ExtractionProgress = current;
-                        ExtractionTotal = total;
-                        ExtractionStatus = message;
-                    });
-
                     if (UseSearchQuery)
                     {
                         Log.Information("ExtractDataAsync - Using Search Query - MaxItems: {MaxItems}, SearchQuery: '{SearchQuery}'", MaxItems, SearchQuery);
                         Status = "Extracting data from Daminion API using search query...";
                         
-                        // Use simple text search - multiple terms are treated as AND by default
                         CurrentDataset = await Task.Run(() => _dataExtractor.ExtractTrainingDataAsync(
                             SearchQuery, 
                             MaxItems,
@@ -675,7 +629,6 @@ namespace DaminionTorchTrainer.ViewModels
                             MaxItems, SelectedCollection.Text, SelectedCollection.Value);
                         Status = $"Extracting data from Daminion API using collection '{SelectedCollection.Text}'...";
                         
-                        // Use collection-based extraction
                         CurrentDataset = await Task.Run(() => _dataExtractor.ExtractTrainingDataFromCollectionAsync(
                             SelectedCollection.Value,
                             MaxItems,
@@ -693,14 +646,6 @@ namespace DaminionTorchTrainer.ViewModels
                 else
                 {
                     Status = "Extracting data from local images...";
-                    
-                    // Create progress callback for local extraction
-                    var progressCallback = new Action<int, int, string>((current, total, message) =>
-                    {
-                        ExtractionProgress = current;
-                        ExtractionTotal = total;
-                        ExtractionStatus = message;
-                    });
                     
                     CurrentDataset = await Task.Run(() => _localDataExtractor.ExtractTrainingDataAsync(
                         LocalImageFolder,
@@ -739,7 +684,6 @@ namespace DaminionTorchTrainer.ViewModels
                 _cancellationTokenSource = new CancellationTokenSource();
                 Status = "Starting training...";
 
-                // Add initial log entry
                 var startLog = $"[{DateTime.Now:HH:mm:ss}] Training started - Dataset: {CurrentDataset.Name}, Samples: {CurrentDataset.TotalSamples}";
                 if (Application.Current?.Dispatcher != null)
                 {
@@ -753,15 +697,12 @@ namespace DaminionTorchTrainer.ViewModels
                     TrainingLogs.Add(startLog);
                 }
 
-                // Create trainer
                 _trainer = new TorchSharpTrainer(TrainingConfig, OnTrainingProgress);
 
-                // Start training in background thread
                 var results = await Task.Run(() => _trainer.TrainAsync(CurrentDataset, _cancellationTokenSource.Token));
 
                 Status = $"Training completed. Final accuracy: {results.FinalValidationAccuracy:F4}";
 
-                // Add completion log entry
                 var completionLog = $"[{DateTime.Now:HH:mm:ss}] Training completed - Final accuracy: {results.FinalValidationAccuracy:F4}";
                 if (Application.Current?.Dispatcher != null)
                 {
@@ -775,7 +716,6 @@ namespace DaminionTorchTrainer.ViewModels
                     TrainingLogs.Add(completionLog);
                 }
 
-                // Auto-export ONNX model if enabled
                 if (AutoExportOnnx && _trainer != null)
                 {
                     try
@@ -874,7 +814,6 @@ namespace DaminionTorchTrainer.ViewModels
 
         private void OnTrainingProgress(TrainingProgress progress)
         {
-            // Ensure we're on the UI thread for all UI updates
             if (Application.Current?.Dispatcher != null)
             {
                 Application.Current.Dispatcher.Invoke(() =>
@@ -894,14 +833,12 @@ namespace DaminionTorchTrainer.ViewModels
             Status = $"Training - Epoch {progress.CurrentEpoch}/{progress.TotalEpochs} - " +
                     $"Loss: {progress.TrainingLoss:F4}, Acc: {progress.TrainingAccuracy:F4}";
 
-            // Add to training logs
             var logEntry = $"[{DateTime.Now:HH:mm:ss}] Epoch {progress.CurrentEpoch}/{progress.TotalEpochs} - " +
                           $"Train Loss: {progress.TrainingLoss:F4}, Train Acc: {progress.TrainingAccuracy:F4}, " +
                           $"Val Loss: {progress.ValidationLoss:F4}, Val Acc: {progress.ValidationAccuracy:F4}";
             
             TrainingLogs.Add(logEntry);
 
-            // Add training result
             var result = new TrainingResult
             {
                 Epoch = progress.CurrentEpoch,
@@ -909,20 +846,18 @@ namespace DaminionTorchTrainer.ViewModels
                 ValidationLoss = progress.ValidationLoss,
                 TrainingAccuracy = progress.TrainingAccuracy,
                 ValidationAccuracy = progress.ValidationAccuracy,
-                ConfidenceScore = progress.ValidationAccuracy, // Use validation accuracy as confidence
+                ConfidenceScore = progress.ValidationAccuracy,
                 Timestamp = DateTime.Now,
                 Details = $"Epoch {progress.CurrentEpoch} completed"
             };
 
             TrainingResults.Add(result);
 
-            // Keep only last 1000 log entries to prevent memory issues
             if (TrainingLogs.Count > 1000)
             {
                 TrainingLogs.RemoveAt(0);
             }
 
-            // Keep only last 500 results
             if (TrainingResults.Count > 500)
             {
                 TrainingResults.RemoveAt(0);
@@ -964,9 +899,6 @@ namespace DaminionTorchTrainer.ViewModels
 
         #region Collection Management Methods
 
-        /// <summary>
-        /// Refreshes the list of available collections from Daminion
-        /// </summary>
         private async Task RefreshCollectionsAsync()
         {
             if (!IsConnected)
@@ -980,7 +912,6 @@ namespace DaminionTorchTrainer.ViewModels
                 Status = "Refreshing collections...";
                 Log.Information("Refreshing collections from Daminion");
 
-                // Step 1: Get all tags to find the Collections tag
                 var tagsResponse = await _daminionClient.GetTagsAsync();
                 if (tagsResponse?.Success != true || tagsResponse.Data == null)
                 {
@@ -988,7 +919,6 @@ namespace DaminionTorchTrainer.ViewModels
                     return;
                 }
 
-                // Step 2: Find the Collections tag (usually named "Shared Collections" or "Collections")
                 var collectionsTag = tagsResponse.Data.FirstOrDefault(t => 
                     t.Name.Equals("Shared Collections", StringComparison.OrdinalIgnoreCase) ||
                     t.Name.Equals("Collections", StringComparison.OrdinalIgnoreCase));
@@ -1002,7 +932,6 @@ namespace DaminionTorchTrainer.ViewModels
 
                 Log.Information("Found Collections tag: {TagName} (ID: {TagId})", collectionsTag.Name, collectionsTag.Id);
 
-                // Step 3: Get all collection values
                 var collectionsResponse = await _daminionClient.GetTagValuesAsync(collectionsTag.Id, 1000, 0, 0, "");
                 if (collectionsResponse?.Success != true || collectionsResponse.Values == null)
                 {
@@ -1010,19 +939,17 @@ namespace DaminionTorchTrainer.ViewModels
                     return;
                 }
 
-                // Step 4: Populate the collections list
                 var newCollections = new ObservableCollection<CollectionSelectionItem>();
                 foreach (var collection in collectionsResponse.Values.OrderBy(c => c.Text))
                 {
                     newCollections.Add(new CollectionSelectionItem(
                         collection.Text,
                         collection.Id,
-                        collection.RawValue, // Use RawValue as GUID
+                        collection.RawValue,
                         $"ID: {collection.Id}"
                     ));
                 }
 
-                // Update on UI thread
                 if (Application.Current?.Dispatcher != null)
                 {
                     Application.Current.Dispatcher.Invoke(() =>
@@ -1046,9 +973,6 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
-        /// <summary>
-        /// Updates the selected collection text display
-        /// </summary>
         private void UpdateSelectedCollectionText()
         {
             if (SelectedCollection != null)
@@ -1128,7 +1052,6 @@ namespace DaminionTorchTrainer.ViewModels
                     return;
                 }
 
-                // Export the model to ONNX format
                 var onnxPath = await _trainer.ExportToOnnxAsync();
                 
                 ExportStatus = $"Model exported successfully to: {onnxPath}";
@@ -1148,11 +1071,9 @@ namespace DaminionTorchTrainer.ViewModels
                 Status = "Refreshing models...";
                 var models = new List<string>();
                 
-                // Look for trained models in the models directory
                 var modelsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
                 if (Directory.Exists(modelsDirectory))
                 {
-                    // Look for TorchSharp models (.pt files)
                     var torchSharpDirectories = Directory.GetDirectories(modelsDirectory)
                         .Where(dir => File.Exists(Path.Combine(dir, "model.pt")))
                         .Select(dir => $"[TorchSharp] {Path.GetFileName(dir)}")
@@ -1161,7 +1082,6 @@ namespace DaminionTorchTrainer.ViewModels
                     
                     models.AddRange(torchSharpDirectories);
                     
-                    // Look for ML.NET models (.mbconfig files)
                     var mlNetDirectories = Directory.GetDirectories(modelsDirectory)
                         .Where(dir => File.Exists(Path.Combine(dir, "model.mbconfig")) || 
                                     File.Exists(Path.Combine(dir, "model.zip")))
@@ -1171,7 +1091,6 @@ namespace DaminionTorchTrainer.ViewModels
                     
                     models.AddRange(mlNetDirectories);
                     
-                    // Look for ONNX models (.onnx files)
                     var onnxDirectories = Directory.GetDirectories(modelsDirectory)
                         .Where(dir => File.Exists(Path.Combine(dir, "model.onnx")))
                         .Select(dir => $"[ONNX] {Path.GetFileName(dir)}")
@@ -1181,7 +1100,6 @@ namespace DaminionTorchTrainer.ViewModels
                     models.AddRange(onnxDirectories);
                 }
                 
-                // Also look for models in the onnx_exports directory
                 var onnxExportsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "onnx_exports");
                 if (Directory.Exists(onnxExportsDirectory))
                 {
@@ -1217,59 +1135,46 @@ namespace DaminionTorchTrainer.ViewModels
         {
             try
             {
-                Console.WriteLine("[DEBUG] Loading settings from registry...");
-                
-                // Load connection settings
                 DaminionUrl = RegistryService.LoadString("DaminionUrl") ?? "http://localhost:8080";
                 DaminionUsername = RegistryService.LoadString("DaminionUsername") ?? "";
                 DaminionPassword = RegistryService.LoadEncryptedString("DaminionPassword") ?? "";
                 
-                // Load data source settings
                 SelectedDataSource = RegistryService.LoadEnum("SelectedDataSource", DataSourceType.API);
                 LocalImageFolder = RegistryService.LoadString("LocalImageFolder") ?? "";
                 IncludeSubfolders = RegistryService.LoadBool("IncludeSubfolders", true);
                 
-                // Load search settings
                 SearchQuery = RegistryService.LoadString("SearchQuery") ?? "";
-                MaxItems = RegistryService.LoadInt("MaxItems", 10000); // Changed from 1000 to 10000
+                MaxItems = RegistryService.LoadInt("MaxItems", 10000);
                 
-                // Load collection settings
                 UseSearchQuery = RegistryService.LoadBool("UseSearchQuery", true);
                 UseCollection = RegistryService.LoadBool("UseCollection", false);
                 var savedCollectionId = RegistryService.LoadLong("SelectedCollectionId", 0);
                 var savedCollectionText = RegistryService.LoadString("SelectedCollectionText") ?? "";
                 var savedCollectionGuid = RegistryService.LoadString("SelectedCollectionGuid") ?? "";
                 
-                // Restore selected collection if it exists
                 if (savedCollectionId > 0 && !string.IsNullOrEmpty(savedCollectionText))
                 {
                     SelectedCollection = new CollectionSelectionItem(savedCollectionText, savedCollectionId, savedCollectionGuid);
                 }
                 
-                // Load training configuration
                 TrainingConfig.LearningRate = (float)RegistryService.LoadDouble("LearningRate", 0.001);
                 TrainingConfig.Epochs = RegistryService.LoadInt("Epochs", 100);
                 TrainingConfig.BatchSize = RegistryService.LoadInt("BatchSize", 32);
                 TrainingConfig.Device = RegistryService.LoadString("Device") ?? "CPU";
                 
-                // Load threshold setting (convert from old decimal format if needed)
                 var savedThreshold = RegistryService.LoadDouble("ResultThreshold", 50.0);
-                // If the saved value is less than 1, it's in the old decimal format, convert to percentage
                 if (savedThreshold < 1.0)
                 {
                     savedThreshold = savedThreshold * 100.0;
                 }
                 ResultThreshold = savedThreshold;
                 
-                // Load hidden dimension preset
                 SelectedHiddenDimensionPreset = RegistryService.LoadString("SelectedHiddenDimensionPreset") ?? "1024, 512, 256";
                 
-                Console.WriteLine("[DEBUG] Settings loaded from registry successfully");
                 Status = "Settings loaded successfully.";
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error loading settings: {ex.Message}");
                 Status = $"Error loading settings: {ex.Message}";
             }
         }
@@ -1278,47 +1183,36 @@ namespace DaminionTorchTrainer.ViewModels
         {
             try
             {
-                Console.WriteLine("[DEBUG] Saving settings to registry...");
-                
-                // Save connection settings
                 RegistryService.SaveString("DaminionUrl", DaminionUrl);
                 RegistryService.SaveString("DaminionUsername", DaminionUsername);
                 RegistryService.SaveEncryptedString("DaminionPassword", DaminionPassword);
                 
-                // Save data source settings
                 RegistryService.SaveEnum("SelectedDataSource", SelectedDataSource);
                 RegistryService.SaveString("LocalImageFolder", LocalImageFolder);
                 RegistryService.SaveBool("IncludeSubfolders", IncludeSubfolders);
                 
-                // Save search settings
                 RegistryService.SaveString("SearchQuery", SearchQuery);
                 RegistryService.SaveInt("MaxItems", MaxItems);
                 
-                // Save collection settings
                 RegistryService.SaveBool("UseSearchQuery", UseSearchQuery);
                 RegistryService.SaveBool("UseCollection", UseCollection);
                 RegistryService.SaveLong("SelectedCollectionId", SelectedCollection?.Value ?? 0);
                 RegistryService.SaveString("SelectedCollectionText", SelectedCollection?.Text ?? "");
                 RegistryService.SaveString("SelectedCollectionGuid", SelectedCollection?.Guid ?? "");
                 
-                // Save training configuration
                 RegistryService.SaveDouble("LearningRate", (double)TrainingConfig.LearningRate);
                 RegistryService.SaveInt("Epochs", TrainingConfig.Epochs);
                 RegistryService.SaveInt("BatchSize", TrainingConfig.BatchSize);
                 RegistryService.SaveString("Device", TrainingConfig.Device);
                 
-                // Save threshold setting
                 RegistryService.SaveDouble("ResultThreshold", ResultThreshold);
                 
-                // Save hidden dimension preset
                 RegistryService.SaveString("SelectedHiddenDimensionPreset", SelectedHiddenDimensionPreset);
                 
-                Console.WriteLine("[DEBUG] Settings saved to registry successfully");
                 Status = "Settings saved successfully.";
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error saving settings: {ex.Message}");
                 Status = $"Error saving settings: {ex.Message}";
             }
         }
@@ -1373,21 +1267,17 @@ namespace DaminionTorchTrainer.ViewModels
             {
                 var canExtract = IsConnected;
                 
-                // Additional validation for collection mode
                 if (UseCollection && SelectedCollection == null)
                 {
                     canExtract = false;
                 }
                 
-                Console.WriteLine($"[DEBUG] CanExtractData - API Mode: IsConnected={IsConnected}, UseCollection={UseCollection}, SelectedCollection={SelectedCollection?.Text}, CanExtract={canExtract}");
                 return canExtract;
             }
             else
             {
-                var canExtract = !string.IsNullOrWhiteSpace(LocalImageFolder) && 
+                return !string.IsNullOrWhiteSpace(LocalImageFolder) &&
                        System.IO.Directory.Exists(LocalImageFolder);
-                Console.WriteLine($"[DEBUG] CanExtractData - Local Mode: LocalImageFolder='{LocalImageFolder}', CanExtract={canExtract}");
-                return canExtract;
             }
         }
 
@@ -1398,7 +1288,6 @@ namespace DaminionTorchTrainer.ViewModels
 
         private void TestConnect()
         {
-            // Implementation for testing connection
             Status = "Connection test not implemented yet.";
         }
 
@@ -1453,7 +1342,6 @@ namespace DaminionTorchTrainer.ViewModels
                 }
                 TestStatus = "Loading model and preprocessing image...";
                 
-                // Determine model type and path based on the selected model name
                 string modelPath = "";
                 string modelType = "";
                 string modelName = SelectedModel;
@@ -1488,7 +1376,6 @@ namespace DaminionTorchTrainer.ViewModels
                 }
                 else
                 {
-                    // Fallback for legacy model names
                     modelType = "Unknown";
                     modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "model.pt");
                 }
@@ -1511,7 +1398,6 @@ namespace DaminionTorchTrainer.ViewModels
                     return;
                 }
 
-                // Load and preprocess the image
                 var imageFeatures = await PreprocessImageAsync(SelectedImagePath);
                 
                 var inferenceResults = new ObservableCollection<string> { $"Running inference with {modelType} model..." };
@@ -1528,33 +1414,27 @@ namespace DaminionTorchTrainer.ViewModels
                 }
                 TestStatus = $"Running inference with {modelType} model...";
                 
-                // For now, create a simple mock prediction since loading the full model is complex
-                // In a real implementation, you would load the model and run inference
                 var mockPredictions = GenerateMockPredictions(imageFeatures.Length);
                 
-                // Get metadata vocabulary from the model directory
                 var vocabularyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", modelName, "vocabulary.json");
                 var metadataTerms = await LoadMetadataVocabularyAsync(vocabularyPath);
                 
-                // Store current predictions for re-filtering
                 _currentPredictions.Clear();
                 for (int i = 0; i < mockPredictions.Length && i < metadataTerms.Count; i++)
                 {
                     _currentPredictions.Add((metadataTerms[i], mockPredictions[i]));
                 }
                 
-                // Format results using threshold (convert percentage to decimal)
                 var thresholdDecimal = ResultThreshold / 100.0;
                 var results = new List<string>();
                 foreach (var (term, probability) in _currentPredictions)
                 {
-                    if (probability >= thresholdDecimal) // Only show terms above threshold
+                    if (probability >= thresholdDecimal)
                     {
                         results.Add($"{term}: {probability:P1}");
                     }
                 }
                 
-                // Create new collection to avoid binding issues
                 var newResults = new ObservableCollection<string>();
                 if (results.Count > 0)
                 {
@@ -1576,7 +1456,6 @@ namespace DaminionTorchTrainer.ViewModels
                     TestStatus = $"No predictions found above threshold ({ResultThreshold:F0}%) using {modelType} model";
                 }
                 
-                // Use dispatcher to ensure UI thread safety
                 if (Application.Current?.Dispatcher != null)
                 {
                     Application.Current.Dispatcher.Invoke(() =>
@@ -1610,14 +1489,12 @@ namespace DaminionTorchTrainer.ViewModels
 
         private float[] GenerateMockPredictions(int featureCount)
         {
-            // Generate mock predictions for demonstration
-            // In a real implementation, this would be the actual model output
             var random = new Random();
-            var predictions = new float[10]; // Assume 10 output classes
+            var predictions = new float[10];
             
             for (int i = 0; i < predictions.Length; i++)
             {
-                predictions[i] = (float)random.NextDouble() * 0.8f; // Random values between 0 and 0.8
+                predictions[i] = (float)random.NextDouble() * 0.8f;
             }
             
             return predictions;
@@ -1625,24 +1502,21 @@ namespace DaminionTorchTrainer.ViewModels
 
         private async Task<float[]> PreprocessImageAsync(string imagePath)
         {
-            // Load image using System.Drawing
             using var image = System.Drawing.Image.FromFile(imagePath);
             using var bitmap = new System.Drawing.Bitmap(image);
             
-            // Resize to 224x224 (standard input size)
             using var resizedBitmap = new System.Drawing.Bitmap(bitmap, new System.Drawing.Size(224, 224));
             
-            // Extract RGB values and normalize to 0-1
             var features = new List<float>();
             
-            for (int y = 0; y < 224; y += 8) // Sample every 8th pixel to reduce features
+            for (int y = 0; y < 224; y += 8)
             {
                 for (int x = 0; x < 224; x += 8)
                 {
                     var pixel = resizedBitmap.GetPixel(x, y);
-                    features.Add(pixel.R / 255.0f); // Red channel
-                    features.Add(pixel.G / 255.0f); // Green channel
-                    features.Add(pixel.B / 255.0f); // Blue channel
+                    features.Add(pixel.R / 255.0f);
+                    features.Add(pixel.G / 255.0f);
+                    features.Add(pixel.B / 255.0f);
                 }
             }
             
@@ -1658,7 +1532,6 @@ namespace DaminionTorchTrainer.ViewModels
                     var json = await File.ReadAllTextAsync(vocabularyPath);
                     var vocabulary = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(json);
                     
-                    // Convert back to ordered list
                     var terms = new List<string>(vocabulary.Count);
                     for (int i = 0; i < vocabulary.Count; i++)
                     {
@@ -1676,7 +1549,6 @@ namespace DaminionTorchTrainer.ViewModels
                 Log.Warning(ex, "Failed to load metadata vocabulary from {VocabularyPath}", vocabularyPath);
             }
             
-            // Fallback: return generic terms
             return new List<string> { "unknown" };
         }
 
@@ -1715,12 +1587,8 @@ namespace DaminionTorchTrainer.ViewModels
 
             try
             {
-                // Convert percentage to decimal
                 var thresholdDecimal = ResultThreshold / 100.0;
                 var results = new List<string>();
-                
-                Console.WriteLine($"[DEBUG] Filtering predictions with threshold: {ResultThreshold:F0}% ({thresholdDecimal:F3})");
-                Console.WriteLine($"[DEBUG] Total predictions to filter: {_currentPredictions.Count}");
                 
                 foreach (var (term, probability) in _currentPredictions)
                 {
@@ -1730,9 +1598,6 @@ namespace DaminionTorchTrainer.ViewModels
                     }
                 }
                 
-                Console.WriteLine($"[DEBUG] Predictions above threshold: {results.Count}");
-                
-                // Create a new collection to avoid UI binding issues
                 var newResults = new ObservableCollection<string>();
                 
                 if (results.Count > 0)
@@ -1750,7 +1615,6 @@ namespace DaminionTorchTrainer.ViewModels
                     TestStatus = $"No predictions found above threshold ({ResultThreshold:F0}%)";
                 }
                 
-                // Use dispatcher to ensure UI thread safety
                 if (Application.Current?.Dispatcher != null)
                 {
                     Application.Current.Dispatcher.Invoke(() =>
@@ -1765,8 +1629,6 @@ namespace DaminionTorchTrainer.ViewModels
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error in FilterCurrentPredictions: {ex.Message}");
-                // Fallback: create a simple error message
                 var errorResults = new ObservableCollection<string> { $"Error filtering predictions: {ex.Message}" };
                 if (Application.Current?.Dispatcher != null)
                 {
@@ -1792,13 +1654,11 @@ namespace DaminionTorchTrainer.ViewModels
             {
                 DataManagementStatus = "Testing data extraction...";
                 
-                // Perform a small test extraction (limit to 10 items)
                 var originalMaxItems = MaxItems;
                 MaxItems = 10;
                 
                 await ExtractDataAsync();
                 
-                // Restore original max items
                 MaxItems = originalMaxItems;
                 
                 if (CurrentDataset != null)
@@ -1875,13 +1735,11 @@ namespace DaminionTorchTrainer.ViewModels
                 {
                     DataManagementStatus = "Exporting properties...";
                     
-                    // Extract unique properties from the dataset
                     var allProperties = new HashSet<string>();
                     var propertyValues = new Dictionary<string, HashSet<string>>();
                     
                     foreach (var sample in CurrentDataset.Samples)
                     {
-                        // Collect from Tags
                         if (sample.Tags != null && sample.Tags.Count > 0)
                         {
                             allProperties.Add("Tags");
@@ -1893,7 +1751,6 @@ namespace DaminionTorchTrainer.ViewModels
                             }
                         }
                         
-                        // Collect from Categories
                         if (sample.Categories != null && sample.Categories.Count > 0)
                         {
                             allProperties.Add("Categories");
@@ -1905,7 +1762,6 @@ namespace DaminionTorchTrainer.ViewModels
                             }
                         }
                         
-                        // Collect from Keywords
                         if (sample.Keywords != null && sample.Keywords.Count > 0)
                         {
                             allProperties.Add("Keywords");
@@ -1917,7 +1773,6 @@ namespace DaminionTorchTrainer.ViewModels
                             }
                         }
                         
-                        // Collect from Description
                         if (!string.IsNullOrEmpty(sample.Description))
                         {
                             allProperties.Add("Description");
@@ -1926,7 +1781,6 @@ namespace DaminionTorchTrainer.ViewModels
                             propertyValues["Description"].Add(sample.Description);
                         }
                         
-                        // Collect from MediaFormat
                         if (!string.IsNullOrEmpty(sample.MediaFormat))
                         {
                             allProperties.Add("MediaFormat");
@@ -1935,7 +1789,6 @@ namespace DaminionTorchTrainer.ViewModels
                             propertyValues["MediaFormat"].Add(sample.MediaFormat);
                         }
                         
-                        // Collect from FormatType
                         if (!string.IsNullOrEmpty(sample.FormatType))
                         {
                             allProperties.Add("FormatType");
@@ -1947,14 +1800,12 @@ namespace DaminionTorchTrainer.ViewModels
 
                     var propertiesList = allProperties.OrderBy(p => p).ToList();
                     
-                    // Create property statistics
                     var propertyStats = new Dictionary<string, object>();
                     foreach (var property in propertiesList)
                     {
                         var values = propertyValues[property];
                         var count = 0;
                         
-                        // Count occurrences
                         foreach (var sample in CurrentDataset.Samples)
                         {
                             switch (property)
@@ -1985,7 +1836,7 @@ namespace DaminionTorchTrainer.ViewModels
                             TotalOccurrences = count,
                             UniqueValues = values.Count,
                             Coverage = (double)count / CurrentDataset.Samples.Count,
-                            SampleValues = values.Take(10).ToList() // First 10 unique values
+                            SampleValues = values.Take(10).ToList()
                         };
                     }
 
@@ -2053,7 +1904,6 @@ namespace DaminionTorchTrainer.ViewModels
         {
             try
             {
-                // Open the default documents folder where datasets are typically saved
                 var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
                 if (Directory.Exists(documentsPath))
                 {
@@ -2104,7 +1954,6 @@ namespace DaminionTorchTrainer.ViewModels
                 MbConfigStatus = "Loading MBConfig...";
                 _mlNetTrainer ??= new MLNetTrainer(progress =>
                 {
-                    // Update training progress
                     if (Application.Current?.Dispatcher != null)
                     {
                         Application.Current.Dispatcher.Invoke(() =>
@@ -2150,7 +1999,6 @@ namespace DaminionTorchTrainer.ViewModels
         {
             if (Equals(field, value)) return false;
             field = value;
-            Console.WriteLine($"[DEBUG] Property changed: {propertyName} = {value}");
             OnPropertyChanged(propertyName);
             return true;
         }
@@ -2158,9 +2006,6 @@ namespace DaminionTorchTrainer.ViewModels
         #endregion
     }
 
-    /// <summary>
-    /// Simple relay command implementation
-    /// </summary>
     public class RelayCommand : ICommand
     {
         private readonly Action _execute;
@@ -2184,9 +2029,6 @@ namespace DaminionTorchTrainer.ViewModels
         }
     }
 
-    /// <summary>
-    /// Async relay command implementation
-    /// </summary>
     public class AsyncRelayCommand : ICommand
     {
         private readonly Func<Task> _execute;
@@ -2224,4 +2066,3 @@ namespace DaminionTorchTrainer.ViewModels
         }
     }
 }
-
