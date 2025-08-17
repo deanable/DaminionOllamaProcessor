@@ -26,15 +26,12 @@ namespace DaminionTorchTrainer.Services
             int maxItems = 1000,
             Action<int, int, string>? progressCallback = null)
         {
-            Log.Information("===== VISUAL CONTENT TRAINING DATA EXTRACTION =====");
             var searchResponse = await _daminionClient.SearchMediaItemsAsync($"5000,{searchQuery}", "5000,all", maxItems);
-            
-            if (searchResponse?.Success != true || searchResponse.MediaItems == null || searchResponse.MediaItems.Count == 0)
+            if (searchResponse?.Success != true || searchResponse.MediaItems == null || !searchResponse.MediaItems.Any())
             {
-                Log.Warning("No media items found for search query: '{SearchQuery}'", searchQuery);
+                Log.Warning("No media items found for search: '{SearchQuery}'", searchQuery);
                 return new TrainingDataset();
             }
-
             return await ProcessMediaItems(searchResponse.MediaItems, progressCallback);
         }
 
@@ -43,15 +40,12 @@ namespace DaminionTorchTrainer.Services
             int maxItems = 1000,
             Action<int, int, string>? progressCallback = null)
         {
-            Log.Information("===== COLLECTION-BASED VISUAL CONTENT TRAINING DATA EXTRACTION =====");
             var searchResponse = await _daminionClient.SearchMediaItemsAsync($"12,{collectionId}", "12,all", maxItems);
-            
-            if (searchResponse?.Success != true || searchResponse.MediaItems == null || searchResponse.MediaItems.Count == 0)
+            if (searchResponse?.Success != true || searchResponse.MediaItems == null || !searchResponse.MediaItems.Any())
             {
-                Log.Warning("No media items found for collection ID: {CollectionId}", collectionId);
+                Log.Warning("No media items found for collection: {CollectionId}", collectionId);
                 return new TrainingDataset();
             }
-
             return await ProcessMediaItems(searchResponse.MediaItems, progressCallback);
         }
 
@@ -63,12 +57,9 @@ namespace DaminionTorchTrainer.Services
             for(int i = 0; i < mediaItems.Count; i++)
             {
                 var mediaItem = mediaItems[i];
-                progressCallback?.Invoke(i, mediaItems.Count, $"Processing {mediaItem.FileName}...");
+                progressCallback?.Invoke(i + 1, mediaItems.Count, $"Processing {mediaItem.FileName}...");
                 var sample = await ConvertToTrainingSampleAsync(mediaItem, metadataVocabulary);
-                if (sample != null)
-                {
-                    samples.Add(sample);
-                }
+                if (sample != null) samples.Add(sample);
             }
 
             return new TrainingDataset
@@ -86,11 +77,7 @@ namespace DaminionTorchTrainer.Services
             var itemIds = mediaItems.Select(item => item.Id).ToList();
             var pathsResponse = await _daminionClient.GetAbsolutePathsAsync(itemIds);
             
-            if (pathsResponse?.Success != true || pathsResponse.Paths == null)
-            {
-                Log.Warning("Failed to get file paths, cannot extract metadata for vocabulary.");
-                return new Dictionary<string, int>();
-            }
+            if (pathsResponse?.Success != true) return new Dictionary<string, int>();
             
             foreach (var mediaItem in mediaItems)
             {
@@ -100,73 +87,46 @@ namespace DaminionTorchTrainer.Services
                     {
                         using var metadataService = new DaminionOllamaInteractionLib.Services.ImageMetadataService(filePath);
                         metadataService.Read();
-                        foreach (var term in metadataService.Categories.Concat(metadataService.Keywords))
+                        foreach (var term in metadataService.Categories.Concat(metadataService.Keywords).Where(t => !string.IsNullOrWhiteSpace(t)))
                         {
-                            if (!string.IsNullOrWhiteSpace(term))
-                            {
-                                uniqueTerms.Add(term.ToLowerInvariant().Trim());
-                            }
+                            uniqueTerms.Add(term.ToLowerInvariant().Trim());
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "Failed to extract metadata from {FilePath}", filePath);
-                    }
+                    catch (Exception ex) { Log.Warning(ex, "Failed to read metadata from {Path}", filePath); }
                 }
             }
-            
-            return uniqueTerms.OrderBy(x => x).Select((term, index) => new { term, index })
-                              .ToDictionary(pair => pair.term, pair => pair.index);
+            return uniqueTerms.OrderBy(x => x).Select((term, index) => new { term, index }).ToDictionary(p => p.term, p => p.index);
         }
 
-        private async Task<TrainingData?> ConvertToTrainingSampleAsync(DaminionMediaItem mediaItem, Dictionary<string, int> metadataVocabulary)
+        private async Task<TrainingData?> ConvertToTrainingSampleAsync(DaminionMediaItem mediaItem, Dictionary<string, int> vocab)
         {
             var pathsResponse = await _daminionClient.GetAbsolutePathsAsync(new List<long> { mediaItem.Id });
             if (pathsResponse?.Success != true || !pathsResponse.Paths.TryGetValue(mediaItem.Id.ToString(), out var filePath) || !File.Exists(filePath))
             {
-                Log.Warning("File not found for media item {MediaItemId}: {FileName}", mediaItem.Id, mediaItem.FileName);
+                Log.Warning("File not found for media item {Id}", mediaItem.Id);
                 return null;
             }
 
-            var visualFeatures = await _imageProcessor.ExtractFeaturesAsync(filePath);
-            if (visualFeatures == null)
-            {
-                Log.Warning("Failed to extract visual features from {FilePath}", filePath);
-                return null;
-            }
+            var features = await _imageProcessor.ExtractFeaturesAsync(filePath);
+            if (features == null) return null;
 
-            var labels = ExtractMetadataLabels(filePath, metadataVocabulary);
-
-            return new TrainingData
-            {
-                Id = mediaItem.Id,
-                FileName = mediaItem.FileName,
-                FilePath = filePath,
-                Features = visualFeatures,
-                Labels = labels
-            };
+            var labels = ExtractMetadataLabels(filePath, vocab);
+            return new TrainingData { Id = mediaItem.Id, FileName = mediaItem.FileName, FilePath = filePath, Features = features, Labels = labels };
         }
 
-        private List<float> ExtractMetadataLabels(string imagePath, Dictionary<string, int> metadataVocabulary)
+        private List<float> ExtractMetadataLabels(string imagePath, Dictionary<string, int> vocab)
         {
-            var labels = new float[metadataVocabulary.Count];
+            var labels = new float[vocab.Count];
             try
             {
                 using var metadataService = new DaminionOllamaInteractionLib.Services.ImageMetadataService(imagePath);
                 metadataService.Read();
-                
-                foreach (var term in metadataService.Categories.Concat(metadataService.Keywords))
+                foreach (var term in metadataService.Categories.Concat(metadataService.Keywords).Where(t => !string.IsNullOrWhiteSpace(t)))
                 {
-                    if (!string.IsNullOrWhiteSpace(term) && metadataVocabulary.TryGetValue(term.ToLowerInvariant().Trim(), out var index))
-                    {
-                        labels[index] = 1.0f;
-                    }
+                    if (vocab.TryGetValue(term.ToLowerInvariant().Trim(), out var index)) labels[index] = 1.0f;
                 }
             }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to extract metadata labels from {ImagePath}", imagePath);
-            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to extract labels from {Path}", imagePath); }
             return labels.ToList();
         }
     }

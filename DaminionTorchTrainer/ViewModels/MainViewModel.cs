@@ -58,7 +58,6 @@ namespace DaminionTorchTrainer.ViewModels
             _trainingConfig = new TrainingConfig();
             _currentProgress = new TrainingProgress();
 
-            // Commands
             ConnectCommand = new AsyncRelayCommand(ConnectToDaminionAsync, () => !IsConnected && !IsTraining);
             ExtractDataCommand = new AsyncRelayCommand(ExtractDataAsync, () => CanExtractData());
             StartTrainingCommand = new AsyncRelayCommand(StartTrainingAsync, () => CanStartTraining());
@@ -110,10 +109,7 @@ namespace DaminionTorchTrainer.ViewModels
                 IsConnected = loginSuccess;
                 Status = loginSuccess ? "Connected." : "Failed to connect.";
             }
-            catch (Exception ex)
-            {
-                Status = $"Error: {ex.Message}";
-            }
+            catch (Exception ex) { Status = $"Error: {ex.Message}"; }
         }
 
         private async Task ExtractDataAsync()
@@ -122,42 +118,22 @@ namespace DaminionTorchTrainer.ViewModels
             try
             {
                 IsExtracting = true;
-                var progressCallback = new Action<int, int, string>((current, total, message) =>
-                {
-                    ExtractionProgress = current;
-                    ExtractionTotal = total;
-                    ExtractionStatus = message;
-                });
+                Status = SelectedDataSource == DataSourceType.API ? "Extracting from Daminion API..." : "Extracting from local folder...";
+                var progressCallback = new Action<int, int, string>((curr, total, msg) => { ExtractionProgress = curr; ExtractionTotal = total; ExtractionStatus = msg; });
 
-                if (SelectedDataSource == DataSourceType.API)
-                {
-                    Status = "Extracting from Daminion API...";
-                    CurrentDataset = await _dataExtractor.ExtractTrainingDataAsync(SearchQuery, MaxItems, progressCallback);
-                }
-                else
-                {
-                    Status = "Extracting from local folder...";
-                    CurrentDataset = await _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback);
-                }
+                CurrentDataset = SelectedDataSource == DataSourceType.API
+                    ? await _dataExtractor.ExtractTrainingDataAsync(SearchQuery, MaxItems, progressCallback)
+                    : await _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback);
+
                 Status = $"Extracted {CurrentDataset.Samples.Count} samples.";
             }
-            catch (Exception ex)
-            {
-                Status = $"Error: {ex.Message}";
-            }
-            finally
-            {
-                IsExtracting = false;
-            }
+            catch (Exception ex) { Status = $"Error: {ex.Message}"; }
+            finally { IsExtracting = false; }
         }
 
         private async Task StartTrainingAsync()
         {
-            if (CurrentDataset == null || !CurrentDataset.Samples.Any())
-            {
-                Status = "No data to train on.";
-                return;
-            }
+            if (CurrentDataset == null || !CurrentDataset.Samples.Any()) { Status = "No data to train on."; return; }
             try
             {
                 IsTraining = true;
@@ -170,14 +146,8 @@ namespace DaminionTorchTrainer.ViewModels
 
                 if (AutoExportOnnx) await ExportOnnxModelAsync();
             }
-            catch (OperationCanceledException)
-            {
-                Status = "Training canceled.";
-            }
-            catch (Exception ex)
-            {
-                Status = $"Error: {ex.Message}";
-            }
+            catch (OperationCanceledException) { Status = "Training canceled."; }
+            catch (Exception ex) { Status = $"Error: {ex.Message}"; }
             finally
             {
                 IsTraining = false;
@@ -190,21 +160,14 @@ namespace DaminionTorchTrainer.ViewModels
 
         private async Task ExportOnnxModelAsync()
         {
-            if (_trainer == null)
-            {
-                ExportStatus = "No trained model.";
-                return;
-            }
+            if (_trainer == null) { ExportStatus = "No trained model."; return; }
             try
             {
                 ExportStatus = "Exporting...";
                 var onnxPath = await _trainer.ExportToOnnxAsync();
                 ExportStatus = $"Exported to {onnxPath}";
             }
-            catch (Exception ex)
-            {
-                ExportStatus = $"Error: {ex.Message}";
-            }
+            catch (Exception ex) { ExportStatus = $"Error: {ex.Message}"; }
         }
 
         private void BrowseLocalFolder()
@@ -233,11 +196,7 @@ namespace DaminionTorchTrainer.ViewModels
     {
         private readonly Action _execute;
         private readonly Func<bool>? _canExecute;
-        public RelayCommand(Action execute, Func<bool>? canExecute = null)
-        {
-            _execute = execute;
-            _canExecute = canExecute;
-        }
+        public RelayCommand(Action execute, Func<bool>? canExecute = null) { _execute = execute; _canExecute = canExecute; }
         public event EventHandler? CanExecuteChanged { add => CommandManager.RequerySuggested += value; remove => CommandManager.RequerySuggested -= value; }
         public bool CanExecute(object? parameter) => _canExecute == null || _canExecute();
         public void Execute(object? parameter) => _execute();
@@ -248,11 +207,7 @@ namespace DaminionTorchTrainer.ViewModels
         private readonly Func<Task> _execute;
         private readonly Func<bool>? _canExecute;
         private bool _isExecuting;
-        public AsyncRelayCommand(Func<Task> execute, Func<bool>? canExecute = null)
-        {
-            _execute = execute;
-            _canExecute = canExecute;
-        }
+        public AsyncRelayCommand(Func<Task> execute, Func<bool>? canExecute = null) { _execute = execute; _canExecute = canExecute; }
         public event EventHandler? CanExecuteChanged { add => CommandManager.RequerySuggested += value; remove => CommandManager.RequerySuggested -= value; }
         public bool CanExecute(object? parameter) => !_isExecuting && (_canExecute?.Invoke() ?? true);
         public async void Execute(object? parameter)

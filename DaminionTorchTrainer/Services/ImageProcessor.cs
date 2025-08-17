@@ -8,7 +8,6 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using TorchSharp;
-using TorchVision;
 using static TorchSharp.torch;
 using static TorchSharp.torch.nn;
 
@@ -24,7 +23,8 @@ namespace DaminionTorchTrainer.Services
         {
             _device = torch.device(deviceType);
 
-            var resnet = vision.models.resnet50(weights: vision.models.ResNet50_Weights.IMAGENET1K_V2);
+            // Use fully qualified name for resnet50, assuming 'torchvision' is a class within TorchSharp
+            var resnet = TorchSharp.torchvision.models.resnet50(weights: TorchSharp.torchvision.models.ResNet50_Weights.IMAGENET1K_V2);
 
             var modules = resnet.named_modules().ToList();
             var feature_extractor_modules = modules
@@ -38,8 +38,6 @@ namespace DaminionTorchTrainer.Services
             _model.eval();
 
             FeatureDimension = 2048;
-
-            Log.Information("ImageProcessor initialized with ResNet50 on device {Device}. Feature dimension: {FeatureDimension}", _device, FeatureDimension);
         }
 
         public async Task<List<float>?> ExtractFeaturesAsync(string imagePath)
@@ -55,11 +53,8 @@ namespace DaminionTorchTrainer.Services
                 using var scope = torch.no_grad();
                 var tensor = await ImageToTensorAsync(imagePath);
                 tensor = tensor.to(_device);
-
                 var features = _model.forward(tensor);
-
                 features = features.squeeze(-1).squeeze(-1).cpu();
-
                 return features.data<float>().ToList();
             }
             catch (Exception ex)
@@ -80,7 +75,6 @@ namespace DaminionTorchTrainer.Services
             }));
 
             var rgbImage = image.CloneAs<Rgb24>();
-
             var memory = new Memory<byte>(new byte[rgbImage.Width * rgbImage.Height * 3]);
             rgbImage.CopyPixelDataTo(memory.Span);
 
@@ -90,7 +84,8 @@ namespace DaminionTorchTrainer.Services
 
             var mean = new[] { 0.485f, 0.456f, 0.406f };
             var std = new[] { 0.229f, 0.224f, 0.225f };
-            tensor = vision.transforms.functional.normalize(tensor, mean, std);
+            // Use fully qualified name for normalize
+            tensor = TorchSharp.torchvision.transforms.functional.normalize(tensor, mean, std);
 
             return tensor.unsqueeze(0);
         }

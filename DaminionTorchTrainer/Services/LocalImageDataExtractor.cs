@@ -27,93 +27,73 @@ namespace DaminionTorchTrainer.Services
             int maxItems = 1000,
             Action<int, int, string>? progressCallback = null)
         {
-            if (!Directory.Exists(folderPath))
-            {
-                throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
-            }
+            if (!Directory.Exists(folderPath)) throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
             var imageFiles = Directory.GetFiles(folderPath, "*.*", includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
                 .Where(file => SupportedExtensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
                 .Take(maxItems)
                 .ToList();
 
-            var metadataVocabulary = await BuildMetadataVocabularyAsync(imageFiles);
+            var vocab = await BuildMetadataVocabularyAsync(imageFiles);
             var samples = new List<TrainingData>();
 
             for (int i = 0; i < imageFiles.Count; i++)
             {
-                var imageFile = imageFiles[i];
-                progressCallback?.Invoke(i + 1, imageFiles.Count, $"Processing {Path.GetFileName(imageFile)}...");
+                var file = imageFiles[i];
+                progressCallback?.Invoke(i + 1, imageFiles.Count, $"Processing {Path.GetFileName(file)}...");
 
-                var features = await _imageProcessor.ExtractFeaturesAsync(imageFile);
+                var features = await _imageProcessor.ExtractFeaturesAsync(file);
                 if (features == null) continue;
 
-                var labels = ExtractLabels(imageFile, metadataVocabulary);
-
-                samples.Add(new TrainingData
-                {
+                samples.Add(new TrainingData {
                     Id = _nextId++,
-                    FileName = Path.GetFileName(imageFile),
-                    FilePath = imageFile,
+                    FileName = Path.GetFileName(file),
+                    FilePath = file,
                     Features = features,
-                    Labels = labels,
+                    Labels = ExtractLabels(file, vocab),
                 });
             }
 
-            return new TrainingDataset
-            {
+            return new TrainingDataset {
                 Samples = samples,
                 FeatureDimension = _imageProcessor.FeatureDimension,
-                LabelDimension = metadataVocabulary.Count,
-                MetadataVocabulary = metadataVocabulary,
+                LabelDimension = vocab.Count,
+                MetadataVocabulary = vocab,
             };
         }
 
-        private Task<Dictionary<string, int>> BuildMetadataVocabularyAsync(List<string> imageFiles)
+        private async Task<Dictionary<string, int>> BuildMetadataVocabularyAsync(List<string> imageFiles)
         {
             var uniqueTerms = new HashSet<string>();
-            foreach (var imageFile in imageFiles)
+            foreach (var file in imageFiles)
             {
                 try
                 {
-                    using var metadataService = new ImageMetadataService(imageFile);
-                    metadataService.Read();
-                    foreach (var term in metadataService.Categories.Concat(metadataService.Keywords))
+                    using var metadata = new ImageMetadataService(file);
+                    metadata.Read();
+                    foreach (var term in metadata.Categories.Concat(metadata.Keywords).Where(t => !string.IsNullOrWhiteSpace(t)))
                     {
-                        if (!string.IsNullOrWhiteSpace(term))
-                        {
-                            uniqueTerms.Add(term.Trim().ToLowerInvariant());
-                        }
+                        uniqueTerms.Add(term.Trim().ToLowerInvariant());
                     }
                 }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "Could not read metadata for {File}", imageFile);
-                }
+                catch (Exception ex) { Log.Warning(ex, "Could not read metadata for {File}", file); }
             }
-            return Task.FromResult(uniqueTerms.OrderBy(t => t).Select((term, index) => new { term, index }).ToDictionary(p => p.term, p => p.index));
+            return await Task.FromResult(uniqueTerms.OrderBy(t => t).Select((t, i) => new { t, i }).ToDictionary(p => p.t, p => p.i));
         }
 
-        private List<float> ExtractLabels(string imagePath, Dictionary<string, int> vocabulary)
+        private List<float> ExtractLabels(string imagePath, Dictionary<string, int> vocab)
         {
-            var labels = new float[vocabulary.Count];
+            var labels = new float[vocab.Count];
             try
             {
-                using var metadataService = new ImageMetadataService(imagePath);
-                metadataService.Read();
-
-                foreach (var term in metadataService.Categories.Concat(metadataService.Keywords))
+                using var metadata = new ImageMetadataService(imagePath);
+                metadata.Read();
+                foreach (var term in metadata.Categories.Concat(metadata.Keywords).Where(t => !string.IsNullOrWhiteSpace(t)))
                 {
-                    if (!string.IsNullOrWhiteSpace(term) && vocabulary.TryGetValue(term.Trim().ToLowerInvariant(), out int index))
-                    {
-                        labels[index] = 1.0f;
-                    }
+                    if (vocab.TryGetValue(term.Trim().ToLowerInvariant(), out int index)) labels[index] = 1.0f;
                 }
             }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Could not extract labels from {File}", imagePath);
-            }
+            catch (Exception ex) { Log.Warning(ex, "Could not extract labels from {File}", imagePath); }
             return labels.ToList();
         }
     }

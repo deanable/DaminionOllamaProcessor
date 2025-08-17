@@ -36,229 +36,158 @@ namespace DaminionTorchTrainer.Services
                     "mps" => MPS,
                     _ => CPU
                 };
-                Log.Information("TorchSharpTrainer initialized with device: {Device}", _device);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[TorchSharpTrainer] Error initializing device: {ex.Message}. Falling back to CPU.");
+                Log.Warning(ex, "Error initializing device, falling back to CPU.");
                 _device = CPU;
             }
         }
 
         public async Task<TrainingResults> TrainAsync(TrainingDataset dataset, CancellationToken cancellationToken = default)
         {
-            Log.Information("Starting training with {SampleCount} samples, {Epochs} epochs, batch size {BatchSize}", 
-                dataset.Samples.Count, _config.Epochs, _config.BatchSize);
+            _currentDataset = dataset;
 
-            try
+            var (trainData, valData) = PrepareData(dataset);
+            _model = CreateModel(dataset.FeatureDimension, dataset.LabelDimension);
+            _model.to(_device);
+
+            _optimizer = CreateOptimizer();
+            _lossFunction = CreateLossFunction();
+
+            var trainingHistory = new List<TrainingProgress>();
+            var bestValidationLoss = float.MaxValue;
+            var patienceCounter = 0;
+
+            for (int epoch = 0; epoch < _config.Epochs; epoch++)
             {
-                _currentDataset = dataset;
-                
-                var (trainData, valData) = PrepareData(dataset);
-                Log.Information("Data prepared: {TrainCount} training samples, {ValCount} validation samples", 
-                    trainData.Count, valData.Count);
-                
-                _model = CreateModel(dataset.FeatureDimension, dataset.LabelDimension);
-                _model.to(_device);
-                
-                _optimizer = CreateOptimizer();
-                _lossFunction = CreateLossFunction();
+                cancellationToken.ThrowIfCancellationRequested();
 
-                var trainingHistory = new List<TrainingProgress>();
-                var bestValidationLoss = float.MaxValue;
-                var patienceCounter = 0;
+                _model.train();
+                var trainLoss = await TrainEpochAsync(trainData, cancellationToken);
 
-                for (int epoch = 0; epoch < _config.Epochs; epoch++)
+                _model.eval();
+                var (valLoss, valAccuracy) = await ValidateEpochAsync(valData, cancellationToken);
+
+                var progress = new TrainingProgress
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    _model.train();
-                    var trainLoss = await TrainEpochAsync(trainData, cancellationToken);
-                    
-                    _model.eval();
-                    var (valLoss, valAccuracy) = await ValidateEpochAsync(valData, cancellationToken);
-                    
-                    var trainAccuracy = 1.0f - trainLoss;
-
-                    var progress = new TrainingProgress
-                    {
-                        CurrentEpoch = epoch + 1,
-                        TotalEpochs = _config.Epochs,
-                        TrainingLoss = trainLoss,
-                        ValidationLoss = valLoss,
-                        TrainingAccuracy = trainAccuracy,
-                        ValidationAccuracy = valAccuracy,
-                    };
-
-                    trainingHistory.Add(progress);
-                    _progressCallback?.Invoke(progress);
-
-                    Log.Information("Epoch {Epoch}/{TotalEpochs}: Train Loss: {TrainLoss:F4}, Val Loss: {ValLoss:F4}, Val Acc: {ValAcc:F4}", 
-                        epoch + 1, _config.Epochs, trainLoss, valLoss, valAccuracy);
-
-                    if (_config.UseEarlyStopping)
-                    {
-                        if (valLoss < bestValidationLoss - _config.EarlyStoppingMinDelta)
-                        {
-                            bestValidationLoss = valLoss;
-                            patienceCounter = 0;
-                        }
-                        else
-                        {
-                            patienceCounter++;
-                            if (patienceCounter >= _config.EarlyStoppingPatience)
-                            {
-                                Log.Information("Early stopping triggered after {Epoch} epochs.", epoch + 1);
-                                break;
-                            }
-                        }
-                    }
-                    await Task.Delay(10, cancellationToken);
-                }
-
-                var modelPath = await SaveModelAsync(dataset);
-                Log.Information("Training completed. Model saved to: {ModelPath}", modelPath);
-
-                return new TrainingResults
-                {
-                    ModelPath = modelPath,
-                    TrainingHistory = trainingHistory,
-                    FinalTrainingLoss = trainingHistory.LastOrDefault()?.TrainingLoss ?? 0,
-                    FinalValidationLoss = trainingHistory.LastOrDefault()?.ValidationLoss ?? 0,
-                    FinalTrainingAccuracy = trainingHistory.LastOrDefault()?.TrainingAccuracy ?? 0,
-                    FinalValidationAccuracy = trainingHistory.LastOrDefault()?.ValidationAccuracy ?? 0,
-                    TrainingMethod = "TorchSharp",
-                    Algorithm = _config.ModelArchitecture ?? "Custom"
+                    CurrentEpoch = epoch + 1,
+                    TotalEpochs = _config.Epochs,
+                    TrainingLoss = trainLoss,
+                    ValidationLoss = valLoss,
+                    TrainingAccuracy = 1.0f - trainLoss,
+                    ValidationAccuracy = valAccuracy,
                 };
+                trainingHistory.Add(progress);
+                _progressCallback?.Invoke(progress);
+
+                if (_config.UseEarlyStopping && valLoss >= bestValidationLoss - _config.EarlyStoppingMinDelta)
+                {
+                    patienceCounter++;
+                    if (patienceCounter >= _config.EarlyStoppingPatience)
+                    {
+                        Log.Information("Early stopping triggered.");
+                        break;
+                    }
+                }
+                else
+                {
+                    bestValidationLoss = valLoss;
+                    patienceCounter = 0;
+                }
             }
-            catch (Exception ex)
+
+            var modelPath = await SaveModelAsync(dataset);
+            return new TrainingResults
             {
-                Log.Error(ex, "Training error occurred");
-                throw;
-            }
+                ModelPath = modelPath,
+                TrainingHistory = trainingHistory,
+                FinalTrainingLoss = trainingHistory.LastOrDefault()?.TrainingLoss ?? 0,
+                FinalValidationLoss = trainingHistory.LastOrDefault()?.ValidationLoss ?? 0,
+                FinalTrainingAccuracy = trainingHistory.LastOrDefault()?.TrainingAccuracy ?? 0,
+                FinalValidationAccuracy = trainingHistory.LastOrDefault()?.ValidationAccuracy ?? 0,
+                TrainingMethod = "TorchSharp",
+                Algorithm = _config.ModelArchitecture ?? "Custom"
+            };
         }
 
-        private Module<Tensor, Tensor> CreateModel(int inputDimension, int outputDimension)
+        private Module<Tensor, Tensor> CreateModel(int inputDim, int outputDim)
         {
             var layers = new List<Module<Tensor, Tensor>>();
-            var currentDimension = inputDimension;
+            var currentDim = inputDim;
             
             foreach (var hiddenDim in _config.HiddenDimensions)
             {
-                layers.Add(Linear(currentDimension, hiddenDim));
+                layers.Add(Linear(currentDim, hiddenDim));
                 layers.Add(ReLU());
-                if (_config.DropoutRate > 0)
-                {
-                    layers.Add(Dropout(_config.DropoutRate));
-                }
-                currentDimension = hiddenDim;
+                if (_config.DropoutRate > 0) layers.Add(Dropout(_config.DropoutRate));
+                currentDim = hiddenDim;
             }
-            
-            layers.Add(Linear(currentDimension, outputDimension));
+            layers.Add(Linear(currentDim, outputDim));
             layers.Add(Sigmoid());
-            
             return Sequential(layers.ToArray());
         }
 
-        private torch.optim.Optimizer CreateOptimizer()
+        private torch.optim.Optimizer CreateOptimizer() => torch.optim.Adam(_model!.parameters(), _config.LearningRate, _config.WeightDecay);
+        private Loss<Tensor, Tensor, Tensor> CreateLossFunction() => BCELoss();
+
+        private (List<TrainingData> train, List<TrainingData> val) PrepareData(TrainingDataset dataset)
         {
-            return _config.Optimizer?.ToLower() switch
-            {
-                "adam" => torch.optim.Adam(_model!.parameters(), _config.LearningRate, weight_decay: _config.WeightDecay),
-                "sgd" => torch.optim.SGD(_model!.parameters(), _config.LearningRate, weight_decay: _config.WeightDecay),
-                "adamw" => torch.optim.AdamW(_model!.parameters(), _config.LearningRate, weight_decay: _config.WeightDecay),
-                _ => torch.optim.Adam(_model!.parameters(), _config.LearningRate, weight_decay: _config.WeightDecay)
-            };
+            var shuffled = dataset.Samples.OrderBy(x => Guid.NewGuid()).ToList();
+            var valCount = (int)(shuffled.Count * _config.ValidationSplit);
+            return (shuffled.Skip(valCount).ToList(), shuffled.Take(valCount).ToList());
         }
 
-        private Loss<Tensor, Tensor, Tensor> CreateLossFunction()
-        {
-            return _config.LossFunction?.ToLower() switch
-            {
-                "bce" => BCELoss(),
-                _ => BCELoss()
-            };
-        }
-
-        private (List<TrainingData> trainData, List<TrainingData> valData) PrepareData(TrainingDataset dataset)
-        {
-            var samples = dataset.Samples.ToList();
-            var valCount = (int)(samples.Count * _config.ValidationSplit);
-            var trainCount = samples.Count - valCount;
-            return (samples.Take(trainCount).ToList(), samples.Skip(trainCount).Take(valCount).ToList());
-        }
-
-        private async Task<float> TrainEpochAsync(List<TrainingData> trainData, CancellationToken cancellationToken)
+        private async Task<float> TrainEpochAsync(List<TrainingData> data, CancellationToken token)
         {
             float totalLoss = 0;
             int batchCount = 0;
-            for (int i = 0; i < trainData.Count; i += _config.BatchSize)
+            foreach (var batch in data.Chunk(_config.BatchSize))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var batch = trainData.Skip(i).Take(_config.BatchSize).ToList();
-                if (batch.Count == 0) continue;
-
-                var features = PrepareFeatures(batch).to(_device);
-                var labels = PrepareLabels(batch).to(_device);
+                token.ThrowIfCancellationRequested();
+                using var features = PrepareFeatures(batch).to(_device);
+                using var labels = PrepareLabels(batch).to(_device);
 
                 _optimizer!.zero_grad();
-                var outputs = _model!.forward(features);
-                var loss = _lossFunction!.forward(outputs, labels);
+                var output = _model!.forward(features);
+                var loss = _lossFunction!.forward(output, labels);
                 loss.backward();
                 _optimizer.step();
-
                 totalLoss += loss.item<float>();
                 batchCount++;
-                await Task.Delay(1, cancellationToken);
+                await Task.Delay(1, token);
             }
-            return batchCount > 0 ? totalLoss / batchCount : 0;
+            return totalLoss / batchCount;
         }
 
-        private async Task<(float loss, float accuracy)> ValidateEpochAsync(List<TrainingData> valData, CancellationToken cancellationToken)
+        private async Task<(float, float)> ValidateEpochAsync(List<TrainingData> data, CancellationToken token)
         {
             float totalLoss = 0;
-            long correctPredictions = 0;
-            long totalPredictions = 0;
+            long correct = 0, total = 0;
             int batchCount = 0;
-
             using (torch.no_grad())
             {
-                for (int i = 0; i < valData.Count; i += _config.BatchSize)
+                foreach (var batch in data.Chunk(_config.BatchSize))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var batch = valData.Skip(i).Take(_config.BatchSize).ToList();
-                    if (batch.Count == 0) continue;
+                    token.ThrowIfCancellationRequested();
+                    using var features = PrepareFeatures(batch).to(_device);
+                    using var labels = PrepareLabels(batch).to(_device);
 
-                    var features = PrepareFeatures(batch).to(_device);
-                    var labels = PrepareLabels(batch).to(_device);
-
-                    var outputs = _model!.forward(features);
-                    var loss = _lossFunction!.forward(outputs, labels);
-                    totalLoss += loss.item<float>();
+                    var output = _model!.forward(features);
+                    totalLoss += _lossFunction!.forward(output, labels).item<float>();
                     batchCount++;
 
-                    var predictions = (outputs > 0.5f).to(ScalarType.Float32);
-                    correctPredictions += (predictions == labels).sum().item<long>();
-                    totalPredictions += labels.numel();
-                    await Task.Delay(1, cancellationToken);
+                    var predicted = (output > 0.5f).to(ScalarType.Int64);
+                    total += labels.numel();
+                    correct += (predicted == labels.to(ScalarType.Int64)).sum().item<long>();
+                    await Task.Delay(1, token);
                 }
             }
-            var avgLoss = batchCount > 0 ? totalLoss / batchCount : 0;
-            var accuracy = totalPredictions > 0 ? (float)correctPredictions / totalPredictions : 0;
-            return (avgLoss, accuracy);
+            return (totalLoss / batchCount, (float)correct / total);
         }
 
-        private Tensor PrepareFeatures(List<TrainingData> batch)
-        {
-            var features = batch.SelectMany(s => s.Features).ToArray();
-            return torch.tensor(features, dtype: ScalarType.Float32).reshape(batch.Count, -1);
-        }
-
-        private Tensor PrepareLabels(List<TrainingData> batch)
-        {
-            var labels = batch.SelectMany(s => s.Labels).ToArray();
-            return torch.tensor(labels, dtype: ScalarType.Float32).reshape(batch.Count, -1);
-        }
+        private Tensor PrepareFeatures(IEnumerable<TrainingData> batch) => torch.tensor(batch.SelectMany(s => s.Features).ToArray()).reshape(batch.Count(), -1);
+        private Tensor PrepareLabels(IEnumerable<TrainingData> batch) => torch.tensor(batch.SelectMany(s => s.Labels).ToArray()).reshape(batch.Count(), -1);
 
         private async Task<string> SaveModelAsync(TrainingDataset dataset)
         {
@@ -269,24 +198,16 @@ namespace DaminionTorchTrainer.Services
             var modelPath = Path.Combine(modelDir, "model.pt");
             _model.save(modelPath);
             
-            if (dataset.MetadataVocabulary != null)
-            {
-                var vocabularyPath = Path.Combine(modelDir, "vocabulary.json");
-                var vocabularyJson = System.Text.Json.JsonSerializer.Serialize(dataset.MetadataVocabulary, 
-                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                await File.WriteAllTextAsync(vocabularyPath, vocabularyJson);
-            }
+            var vocabPath = Path.Combine(modelDir, "vocabulary.json");
+            var vocabJson = System.Text.Json.JsonSerializer.Serialize(dataset.MetadataVocabulary);
+            await File.WriteAllTextAsync(vocabPath, vocabJson);
             
-            Log.Information("Model saved to: {ModelPath}", modelPath);
             return modelPath;
         }
 
         public async Task<string> ExportToOnnxAsync()
         {
-            if (_model == null)
-            {
-                throw new InvalidOperationException("No trained model available for export");
-            }
+            if (_model == null) throw new InvalidOperationException("Model not trained.");
 
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var onnxDir = Path.Combine(_config.OutputPath, "onnx_exports");
@@ -295,34 +216,18 @@ namespace DaminionTorchTrainer.Services
             var onnxPath = Path.Combine(onnxDir, $"daminion_model_{timestamp}.onnx");
 
             _model.eval();
-            using (torch.no_grad())
-            {
-                _model.to(CPU);
-                
-                // Save as .pt file as a workaround for missing ONNX export API
-                var ptPath = onnxPath.Replace(".onnx", ".pt");
-                _model.save(ptPath);
-                Log.Information("Model saved in PyTorch format at {Path}. Convert to ONNX using a separate Python script.", ptPath);
+            _model.to(CPU);
 
-                _model.to(_device);
-            }
-            
-            var onnxMetadata = new
-            {
-                ModelName = "DaminionTorchSharpModel",
-                Version = "1.0",
-                CreatedAt = DateTime.Now,
-                Framework = "TorchSharp",
-                Labels = _currentDataset?.MetadataVocabulary ?? new Dictionary<string, int>()
-            };
+            var ptPath = onnxPath.Replace(".onnx", ".pt");
+            _model.save(ptPath);
+            Log.Information("ONNX export not directly available. Model saved in PyTorch format at {Path}. Convert to ONNX using a separate Python script.", ptPath);
 
-            var metadataJson = System.Text.Json.JsonSerializer.Serialize(onnxMetadata,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            _model.to(_device);
 
+            var metadata = new { ModelName = "DaminionTorchSharpModel", Labels = _currentDataset?.MetadataVocabulary };
             var metadataPath = Path.ChangeExtension(onnxPath, ".json");
-            await File.WriteAllTextAsync(metadataPath, metadataJson);
+            await File.WriteAllTextAsync(metadataPath, System.Text.Json.JsonSerializer.Serialize(metadata));
 
-            Console.WriteLine($"[TorchSharpTrainer] ONNX model metadata exported to: {metadataPath}. Model saved as .pt file.");
             return onnxPath;
         }
 
