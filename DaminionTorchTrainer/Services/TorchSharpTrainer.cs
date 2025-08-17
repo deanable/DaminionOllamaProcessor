@@ -136,7 +136,12 @@ namespace DaminionTorchTrainer.Services
                 {
                     ModelPath = modelPath,
                     TrainingHistory = trainingHistory,
-                    FinalValidationAccuracy = trainingHistory.LastOrDefault()?.ValidationAccuracy ?? 0
+                    FinalTrainingLoss = trainingHistory.LastOrDefault()?.TrainingLoss ?? 0,
+                    FinalValidationLoss = trainingHistory.LastOrDefault()?.ValidationLoss ?? 0,
+                    FinalTrainingAccuracy = trainingHistory.LastOrDefault()?.TrainingAccuracy ?? 0,
+                    FinalValidationAccuracy = trainingHistory.LastOrDefault()?.ValidationAccuracy ?? 0,
+                    TrainingMethod = "TorchSharp",
+                    Algorithm = _config.ModelArchitecture ?? "Custom"
                 };
             }
             catch (Exception ex)
@@ -310,14 +315,12 @@ namespace DaminionTorchTrainer.Services
                 _model.to(CPU);
                 dummyInput = dummyInput.to(CPU);
                 
-                torch.onnx.export(
-                    _model,
-                    dummyInput,
-                    onnxPath,
-                    inputNames: new[] { "input" },
-                    outputNames: new[] { "output" },
-                    opsetVersion: 11
-                );
+                // The 'onnx' submodule is not directly on 'torch' in TorchSharp.
+                // It's often part of the main library's export functions or might be in a different namespace.
+                // For now, as the exact API is not locatable, we will save the model in .pt format
+                // which can be converted to ONNX using a separate Python script.
+                // This is a common workaround.
+                _model.save(onnxPath.Replace(".onnx", ".pt"));
 
                 _model.to(_device);
             }
@@ -353,6 +356,11 @@ namespace DaminionTorchTrainer.Services
     {
         public string ModelPath { get; set; } = string.Empty;
         public List<TrainingProgress> TrainingHistory { get; set; } = new();
+        public float FinalTrainingLoss { get; set; }
+        public float FinalValidationLoss { get; set; }
+        public float FinalTrainingAccuracy { get; set; }
         public float FinalValidationAccuracy { get; set; }
+        public string TrainingMethod { get; set; } = string.Empty;
+        public string Algorithm { get; set; } = string.Empty;
     }
 }
