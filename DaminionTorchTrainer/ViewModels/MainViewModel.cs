@@ -28,6 +28,7 @@ namespace DaminionTorchTrainer.ViewModels
     public class MainViewModel : INotifyPropertyChanged
     {
         private readonly DaminionApiClient _daminionClient;
+        private readonly ImageProcessor _imageProcessor;
         private readonly DaminionDataExtractor _dataExtractor;
         private readonly LocalImageDataExtractor _localDataExtractor;
         private TorchSharpTrainer? _trainer;
@@ -95,8 +96,9 @@ namespace DaminionTorchTrainer.ViewModels
         public MainViewModel()
         {
             _daminionClient = new DaminionApiClient();
-            _dataExtractor = new DaminionDataExtractor(_daminionClient);
-            _localDataExtractor = new LocalImageDataExtractor();
+            _imageProcessor = new ImageProcessor(); // Use CPU by default
+            _dataExtractor = new DaminionDataExtractor(_daminionClient, _imageProcessor);
+            _localDataExtractor = new LocalImageDataExtractor(_imageProcessor);
             _trainingConfig = new TrainingConfig();
             _currentProgress = new TrainingProgress();
 

@@ -6,8 +6,7 @@ using DaminionOllamaInteractionLib;
 using DaminionOllamaInteractionLib.Daminion;
 using DaminionTorchTrainer.Models;
 using Serilog;
-using System.IO; // Added for Path.GetFileNameWithoutExtension
-using System.Drawing; // Added for Image and Bitmap
+using System.IO;
 
 namespace DaminionTorchTrainer.Services
 {
@@ -17,14 +16,17 @@ namespace DaminionTorchTrainer.Services
     public class DaminionDataExtractor
     {
         private readonly DaminionApiClient _daminionClient;
+        private readonly ImageProcessor _imageProcessor;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DaminionDataExtractor"/> class.
         /// </summary>
         /// <param name="daminionClient">The Daminion API client</param>
-        public DaminionDataExtractor(DaminionApiClient daminionClient)
+        /// <param name="imageProcessor">The image processor for feature extraction</param>
+        public DaminionDataExtractor(DaminionApiClient daminionClient, ImageProcessor imageProcessor)
         {
             _daminionClient = daminionClient ?? throw new ArgumentNullException(nameof(daminionClient));
+            _imageProcessor = imageProcessor ?? throw new ArgumentNullException(nameof(imageProcessor));
         }
 
         /// <summary>
@@ -110,12 +112,12 @@ namespace DaminionTorchTrainer.Services
             }
 
             // Step 4: Create dataset
-            var featureDimension = CalculateFeatureDimension();
+            var featureDimension = _imageProcessor.FeatureDimension;
             var labelDimension = metadataVocabulary.Count;
 
             Log.Information("===== EXTRACTION SUMMARY =====");
             Log.Information("Samples: {SampleCount}", samples.Count);
-            Log.Information("Features: {FeatureDimension} (visual features from image pixels)", featureDimension);
+            Log.Information("Features: {FeatureDimension} (from ResNet50)", featureDimension);
             Log.Information("Labels: {LabelDimension} (metadata terms: {MetadataTerms})", labelDimension, string.Join(", ", metadataVocabulary.Keys));
 
             return new TrainingDataset
@@ -208,13 +210,13 @@ namespace DaminionTorchTrainer.Services
             }
 
             // Step 4: Create dataset
-            var featureDimension = CalculateFeatureDimension();
+            var featureDimension = _imageProcessor.FeatureDimension;
             var labelDimension = metadataVocabulary.Count;
 
             Log.Information("===== COLLECTION EXTRACTION SUMMARY =====");
             Log.Information("Collection ID: {CollectionId}", collectionId);
             Log.Information("Samples: {SampleCount}", samples.Count);
-            Log.Information("Features: {FeatureDimension} (visual features from image pixels)", featureDimension);
+            Log.Information("Features: {FeatureDimension} (from ResNet50)", featureDimension);
             Log.Information("Labels: {LabelDimension} (metadata terms: {MetadataTerms})", labelDimension, string.Join(", ", metadataVocabulary.Keys));
 
             return new TrainingDataset
@@ -384,7 +386,7 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Converts a media item to a training sample with actual image pixels
+        /// Converts a media item to a training sample using the ImageProcessor for feature extraction.
         /// </summary>
         private async Task<TrainingData?> ConvertToTrainingSampleAsync(DaminionMediaItem mediaItem, Dictionary<string, int> metadataVocabulary)
         {
@@ -397,21 +399,21 @@ namespace DaminionTorchTrainer.Services
                     Log.Warning("File not found for media item {MediaItemId}: {FileName}", mediaItem.Id, mediaItem.FileName);
                     return null;
                 }
-                
-                // Extract visual features from image pixels
-                var visualFeatures = await ExtractVisualFeaturesAsync(filePath);
+
+                // Extract visual features using the ImageProcessor
+                var visualFeatures = await _imageProcessor.ExtractFeaturesAsync(filePath);
                 if (visualFeatures == null)
                 {
-                    Log.Warning("Failed to extract visual features from {FilePath}", filePath);
+                    Log.Warning("Failed to extract visual features from {FilePath} using ImageProcessor", filePath);
                     return null;
                 }
-                
+
                 // Extract metadata labels
                 var labels = await ExtractMetadataLabelsAsync(filePath, metadataVocabulary);
-                
-                Log.Information("Converted {FileName} - Visual features: {FeatureCount}, Labels: {LabelCount}", 
+
+                Log.Information("Converted {FileName} - Features: {FeatureCount} (ResNet50), Labels: {LabelCount}",
                     mediaItem.FileName, visualFeatures.Count, labels.Count(x => x > 0));
-                
+
                 return new TrainingData
                 {
                     Id = mediaItem.Id,
@@ -425,46 +427,6 @@ namespace DaminionTorchTrainer.Services
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to convert media item {MediaItemId} to training sample", mediaItem.Id);
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Extracts visual features from image pixels using a higher resolution approach
-        /// </summary>
-        private async Task<List<float>?> ExtractVisualFeaturesAsync(string imagePath)
-        {
-            try
-            {
-                // Use higher resolution for better accuracy: 512x512 instead of 224x224
-                using var image = System.Drawing.Image.FromFile(imagePath);
-                using var bitmap = new System.Drawing.Bitmap(image);
-                
-                // Resize to higher resolution (512x512) for better feature extraction
-                using var resizedBitmap = new System.Drawing.Bitmap(bitmap, new System.Drawing.Size(512, 512));
-                
-                var features = new List<float>();
-                
-                // Extract RGB values from pixels with finer sampling (every 4th pixel instead of 8th)
-                // This gives us 128x128 = 16,384 pixels, each with 3 RGB values = 49,152 features
-                for (int y = 0; y < resizedBitmap.Height; y += 4) // Sample every 4th pixel for higher detail
-                {
-                    for (int x = 0; x < resizedBitmap.Width; x += 4)
-                    {
-                        var pixel = resizedBitmap.GetPixel(x, y);
-                        features.Add(pixel.R / 255.0f); // Normalize to 0-1
-                        features.Add(pixel.G / 255.0f);
-                        features.Add(pixel.B / 255.0f);
-                    }
-                }
-                
-                Log.Information("Extracted {FeatureCount} visual features from {ImagePath} (512x512 resolution, 4-pixel sampling)", 
-                    features.Count, Path.GetFileName(imagePath));
-                return features;
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to extract visual features from {ImagePath}", imagePath);
                 return null;
             }
         }
@@ -510,32 +472,6 @@ namespace DaminionTorchTrainer.Services
             }
             
             return labels.ToList();
-        }
-
-        /// <summary>
-        /// Normalizes features to have zero mean and unit variance
-        /// </summary>
-        private List<float> NormalizeFeatures(List<float> features)
-        {
-            if (features.Count == 0) return features;
-
-            var mean = features.Average();
-            var variance = features.Select(f => (f - mean) * (f - mean)).Average();
-            var stdDev = (float)Math.Sqrt(variance);
-
-            if (stdDev == 0) return features;
-
-            return features.Select(f => (f - mean) / stdDev).ToList();
-        }
-
-        /// <summary>
-        /// Calculates the feature dimension based on visual features
-        /// </summary>
-        private int CalculateFeatureDimension()
-        {
-            // Visual features: 512x512 image, sampled every 4th pixel, 3 RGB channels
-            // (512/4) * (512/4) * 3 = 128 * 128 * 3 = 49,152 features
-            return 49152;
         }
     }
 }

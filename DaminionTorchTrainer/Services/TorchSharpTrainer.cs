@@ -482,12 +482,25 @@ namespace DaminionTorchTrainer.Services
                 // Create dummy input for ONNX export
                 var dummyInput = torch.randn(1, _config.FeatureDimension).to(_device);
                 
-                // Export to ONNX - for now, save as regular PyTorch model
-                // ONNX export requires additional libraries and setup
+                // Export to ONNX
                 _model.eval();
                 using (torch.no_grad())
                 {
-                    _model.save(onnxPath);
+                    // Ensure the model is on the CPU for export, as some ops may not be supported on CUDA/MPS for ONNX
+                    _model.to(CPU);
+                    dummyInput = dummyInput.to(CPU);
+
+                    torch.onnx.export(
+                        _model,
+                        dummyInput,
+                        onnxPath,
+                        inputNames: new[] { "input" },
+                        outputNames: new[] { "output" },
+                        opsetVersion: 11
+                    );
+
+                    // Move model back to original device
+                    _model.to(_device);
                 }
                 
                 // Create metadata file with labels/vocabulary
@@ -544,7 +557,7 @@ namespace DaminionTorchTrainer.Services
             if (_model != null)
             {
                 Log.Information("Model Type: {ModelType}", _model.GetType().Name);
-                Log.Information("Input Dimension: {InputDim} (visual features from image pixels)", _config.FeatureDimension);
+                Log.Information("Input Dimension: {InputDim} (ResNet50 features)", _config.FeatureDimension);
                 Log.Information("Output Dimension: {OutputDim} (metadata terms)", _config.OutputDimension);
                 Log.Information("Device: {Device}", _device);
                 Log.Information("Optimizer: {Optimizer}", _config.Optimizer);
