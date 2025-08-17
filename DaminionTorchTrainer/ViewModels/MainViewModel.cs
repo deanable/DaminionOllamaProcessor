@@ -11,11 +11,9 @@ using DaminionOllamaInteractionLib.Daminion;
 using DaminionTorchTrainer.Models;
 using DaminionTorchTrainer.Services;
 using Serilog;
-using System.Windows.Media;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using TorchSharp;
 
 namespace DaminionTorchTrainer.ViewModels
 {
@@ -60,8 +58,7 @@ namespace DaminionTorchTrainer.ViewModels
             _trainingConfig = new TrainingConfig();
             _currentProgress = new TrainingProgress();
 
-            LoadSettingsFromRegistry();
-
+            // Commands
             ConnectCommand = new AsyncRelayCommand(ConnectToDaminionAsync, () => !IsConnected && !IsTraining);
             ExtractDataCommand = new AsyncRelayCommand(ExtractDataAsync, () => CanExtractData());
             StartTrainingCommand = new AsyncRelayCommand(StartTrainingAsync, () => CanStartTraining());
@@ -71,7 +68,6 @@ namespace DaminionTorchTrainer.ViewModels
         }
 
         #region Properties
-
         public string Status { get => _status; set => SetProperty(ref _status, value); }
         public bool IsConnected { get => _isConnected; set => SetProperty(ref _isConnected, value); }
         public bool IsTraining { get => _isTraining; set => SetProperty(ref _isTraining, value); }
@@ -92,56 +88,37 @@ namespace DaminionTorchTrainer.ViewModels
         public string LocalImageFolder { get => _localImageFolder; set => SetProperty(ref _localImageFolder, value); }
         public bool IncludeSubfolders { get => _includeSubfolders; set => SetProperty(ref _includeSubfolders, value); }
         public DataSourceType SelectedDataSource { get => _selectedDataSource; set => SetProperty(ref _selectedDataSource, value); }
-
         #endregion
 
         #region Commands
-
         public ICommand ConnectCommand { get; }
         public ICommand ExtractDataCommand { get; }
         public ICommand StartTrainingCommand { get; }
         public ICommand StopTrainingCommand { get; }
         public ICommand ExportOnnxCommand { get; }
         public ICommand BrowseFolderCommand { get; }
-
         #endregion
 
         #region Methods
-
         private async Task ConnectToDaminionAsync()
         {
             try
             {
-                Status = "Connecting to Daminion...";
+                Status = "Connecting...";
                 _daminionClient.SetApiBaseUrl(DaminionUrl);
-                
-                if (string.IsNullOrEmpty(DaminionUsername) || string.IsNullOrEmpty(DaminionPassword))
-                {
-                    Status = "Username and password are required.";
-                    return;
-                }
-
                 var loginSuccess = await _daminionClient.LoginAsync(DaminionUrl, DaminionUsername, DaminionPassword);
-                
-                if (!loginSuccess)
-                {
-                    Status = "Failed to authenticate with Daminion.";
-                    return;
-                }
-
-                IsConnected = true;
-                Status = "Connected to Daminion successfully.";
+                IsConnected = loginSuccess;
+                Status = loginSuccess ? "Connected." : "Failed to connect.";
             }
             catch (Exception ex)
             {
-                Status = $"Error connecting: {ex.Message}";
+                Status = $"Error: {ex.Message}";
             }
         }
 
         private async Task ExtractDataAsync()
         {
             if (IsExtracting) return;
-
             try
             {
                 IsExtracting = true;
@@ -154,20 +131,19 @@ namespace DaminionTorchTrainer.ViewModels
 
                 if (SelectedDataSource == DataSourceType.API)
                 {
-                    Status = "Extracting data from Daminion API...";
-                    CurrentDataset = await Task.Run(() => _dataExtractor.ExtractTrainingDataAsync(SearchQuery, MaxItems, progressCallback));
-                    Status = $"Extracted {CurrentDataset.Samples.Count} samples from Daminion API.";
+                    Status = "Extracting from Daminion API...";
+                    CurrentDataset = await _dataExtractor.ExtractTrainingDataAsync(SearchQuery, MaxItems, progressCallback);
                 }
                 else
                 {
-                    Status = "Extracting data from local images...";
-                    CurrentDataset = await Task.Run(() => _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback));
-                    Status = $"Extracted {CurrentDataset.Samples.Count} samples from local images.";
+                    Status = "Extracting from local folder...";
+                    CurrentDataset = await _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback);
                 }
+                Status = $"Extracted {CurrentDataset.Samples.Count} samples.";
             }
             catch (Exception ex)
             {
-                Status = $"Error extracting data: {ex.Message}";
+                Status = $"Error: {ex.Message}";
             }
             finally
             {
@@ -177,45 +153,30 @@ namespace DaminionTorchTrainer.ViewModels
 
         private async Task StartTrainingAsync()
         {
-            if (CurrentDataset == null)
+            if (CurrentDataset == null || !CurrentDataset.Samples.Any())
             {
-                Status = "No dataset available for training.";
+                Status = "No data to train on.";
                 return;
             }
-
             try
             {
                 IsTraining = true;
                 _cancellationTokenSource = new CancellationTokenSource();
-                Status = "Starting training...";
+                Status = "Training...";
 
-                _trainer = new TorchSharpTrainer(TrainingConfig, (progress) =>
-                {
-                    if (Application.Current?.Dispatcher != null)
-                    {
-                        Application.Current.Dispatcher.Invoke(() => CurrentProgress = progress);
-                    }
-                    else
-                    {
-                        CurrentProgress = progress;
-                    }
-                });
+                _trainer = new TorchSharpTrainer(TrainingConfig, progress => Application.Current.Dispatcher.Invoke(() => CurrentProgress = progress));
+                var results = await Task.Run(() => _trainer.TrainAsync(CurrentDataset, _cancellationTokenSource.Token), _cancellationTokenSource.Token);
+                Status = $"Training complete. Accuracy: {results.FinalValidationAccuracy:P2}";
 
-                var results = await Task.Run(() => _trainer.TrainAsync(CurrentDataset, _cancellationTokenSource.Token));
-                Status = $"Training completed. Final accuracy: {results.FinalValidationAccuracy:F4}";
-
-                if (AutoExportOnnx && _trainer != null)
-                {
-                    await ExportOnnxModelAsync();
-                }
+                if (AutoExportOnnx) await ExportOnnxModelAsync();
             }
             catch (OperationCanceledException)
             {
-                Status = "Training was cancelled.";
+                Status = "Training canceled.";
             }
             catch (Exception ex)
             {
-                Status = $"Error during training: {ex.Message}";
+                Status = $"Error: {ex.Message}";
             }
             finally
             {
@@ -225,69 +186,45 @@ namespace DaminionTorchTrainer.ViewModels
             }
         }
 
-        private void StopTraining()
-        {
-            _cancellationTokenSource?.Cancel();
-        }
+        private void StopTraining() => _cancellationTokenSource?.Cancel();
 
         private async Task ExportOnnxModelAsync()
         {
             if (_trainer == null)
             {
-                ExportStatus = "No trained model available for export.";
+                ExportStatus = "No trained model.";
                 return;
             }
             try
             {
-                ExportStatus = "Exporting model to ONNX...";
+                ExportStatus = "Exporting...";
                 var onnxPath = await _trainer.ExportToOnnxAsync();
-                ExportStatus = $"Model exported successfully to: {onnxPath}";
+                ExportStatus = $"Exported to {onnxPath}";
             }
             catch (Exception ex)
             {
-                ExportStatus = $"Error exporting model: {ex.Message}";
+                ExportStatus = $"Error: {ex.Message}";
             }
         }
 
         private void BrowseLocalFolder()
         {
             var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Select Image Folder" };
-            if (dialog.ShowDialog() == true)
-            {
-                LocalImageFolder = dialog.FolderName;
-            }
+            if (dialog.ShowDialog() == true) LocalImageFolder = dialog.FolderName;
         }
 
-        private bool CanExtractData()
-        {
-            if (IsTraining || IsExtracting) return false;
-            return SelectedDataSource == DataSourceType.API ? IsConnected : Directory.Exists(LocalImageFolder);
-        }
-
-        private bool CanStartTraining()
-        {
-            return !IsTraining && CurrentDataset != null && CurrentDataset.Samples.Any();
-        }
-
-        private void LoadSettingsFromRegistry()
-        {
-            // Placeholder for loading settings
-        }
+        private bool CanExtractData() => !IsTraining && !IsExtracting && (SelectedDataSource == DataSourceType.API ? IsConnected : Directory.Exists(LocalImageFolder));
+        private bool CanStartTraining() => !IsTraining && CurrentDataset != null && CurrentDataset.Samples.Any();
 
         #endregion
 
         #region INotifyPropertyChanged
         public event PropertyChangedEventHandler? PropertyChanged;
-        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        protected void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-        {
-            if (Equals(field, value)) return false;
+            if (EqualityComparer<T>.Default.Equals(field, value)) return;
             field = value;
-            OnPropertyChanged(propertyName);
-            return true;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
         #endregion
     }
@@ -301,11 +238,7 @@ namespace DaminionTorchTrainer.ViewModels
             _execute = execute;
             _canExecute = canExecute;
         }
-        public event EventHandler? CanExecuteChanged
-        {
-            add { CommandManager.RequerySuggested += value; }
-            remove { CommandManager.RequerySuggested -= value; }
-        }
+        public event EventHandler? CanExecuteChanged { add => CommandManager.RequerySuggested += value; remove => CommandManager.RequerySuggested -= value; }
         public bool CanExecute(object? parameter) => _canExecute == null || _canExecute();
         public void Execute(object? parameter) => _execute();
     }
@@ -320,23 +253,13 @@ namespace DaminionTorchTrainer.ViewModels
             _execute = execute;
             _canExecute = canExecute;
         }
-        public event EventHandler? CanExecuteChanged
-        {
-            add { CommandManager.RequerySuggested += value; }
-            remove { CommandManager.RequerySuggested -= value; }
-        }
+        public event EventHandler? CanExecuteChanged { add => CommandManager.RequerySuggested += value; remove => CommandManager.RequerySuggested -= value; }
         public bool CanExecute(object? parameter) => !_isExecuting && (_canExecute?.Invoke() ?? true);
         public async void Execute(object? parameter)
         {
             _isExecuting = true;
-            try
-            {
-                await _execute();
-            }
-            finally
-            {
-                _isExecuting = false;
-            }
+            try { await _execute(); }
+            finally { _isExecuting = false; }
         }
     }
 }

@@ -13,9 +13,6 @@ using Serilog;
 
 namespace DaminionTorchTrainer.Services
 {
-    /// <summary>
-    /// Service for training neural networks using TorchSharp
-    /// </summary>
     public class TorchSharpTrainer : IDisposable
     {
         private readonly TrainingConfig _config;
@@ -26,11 +23,6 @@ namespace DaminionTorchTrainer.Services
         private Device _device;
         private TrainingDataset? _currentDataset;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="TorchSharpTrainer"/> class.
-        /// </summary>
-        /// <param name="config">Training configuration</param>
-        /// <param name="progressCallback">Optional progress callback</param>
         public TorchSharpTrainer(TrainingConfig config, Action<TrainingProgress>? progressCallback = null)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
@@ -53,9 +45,6 @@ namespace DaminionTorchTrainer.Services
             }
         }
 
-        /// <summary>
-        /// Trains a neural network on the provided dataset
-        /// </summary>
         public async Task<TrainingResults> TrainAsync(TrainingDataset dataset, CancellationToken cancellationToken = default)
         {
             Log.Information("Starting training with {SampleCount} samples, {Epochs} epochs, batch size {BatchSize}", 
@@ -71,8 +60,6 @@ namespace DaminionTorchTrainer.Services
                 
                 _model = CreateModel(dataset.FeatureDimension, dataset.LabelDimension);
                 _model.to(_device);
-                Log.Information("Model created with input dimension {InputDim}, output dimension {OutputDim}", 
-                    dataset.FeatureDimension, dataset.LabelDimension);
                 
                 _optimizer = CreateOptimizer();
                 _lossFunction = CreateLossFunction();
@@ -307,20 +294,15 @@ namespace DaminionTorchTrainer.Services
 
             var onnxPath = Path.Combine(onnxDir, $"daminion_model_{timestamp}.onnx");
 
-            var dummyInput = torch.randn(1, _config.FeatureDimension);
-            
             _model.eval();
             using (torch.no_grad())
             {
                 _model.to(CPU);
-                dummyInput = dummyInput.to(CPU);
                 
-                // The 'onnx' submodule is not directly on 'torch' in TorchSharp.
-                // It's often part of the main library's export functions or might be in a different namespace.
-                // For now, as the exact API is not locatable, we will save the model in .pt format
-                // which can be converted to ONNX using a separate Python script.
-                // This is a common workaround.
-                _model.save(onnxPath.Replace(".onnx", ".pt"));
+                // Save as .pt file as a workaround for missing ONNX export API
+                var ptPath = onnxPath.Replace(".onnx", ".pt");
+                _model.save(ptPath);
+                Log.Information("Model saved in PyTorch format at {Path}. Convert to ONNX using a separate Python script.", ptPath);
 
                 _model.to(_device);
             }
@@ -333,14 +315,14 @@ namespace DaminionTorchTrainer.Services
                 Framework = "TorchSharp",
                 Labels = _currentDataset?.MetadataVocabulary ?? new Dictionary<string, int>()
             };
-            
+
             var metadataJson = System.Text.Json.JsonSerializer.Serialize(onnxMetadata,
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
             var metadataPath = Path.ChangeExtension(onnxPath, ".json");
             await File.WriteAllTextAsync(metadataPath, metadataJson);
 
-            Console.WriteLine($"[TorchSharpTrainer] ONNX model exported to: {onnxPath}");
+            Console.WriteLine($"[TorchSharpTrainer] ONNX model metadata exported to: {metadataPath}. Model saved as .pt file.");
             return onnxPath;
         }
 
