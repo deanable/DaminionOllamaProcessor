@@ -31,6 +31,7 @@ namespace DaminionTorchTrainer.ViewModels
         private readonly DaminionDataExtractor _dataExtractor;
         private readonly LocalImageDataExtractor _localDataExtractor;
         private TorchSharpTrainer? _trainer;
+        private MLNetTrainer? _mlNetTrainer;
         private CancellationTokenSource? _cancellationTokenSource;
 
         private string _status = "Ready";
@@ -51,6 +52,7 @@ namespace DaminionTorchTrainer.ViewModels
         private int _extractionProgress = 0;
         private int _extractionTotal = 0;
         private string _extractionStatus = "";
+        private string _dataManagementStatus = "";
         private bool _autoExportOnnx = true;
         
         // Local image properties
@@ -69,6 +71,26 @@ namespace DaminionTorchTrainer.ViewModels
         private ObservableCollection<CollectionSelectionItem> _availableCollections = new ObservableCollection<CollectionSelectionItem>();
         private CollectionSelectionItem? _selectedCollection;
         private string _selectedCollectionText = "";
+
+        // MBConfig and ML.NET properties
+        private string _mbConfigPath = "";
+        private string _mbConfigStatus = "";
+        private bool _useTorchSharp = true;
+        private bool _useMLNet = false;
+        private MbConfig? _currentMbConfig;
+
+        // Hidden dimension presets
+        private List<string> _hiddenDimensionPresets = new List<string>
+        {
+            "1024, 512, 256", // Default for high-resolution features
+            "2048, 1024, 512, 256", // Deep network for complex patterns
+            "512, 256, 128", // Lighter network
+            "2048, 1024, 512", // Medium depth
+            "1024, 512, 256, 128, 64", // Very deep network
+            "4096, 2048, 1024, 512" // Heavy network for maximum accuracy
+        };
+        private string _selectedHiddenDimensionPreset = "1024, 512, 256";
+
 
         public MainViewModel()
         {
@@ -107,6 +129,19 @@ namespace DaminionTorchTrainer.ViewModels
             ClearLogsCommand = new RelayCommand(ClearTrainingLogs);
             ExportLogsCommand = new RelayCommand(ExportTrainingLogs);
             RefreshCollectionsCommand = new AsyncRelayCommand(RefreshCollectionsAsync, () => IsConnected);
+
+            // MBConfig and ML.NET commands
+            BrowseMbConfigCommand = new RelayCommand(BrowseMbConfig);
+            LoadMbConfigCommand = new AsyncRelayCommand(LoadMbConfigAsync);
+
+            // Data Management commands
+            TestDataExtractionCommand = new AsyncRelayCommand(TestDataExtractionAsync, () => CanExtractData());
+            SaveDatasetCommand = new AsyncRelayCommand(SaveDatasetAsync, () => CurrentDataset != null);
+            ExportPropertiesCommand = new AsyncRelayCommand(ExportPropertiesAsync, () => CurrentDataset != null);
+            LoadDatasetCommand = new AsyncRelayCommand(LoadDatasetAsync);
+            OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
+
+
 
             // Initialize model list
             _ = RefreshModelsAsync();
@@ -154,6 +189,12 @@ namespace DaminionTorchTrainer.ViewModels
         {
             get => _extractionStatus;
             set => SetProperty(ref _extractionStatus, value);
+        }
+
+        public string DataManagementStatus
+        {
+            get => _dataManagementStatus;
+            set => SetProperty(ref _dataManagementStatus, value);
         }
 
         public bool AutoExportOnnx
@@ -386,6 +427,20 @@ namespace DaminionTorchTrainer.ViewModels
         public ICommand ExportLogsCommand { get; }
         public ICommand RefreshCollectionsCommand { get; }
 
+        // MBConfig and ML.NET commands
+        public ICommand BrowseMbConfigCommand { get; }
+        public ICommand LoadMbConfigCommand { get; }
+
+        // Data Management commands
+        public ICommand TestDataExtractionCommand { get; }
+        public ICommand SaveDatasetCommand { get; }
+        public ICommand ExportPropertiesCommand { get; }
+        public ICommand LoadDatasetCommand { get; }
+        public ICommand OpenDataFolderCommand { get; }
+
+        // Database commands
+
+
         // Model Testing Properties
         private string? _selectedModel;
         public string? SelectedModel
@@ -446,6 +501,68 @@ namespace DaminionTorchTrainer.ViewModels
         
         // Test results collection
         private ObservableCollection<string> _testResults = new ObservableCollection<string>();
+
+        #region MBConfig and ML.NET Properties
+
+        public string MbConfigPath
+        {
+            get => _mbConfigPath;
+            set => SetProperty(ref _mbConfigPath, value);
+        }
+
+        public string MbConfigStatus
+        {
+            get => _mbConfigStatus;
+            set => SetProperty(ref _mbConfigStatus, value);
+        }
+
+        public bool UseTorchSharp
+        {
+            get => _useTorchSharp;
+            set 
+            { 
+                if (SetProperty(ref _useTorchSharp, value))
+                {
+                    if (value) UseMLNet = false;
+                }
+            }
+        }
+
+        public bool UseMLNet
+        {
+            get => _useMLNet;
+            set 
+            { 
+                if (SetProperty(ref _useMLNet, value))
+                {
+                    if (value) UseTorchSharp = false;
+                }
+            }
+        }
+
+        #endregion
+
+        // Hidden dimension presets
+        public List<string> HiddenDimensionPresets
+        {
+            get => _hiddenDimensionPresets;
+            set => SetProperty(ref _hiddenDimensionPresets, value);
+        }
+
+        public string SelectedHiddenDimensionPreset
+        {
+            get => _selectedHiddenDimensionPreset;
+            set 
+            { 
+                if (SetProperty(ref _selectedHiddenDimensionPreset, value))
+                {
+                    // Update the training config with the selected preset
+                    TrainingConfig.HiddenDimensionsString = value;
+                    SaveSettingsToRegistry();
+                }
+            }
+        }
+
 
         #endregion
 
@@ -1033,17 +1150,48 @@ namespace DaminionTorchTrainer.ViewModels
                 var modelsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
                 if (Directory.Exists(modelsDirectory))
                 {
-                    var modelDirectories = Directory.GetDirectories(modelsDirectory)
+                    // Look for TorchSharp models (.pt files)
+                    var torchSharpDirectories = Directory.GetDirectories(modelsDirectory)
                         .Where(dir => File.Exists(Path.Combine(dir, "model.pt")))
-                        .Select(dir => Path.GetFileName(dir))
+                        .Select(dir => $"[TorchSharp] {Path.GetFileName(dir)}")
                         .Where(name => !string.IsNullOrEmpty(name))
                         .ToList();
                     
-                    models.AddRange(modelDirectories);
+                    models.AddRange(torchSharpDirectories);
+                    
+                    // Look for ML.NET models (.mbconfig files)
+                    var mlNetDirectories = Directory.GetDirectories(modelsDirectory)
+                        .Where(dir => File.Exists(Path.Combine(dir, "model.mbconfig")) || 
+                                    File.Exists(Path.Combine(dir, "model.zip")))
+                        .Select(dir => $"[ML.NET] {Path.GetFileName(dir)}")
+                        .Where(name => !string.IsNullOrEmpty(name))
+                        .ToList();
+                    
+                    models.AddRange(mlNetDirectories);
+                    
+                    // Look for ONNX models (.onnx files)
+                    var onnxDirectories = Directory.GetDirectories(modelsDirectory)
+                        .Where(dir => File.Exists(Path.Combine(dir, "model.onnx")))
+                        .Select(dir => $"[ONNX] {Path.GetFileName(dir)}")
+                        .Where(name => !string.IsNullOrEmpty(name))
+                        .ToList();
+                    
+                    models.AddRange(onnxDirectories);
+                }
+                
+                // Also look for models in the onnx_exports directory
+                var onnxExportsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "onnx_exports");
+                if (Directory.Exists(onnxExportsDirectory))
+                {
+                    var onnxFiles = Directory.GetFiles(onnxExportsDirectory, "*.onnx")
+                        .Select(file => $"[ONNX Export] {Path.GetFileNameWithoutExtension(file)}")
+                        .ToList();
+                    
+                    models.AddRange(onnxFiles);
                 }
                 
                 AvailableModels = models;
-                Status = $"Found {AvailableModels.Count} trained models.";
+                Status = $"Found {AvailableModels.Count} trained models ({models.Count(m => m.Contains("[TorchSharp]"))} TorchSharp, {models.Count(m => m.Contains("[ML.NET]"))} ML.NET, {models.Count(m => m.Contains("[ONNX]"))} ONNX).";
                 
                 if (AvailableModels.Count > 0)
                 {
@@ -1111,6 +1259,9 @@ namespace DaminionTorchTrainer.ViewModels
                 }
                 ResultThreshold = savedThreshold;
                 
+                // Load hidden dimension preset
+                SelectedHiddenDimensionPreset = RegistryService.LoadString("SelectedHiddenDimensionPreset") ?? "1024, 512, 256";
+                
                 Console.WriteLine("[DEBUG] Settings loaded from registry successfully");
                 Status = "Settings loaded successfully.";
             }
@@ -1156,6 +1307,9 @@ namespace DaminionTorchTrainer.ViewModels
                 
                 // Save threshold setting
                 RegistryService.SaveDouble("ResultThreshold", ResultThreshold);
+                
+                // Save hidden dimension preset
+                RegistryService.SaveString("SelectedHiddenDimensionPreset", SelectedHiddenDimensionPreset);
                 
                 Console.WriteLine("[DEBUG] Settings saved to registry successfully");
                 Status = "Settings saved successfully.";
@@ -1297,11 +1451,49 @@ namespace DaminionTorchTrainer.ViewModels
                 }
                 TestStatus = "Loading model and preprocessing image...";
                 
-                // Get the model path
-                var modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "model.pt");
+                // Determine model type and path based on the selected model name
+                string modelPath = "";
+                string modelType = "";
+                string modelName = SelectedModel;
+                
+                if (SelectedModel.StartsWith("[TorchSharp] "))
+                {
+                    modelType = "TorchSharp";
+                    modelName = SelectedModel.Replace("[TorchSharp] ", "");
+                    modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", modelName, "model.pt");
+                }
+                else if (SelectedModel.StartsWith("[ML.NET] "))
+                {
+                    modelType = "ML.NET";
+                    modelName = SelectedModel.Replace("[ML.NET] ", "");
+                    modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", modelName, "model.mbconfig");
+                    if (!File.Exists(modelPath))
+                    {
+                        modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", modelName, "model.zip");
+                    }
+                }
+                else if (SelectedModel.StartsWith("[ONNX] "))
+                {
+                    modelType = "ONNX";
+                    modelName = SelectedModel.Replace("[ONNX] ", "");
+                    modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", modelName, "model.onnx");
+                }
+                else if (SelectedModel.StartsWith("[ONNX Export] "))
+                {
+                    modelType = "ONNX Export";
+                    modelName = SelectedModel.Replace("[ONNX Export] ", "");
+                    modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "onnx_exports", $"{modelName}.onnx");
+                }
+                else
+                {
+                    // Fallback for legacy model names
+                    modelType = "Unknown";
+                    modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "model.pt");
+                }
+                
                 if (!File.Exists(modelPath))
                 {
-                    var modelNotFoundResults = new ObservableCollection<string> { $"Model file not found: {modelPath}" };
+                    var modelNotFoundResults = new ObservableCollection<string> { $"Model file not found: {modelPath}", $"Model type: {modelType}", $"Model name: {modelName}" };
                     if (Application.Current?.Dispatcher != null)
                     {
                         Application.Current.Dispatcher.Invoke(() =>
@@ -1320,7 +1512,7 @@ namespace DaminionTorchTrainer.ViewModels
                 // Load and preprocess the image
                 var imageFeatures = await PreprocessImageAsync(SelectedImagePath);
                 
-                var inferenceResults = new ObservableCollection<string> { "Running inference..." };
+                var inferenceResults = new ObservableCollection<string> { $"Running inference with {modelType} model..." };
                 if (Application.Current?.Dispatcher != null)
                 {
                     Application.Current.Dispatcher.Invoke(() =>
@@ -1332,14 +1524,14 @@ namespace DaminionTorchTrainer.ViewModels
                 {
                     TestResults = inferenceResults;
                 }
-                TestStatus = "Running inference...";
+                TestStatus = $"Running inference with {modelType} model...";
                 
                 // For now, create a simple mock prediction since loading the full model is complex
                 // In a real implementation, you would load the model and run inference
                 var mockPredictions = GenerateMockPredictions(imageFeatures.Length);
                 
                 // Get metadata vocabulary from the model directory
-                var vocabularyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", SelectedModel, "vocabulary.json");
+                var vocabularyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", modelName, "vocabulary.json");
                 var metadataTerms = await LoadMetadataVocabularyAsync(vocabularyPath);
                 
                 // Store current predictions for re-filtering
@@ -1364,17 +1556,22 @@ namespace DaminionTorchTrainer.ViewModels
                 var newResults = new ObservableCollection<string>();
                 if (results.Count > 0)
                 {
-                    newResults.Add($"Predictions (threshold: {ResultThreshold:F0}%):");
+                    newResults.Add($"Predictions using {modelType} model (threshold: {ResultThreshold:F0}%):");
+                    newResults.Add($"Model: {modelName}");
+                    newResults.Add($"Model path: {modelPath}");
+                    newResults.Add("");
                     foreach (var result in results)
                     {
                         newResults.Add(result);
                     }
-                    TestStatus = $"Found {results.Count} predictions above threshold ({ResultThreshold:F0}%)";
+                    TestStatus = $"Found {results.Count} predictions above threshold ({ResultThreshold:F0}%) using {modelType} model";
                 }
                 else
                 {
-                    newResults.Add($"No predictions found above threshold ({ResultThreshold:F0}%)");
-                    TestStatus = $"No predictions found above threshold ({ResultThreshold:F0}%)";
+                    newResults.Add($"No predictions found above threshold ({ResultThreshold:F0}%) using {modelType} model");
+                    newResults.Add($"Model: {modelName}");
+                    newResults.Add($"Model path: {modelPath}");
+                    TestStatus = $"No predictions found above threshold ({ResultThreshold:F0}%) using {modelType} model";
                 }
                 
                 // Use dispatcher to ensure UI thread safety
@@ -1580,6 +1777,359 @@ namespace DaminionTorchTrainer.ViewModels
                 {
                     TestResults = errorResults;
                 }
+            }
+        }
+
+        #endregion
+
+        #region Data Management Methods
+
+        private async Task TestDataExtractionAsync()
+        {
+            try
+            {
+                DataManagementStatus = "Testing data extraction...";
+                
+                // Perform a small test extraction (limit to 10 items)
+                var originalMaxItems = MaxItems;
+                MaxItems = 10;
+                
+                await ExtractDataAsync();
+                
+                // Restore original max items
+                MaxItems = originalMaxItems;
+                
+                if (CurrentDataset != null)
+                {
+                    DataManagementStatus = $"Test successful! Extracted {CurrentDataset.Samples.Count} samples. Ready for full extraction.";
+                }
+                else
+                {
+                    DataManagementStatus = "Test failed. No data was extracted.";
+                }
+            }
+            catch (Exception ex)
+            {
+                DataManagementStatus = $"Test failed: {ex.Message}";
+                Log.Error(ex, "Error during test data extraction");
+            }
+        }
+
+        private async Task SaveDatasetAsync()
+        {
+            if (CurrentDataset == null)
+            {
+                DataManagementStatus = "No dataset available to save.";
+                return;
+            }
+
+            try
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                    DefaultExt = "json",
+                    FileName = $"dataset_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    DataManagementStatus = "Saving dataset...";
+                    
+                    var json = System.Text.Json.JsonSerializer.Serialize(CurrentDataset, 
+                        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                    
+                    await File.WriteAllTextAsync(dialog.FileName, json);
+                    
+                    DataManagementStatus = $"Dataset saved successfully to: {dialog.FileName}";
+                    Status = $"Dataset saved: {CurrentDataset.Samples.Count} samples";
+                }
+            }
+            catch (Exception ex)
+            {
+                DataManagementStatus = $"Error saving dataset: {ex.Message}";
+                Log.Error(ex, "Error saving dataset");
+            }
+        }
+
+        private async Task ExportPropertiesAsync()
+        {
+            if (CurrentDataset == null)
+            {
+                DataManagementStatus = "No dataset available for property export.";
+                return;
+            }
+
+            try
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Filter = "JSON files (*.json)|*.json|Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                    DefaultExt = "json",
+                    FileName = $"properties_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    DataManagementStatus = "Exporting properties...";
+                    
+                    // Extract unique properties from the dataset
+                    var allProperties = new HashSet<string>();
+                    var propertyValues = new Dictionary<string, HashSet<string>>();
+                    
+                    foreach (var sample in CurrentDataset.Samples)
+                    {
+                        // Collect from Tags
+                        if (sample.Tags != null && sample.Tags.Count > 0)
+                        {
+                            allProperties.Add("Tags");
+                            if (!propertyValues.ContainsKey("Tags"))
+                                propertyValues["Tags"] = new HashSet<string>();
+                            foreach (var tag in sample.Tags)
+                            {
+                                propertyValues["Tags"].Add(tag);
+                            }
+                        }
+                        
+                        // Collect from Categories
+                        if (sample.Categories != null && sample.Categories.Count > 0)
+                        {
+                            allProperties.Add("Categories");
+                            if (!propertyValues.ContainsKey("Categories"))
+                                propertyValues["Categories"] = new HashSet<string>();
+                            foreach (var category in sample.Categories)
+                            {
+                                propertyValues["Categories"].Add(category);
+                            }
+                        }
+                        
+                        // Collect from Keywords
+                        if (sample.Keywords != null && sample.Keywords.Count > 0)
+                        {
+                            allProperties.Add("Keywords");
+                            if (!propertyValues.ContainsKey("Keywords"))
+                                propertyValues["Keywords"] = new HashSet<string>();
+                            foreach (var keyword in sample.Keywords)
+                            {
+                                propertyValues["Keywords"].Add(keyword);
+                            }
+                        }
+                        
+                        // Collect from Description
+                        if (!string.IsNullOrEmpty(sample.Description))
+                        {
+                            allProperties.Add("Description");
+                            if (!propertyValues.ContainsKey("Description"))
+                                propertyValues["Description"] = new HashSet<string>();
+                            propertyValues["Description"].Add(sample.Description);
+                        }
+                        
+                        // Collect from MediaFormat
+                        if (!string.IsNullOrEmpty(sample.MediaFormat))
+                        {
+                            allProperties.Add("MediaFormat");
+                            if (!propertyValues.ContainsKey("MediaFormat"))
+                                propertyValues["MediaFormat"] = new HashSet<string>();
+                            propertyValues["MediaFormat"].Add(sample.MediaFormat);
+                        }
+                        
+                        // Collect from FormatType
+                        if (!string.IsNullOrEmpty(sample.FormatType))
+                        {
+                            allProperties.Add("FormatType");
+                            if (!propertyValues.ContainsKey("FormatType"))
+                                propertyValues["FormatType"] = new HashSet<string>();
+                            propertyValues["FormatType"].Add(sample.FormatType);
+                        }
+                    }
+
+                    var propertiesList = allProperties.OrderBy(p => p).ToList();
+                    
+                    // Create property statistics
+                    var propertyStats = new Dictionary<string, object>();
+                    foreach (var property in propertiesList)
+                    {
+                        var values = propertyValues[property];
+                        var count = 0;
+                        
+                        // Count occurrences
+                        foreach (var sample in CurrentDataset.Samples)
+                        {
+                            switch (property)
+                            {
+                                case "Tags":
+                                    if (sample.Tags != null && sample.Tags.Count > 0) count++;
+                                    break;
+                                case "Categories":
+                                    if (sample.Categories != null && sample.Categories.Count > 0) count++;
+                                    break;
+                                case "Keywords":
+                                    if (sample.Keywords != null && sample.Keywords.Count > 0) count++;
+                                    break;
+                                case "Description":
+                                    if (!string.IsNullOrEmpty(sample.Description)) count++;
+                                    break;
+                                case "MediaFormat":
+                                    if (!string.IsNullOrEmpty(sample.MediaFormat)) count++;
+                                    break;
+                                case "FormatType":
+                                    if (!string.IsNullOrEmpty(sample.FormatType)) count++;
+                                    break;
+                            }
+                        }
+                        
+                        propertyStats[property] = new
+                        {
+                            TotalOccurrences = count,
+                            UniqueValues = values.Count,
+                            Coverage = (double)count / CurrentDataset.Samples.Count,
+                            SampleValues = values.Take(10).ToList() // First 10 unique values
+                        };
+                    }
+
+                    var exportData = new
+                    {
+                        DatasetName = CurrentDataset.Name,
+                        TotalSamples = CurrentDataset.Samples.Count,
+                        Properties = propertyStats,
+                        ExportDate = DateTime.Now
+                    };
+
+                    var json = System.Text.Json.JsonSerializer.Serialize(exportData, 
+                        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                    
+                    await File.WriteAllTextAsync(dialog.FileName, json);
+                    
+                    DataManagementStatus = $"Properties exported successfully to: {dialog.FileName} ({propertiesList.Count} properties found)";
+                    Status = $"Properties exported: {propertiesList.Count} properties from {CurrentDataset.Samples.Count} samples";
+                }
+            }
+            catch (Exception ex)
+            {
+                DataManagementStatus = $"Error exporting properties: {ex.Message}";
+                Log.Error(ex, "Error exporting properties");
+            }
+        }
+
+        private async Task LoadDatasetAsync()
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                    DefaultExt = "json"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    DataManagementStatus = "Loading dataset...";
+                    
+                    var json = await File.ReadAllTextAsync(dialog.FileName);
+                    var dataset = System.Text.Json.JsonSerializer.Deserialize<TrainingDataset>(json);
+                    
+                    if (dataset != null)
+                    {
+                        CurrentDataset = dataset;
+                        DataManagementStatus = $"Dataset loaded successfully: {dataset.Samples.Count} samples from {dialog.FileName}";
+                        Status = $"Dataset loaded: {dataset.Samples.Count} samples";
+                    }
+                    else
+                    {
+                        DataManagementStatus = "Failed to load dataset. Invalid file format.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DataManagementStatus = $"Error loading dataset: {ex.Message}";
+                Log.Error(ex, "Error loading dataset");
+            }
+        }
+
+        private void OpenDataFolder()
+        {
+            try
+            {
+                // Open the default documents folder where datasets are typically saved
+                var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                if (Directory.Exists(documentsPath))
+                {
+                    System.Diagnostics.Process.Start("explorer.exe", documentsPath);
+                    DataManagementStatus = "Opened Documents folder. Look for dataset_*.json files.";
+                }
+                else
+                {
+                    DataManagementStatus = "Documents folder not found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                DataManagementStatus = $"Error opening data folder: {ex.Message}";
+                Log.Error(ex, "Error opening data folder");
+            }
+        }
+
+        #endregion
+
+        #region MBConfig and ML.NET Methods
+
+        private void BrowseMbConfig()
+        {
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select MBConfig File",
+                Filter = "MBConfig files (*.mbconfig)|*.mbconfig|JSON files (*.json)|*.json|All files (*.*)|*.*",
+                DefaultExt = "mbconfig"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                MbConfigPath = openFileDialog.FileName;
+            }
+        }
+
+        private async Task LoadMbConfigAsync()
+        {
+            if (string.IsNullOrEmpty(MbConfigPath))
+            {
+                MbConfigStatus = "Please select an MBConfig file first.";
+                return;
+            }
+
+            try
+            {
+                MbConfigStatus = "Loading MBConfig...";
+                _mlNetTrainer ??= new MLNetTrainer(progress =>
+                {
+                    // Update training progress
+                    if (Application.Current?.Dispatcher != null)
+                    {
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            CurrentProgress = progress;
+                            Status = $"ML.NET Training - Epoch {progress.CurrentEpoch}/{progress.TotalEpochs} - Loss: {progress.TrainingLoss:F4}";
+                        });
+                    }
+                });
+                
+                _currentMbConfig = await _mlNetTrainer.LoadMbConfigAsync(MbConfigPath);
+                
+                var (isValid, errorMessage) = _mlNetTrainer.ValidateMbConfig(_currentMbConfig);
+                if (isValid)
+                {
+                    MbConfigStatus = $"MBConfig loaded successfully. Algorithm: {_currentMbConfig.Training.Algorithm}";
+                    Log.Information("MBConfig loaded: {Algorithm}", _currentMbConfig.Training.Algorithm);
+                }
+                else
+                {
+                    MbConfigStatus = $"MBConfig validation failed: {errorMessage}";
+                }
+            }
+            catch (Exception ex)
+            {
+                MbConfigStatus = $"Error loading MBConfig: {ex.Message}";
+                Log.Error(ex, "Error loading MBConfig from {Path}", MbConfigPath);
             }
         }
 

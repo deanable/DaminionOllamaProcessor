@@ -35,13 +35,40 @@ namespace DaminionTorchTrainer.Models
         /// Gets or sets the feature dimension for the model
         /// </summary>
         [JsonPropertyName("featureDimension")]
-        public int FeatureDimension { get; set; } = 128;
+        public int FeatureDimension { get; set; } = 49152; // Updated for 512x512 resolution
 
         /// <summary>
         /// Gets or sets the hidden layer dimensions
         /// </summary>
         [JsonPropertyName("hiddenDimensions")]
-        public int[] HiddenDimensions { get; set; } = { 256, 128, 64 };
+        public int[] HiddenDimensions { get; set; } = { 1024, 512, 256 }; // Updated for larger feature set
+
+        /// <summary>
+        /// Gets or sets the hidden dimensions as a comma-separated string for UI binding
+        /// </summary>
+        [JsonIgnore]
+        public string HiddenDimensionsString
+        {
+            get => string.Join(",", HiddenDimensions);
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    try
+                    {
+                        HiddenDimensions = value.Split(',')
+                            .Select(s => s.Trim())
+                            .Where(s => !string.IsNullOrEmpty(s))
+                            .Select(int.Parse)
+                            .ToArray();
+                    }
+                    catch (FormatException)
+                    {
+                        // Keep existing value if parsing fails
+                    }
+                }
+            }
+        }
 
         /// <summary>
         /// Gets or sets the output dimension for the model

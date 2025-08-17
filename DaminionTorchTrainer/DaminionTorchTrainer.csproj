@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
@@ -9,17 +8,16 @@
     <ApplicationIcon>Daminion-Llama.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
-
   <ItemGroup>
     <Content Include="Daminion-Llama.ico" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\DaminionOllamaInteractionLib\DaminionOllamaInteractionLib.csproj" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.8.0" />
+    <PackageReference Include="Microsoft.ML.Vision" Version="4.0.0" />
+    <PackageReference Include="SciSharp.TensorFlow.Redist" Version="2.3.1" />
     <PackageReference Include="TorchSharp-cpu" Version="0.105.1" />
     <PackageReference Include="Microsoft.ML.OnnxConverter" Version="0.22.2" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.1" />
@@ -29,6 +27,14 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="System.Drawing.Common" Version="9.0.8" />
     <PackageReference Include="Npgsql" Version="9.0.3" />
+    <PackageReference Include="Microsoft.ML" Version="4.0.2" />
+    <PackageReference Include="Microsoft.ML.FastTree" Version="4.0.2" />
+    <PackageReference Include="Microsoft.ML.LightGbm" Version="4.0.2" />
+    <PackageReference Include="Microsoft.ML.AutoML" Version="0.22.0" />
   </ItemGroup>
-
+  <ItemGroup Label="MLModel1">
+    <None Include="MLModel1.mlnet">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

@@ -39,5 +39,7 @@ namespace DaminionTorchTrainer
                 viewModel.DaminionPassword = passwordBox.Password;
             }
         }
+
+
     }
 }

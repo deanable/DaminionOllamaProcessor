@@ -24,6 +24,7 @@ namespace DaminionTorchTrainer.Services
         private torch.optim.Optimizer? _optimizer;
         private Loss<Tensor, Tensor, Tensor>? _lossFunction;
         private Device _device;
+        private TrainingDataset? _currentDataset;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TorchSharpTrainer"/> class.
@@ -75,6 +76,9 @@ namespace DaminionTorchTrainer.Services
 
             try
             {
+                // Store current dataset for ONNX export
+                _currentDataset = dataset;
+                
                 // Prepare data
                 var (trainData, valData) = PrepareData(dataset);
                 Log.Information("Data prepared: {TrainCount} training samples, {ValCount} validation samples", 
@@ -486,7 +490,7 @@ namespace DaminionTorchTrainer.Services
                     _model.save(onnxPath);
                 }
                 
-                // Create metadata file
+                // Create metadata file with labels/vocabulary
                 var onnxMetadata = new
                 {
                     ModelName = "DaminionTorchSharpModel",
@@ -495,7 +499,9 @@ namespace DaminionTorchTrainer.Services
                     Framework = "TorchSharp",
                     InputShape = new int[] { 1, _config.FeatureDimension },
                     OutputShape = new int[] { 1, _config.OutputDimension },
-                    TrainingConfig = _config
+                    TrainingConfig = _config,
+                    Labels = _currentDataset?.MetadataVocabulary ?? new Dictionary<string, int>(),
+                    LabelMapping = _currentDataset?.MetadataVocabulary?.ToDictionary(kvp => kvp.Value, kvp => kvp.Key) ?? new Dictionary<int, string>()
                 };
                 
                 var metadataJson = System.Text.Json.JsonSerializer.Serialize(onnxMetadata, 
@@ -505,6 +511,8 @@ namespace DaminionTorchTrainer.Services
                 await File.WriteAllTextAsync(metadataPath, metadataJson);
                 
                 Console.WriteLine($"[TorchSharpTrainer] ONNX model exported to: {onnxPath}");
+                Console.WriteLine($"[TorchSharpTrainer] ONNX metadata exported to: {metadataPath}");
+                Console.WriteLine($"[TorchSharpTrainer] Labels included: {(_currentDataset?.MetadataVocabulary?.Count ?? 0)} terms");
                 return onnxPath;
             }
             catch (Exception ex)
@@ -659,5 +667,7 @@ namespace DaminionTorchTrainer.Services
         public float FinalValidationLoss { get; set; }
         public float FinalTrainingAccuracy { get; set; }
         public float FinalValidationAccuracy { get; set; }
+        public string TrainingMethod { get; set; } = string.Empty;
+        public string Algorithm { get; set; } = string.Empty;
     }
 }

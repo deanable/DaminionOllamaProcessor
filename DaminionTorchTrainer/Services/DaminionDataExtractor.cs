@@ -44,8 +44,17 @@ namespace DaminionTorchTrainer.Services
 
             // Step 1: Search for media items
             progressCallback?.Invoke(0, maxItems, "Searching for media items...");
-            Log.Information("Calling SearchMediaItemsAsync with query='{SearchQuery}', operators='', maxItems={MaxItems}", searchQuery, maxItems);
-            var searchResponse = await _daminionClient.SearchMediaItemsAsync(searchQuery, "", maxItems);
+            
+            // Based on Daminion web interface analysis, text search uses:
+            // - ID 5000 for "Everywhere" search (includes Filename, Folder, Title, Description, etc.)
+            // - Format: "5000,{searchTerm}" 
+            // - Operators: "5000,all" (match all terms)
+            var queryLine = string.IsNullOrWhiteSpace(searchQuery) ? "" : $"5000,{searchQuery}";
+            var operators = string.IsNullOrWhiteSpace(searchQuery) ? "" : "5000,all";
+            
+            Log.Information("Calling SearchMediaItemsAsync with queryLine='{QueryLine}', operators='{Operators}', maxItems={MaxItems}", 
+                queryLine, operators, maxItems);
+            var searchResponse = await _daminionClient.SearchMediaItemsAsync(queryLine, operators, maxItems);
             
             Log.Information("Search response received - Success: {Success}, Error: {Error}, MediaItemsCount: {MediaItemsCount}", 
                 searchResponse?.Success, searchResponse?.Error, searchResponse?.MediaItems?.Count ?? 0);
@@ -136,31 +145,14 @@ namespace DaminionTorchTrainer.Services
             // Step 1: Search for media items in the collection
             progressCallback?.Invoke(0, maxItems, "Searching for media items in collection...");
             
-            // First, we need to find the Collections tag ID
-            var tagsResponse = await _daminionClient.GetTagsAsync();
-            if (tagsResponse?.Success != true || tagsResponse.Data == null)
-            {
-                Log.Warning("Failed to get tags for collection search");
-                return new TrainingDataset { Samples = new List<TrainingData>(), FeatureDimension = 0, LabelDimension = 0 };
-            }
-
-            // Find the Collections tag
-            var collectionsTag = tagsResponse.Data.FirstOrDefault(t => 
-                t.Name.Equals("Shared Collections", StringComparison.OrdinalIgnoreCase) ||
-                t.Name.Equals("Collections", StringComparison.OrdinalIgnoreCase));
-
-            if (collectionsTag == null)
-            {
-                Log.Warning("Collections tag not found");
-                return new TrainingDataset { Samples = new List<TrainingData>(), FeatureDimension = 0, LabelDimension = 0 };
-            }
-
-            // Create query to search for items in the specific collection
-            // Format: queryLine={collectionsTagId},{collectionId}
-            var queryLine = $"{collectionsTag.Id},{collectionId}";
+            // Based on Daminion web interface analysis, the query format is:
+            // queryLine=12,{keywordId}&operators=12,all
+            // Where 12 is the search type ID for keywords, and collectionId is the keyword ID
+            var queryLine = $"12,{collectionId}";
+            var operators = "12,all"; // "all" means all items matching the keyword
             
-            Log.Information("Searching with query: {QueryLine}", queryLine);
-            var searchResponse = await _daminionClient.SearchMediaItemsAsync("", queryLine, maxItems);
+            Log.Information("Searching with query: {QueryLine}, operators: {Operators}", queryLine, operators);
+            var searchResponse = await _daminionClient.SearchMediaItemsAsync(queryLine, operators, maxItems);
             
             Log.Information("Collection search response received - Success: {Success}, Error: {Error}, MediaItemsCount: {MediaItemsCount}", 
                 searchResponse?.Success, searchResponse?.Error, searchResponse?.MediaItems?.Count ?? 0);
@@ -438,26 +430,26 @@ namespace DaminionTorchTrainer.Services
         }
 
         /// <summary>
-        /// Extracts visual features from image pixels using a simple approach
+        /// Extracts visual features from image pixels using a higher resolution approach
         /// </summary>
         private async Task<List<float>?> ExtractVisualFeaturesAsync(string imagePath)
         {
             try
             {
-                // For now, use a simple approach: resize image and extract pixel values
-                // In a production system, you'd use a pre-trained CNN like ResNet
+                // Use higher resolution for better accuracy: 512x512 instead of 224x224
                 using var image = System.Drawing.Image.FromFile(imagePath);
                 using var bitmap = new System.Drawing.Bitmap(image);
                 
-                // Resize to standard size (224x224 is common for CNNs)
-                using var resizedBitmap = new System.Drawing.Bitmap(bitmap, new System.Drawing.Size(224, 224));
+                // Resize to higher resolution (512x512) for better feature extraction
+                using var resizedBitmap = new System.Drawing.Bitmap(bitmap, new System.Drawing.Size(512, 512));
                 
                 var features = new List<float>();
                 
-                // Extract RGB values from pixels (simplified approach)
-                for (int y = 0; y < resizedBitmap.Height; y += 8) // Sample every 8th pixel to reduce dimensionality
+                // Extract RGB values from pixels with finer sampling (every 4th pixel instead of 8th)
+                // This gives us 128x128 = 16,384 pixels, each with 3 RGB values = 49,152 features
+                for (int y = 0; y < resizedBitmap.Height; y += 4) // Sample every 4th pixel for higher detail
                 {
-                    for (int x = 0; x < resizedBitmap.Width; x += 8)
+                    for (int x = 0; x < resizedBitmap.Width; x += 4)
                     {
                         var pixel = resizedBitmap.GetPixel(x, y);
                         features.Add(pixel.R / 255.0f); // Normalize to 0-1
@@ -466,7 +458,8 @@ namespace DaminionTorchTrainer.Services
                     }
                 }
                 
-                Log.Information("Extracted {FeatureCount} visual features from {ImagePath}", features.Count, Path.GetFileName(imagePath));
+                Log.Information("Extracted {FeatureCount} visual features from {ImagePath} (512x512 resolution, 4-pixel sampling)", 
+                    features.Count, Path.GetFileName(imagePath));
                 return features;
             }
             catch (Exception ex)
@@ -540,9 +533,9 @@ namespace DaminionTorchTrainer.Services
         /// </summary>
         private int CalculateFeatureDimension()
         {
-            // Visual features: 224x224 image, sampled every 8th pixel, 3 RGB channels
-            // (224/8) * (224/8) * 3 = 28 * 28 * 3 = 2,352 features
-            return 2352;
+            // Visual features: 512x512 image, sampled every 4th pixel, 3 RGB channels
+            // (512/4) * (512/4) * 3 = 128 * 128 * 3 = 49,152 features
+            return 49152;
         }
     }
 }
