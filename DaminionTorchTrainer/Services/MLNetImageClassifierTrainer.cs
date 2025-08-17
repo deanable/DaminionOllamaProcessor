@@ -39,8 +39,6 @@ namespace DaminionTorchTrainer.Services
             var imageData = new List<ImageData>();
             var allLabels = new HashSet<string>();
 
-            // ML.NET's ImageClassificationTrainer works with single-label data.
-            // We create a data point for each tag associated with an image.
             foreach (var sample in dataset.Samples.Where(s => !string.IsNullOrEmpty(s.FilePath)))
             {
                 var labels = sample.Labels.Select((v, i) => v > 0.5f ? dataset.MetadataVocabulary.FirstOrDefault(kvp => kvp.Value == i).Key : null)
@@ -63,15 +61,23 @@ namespace DaminionTorchTrainer.Services
             IDataView trainingDataView = _mlContext.Data.LoadFromEnumerable(imageData);
             trainingDataView = _mlContext.Data.ShuffleRows(trainingDataView);
 
-            // 2. Define the training pipeline
+            // 2. Define the training pipeline using the Options object
             logCallback("Defining the ML.NET training pipeline...");
+            var options = new ImageClassificationTrainer.Options()
+            {
+                LabelColumnName = "LabelAsKey",
+                FeatureColumnName = "Features",
+                Arch = ImageClassificationTrainer.Architecture.ResnetV250, // Specify architecture here
+                Epoch = 50, // Example: specify other parameters
+                BatchSize = 10,
+                LearningRate = 0.01f,
+                ValidationSet = null // No validation set for simplicity, but can be added
+            };
+
             var pipeline = _mlContext.Transforms.Conversion.MapValueToKey(outputColumnName: "LabelAsKey", inputColumnName: "Label")
                 .Append(_mlContext.Transforms.LoadRawImageBytes(outputColumnName: "Image", imageFolder: null, inputColumnName: "ImagePath"))
                 .Append(_mlContext.Transforms.CopyColumns(outputColumnName: "Features", inputColumnName: "Image"))
-                .Append(_mlContext.MulticlassClassification.Trainers.ImageClassification(
-                    labelColumnName: "LabelAsKey",
-                    featureColumnName: "Features",
-                    arch: ImageClassificationTrainer.Architecture.ResnetV250))
+                .Append(_mlContext.MulticlassClassification.Trainers.ImageClassification(options))
                 .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
             // 3. Train the model
