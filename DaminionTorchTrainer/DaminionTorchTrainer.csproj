@@ -32,9 +32,4 @@
     <PackageReference Include="Microsoft.ML.LightGbm" Version="4.0.2" />
     <PackageReference Include="Microsoft.ML.AutoML" Version="0.22.0" />
   </ItemGroup>
-  <ItemGroup Label="MLModel1">
-    <None Include="MLModel1.mlnet">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
 </Project>
