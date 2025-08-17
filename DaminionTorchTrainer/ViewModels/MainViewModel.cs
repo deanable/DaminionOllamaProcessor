@@ -45,14 +45,9 @@ namespace DaminionTorchTrainer.ViewModels
         
         public MainViewModel()
         {
-            // The ImageProcessor is no longer needed here, as ML.NET handles it.
-            // We can't remove it completely yet as the old extractors still need it.
-            // This will be cleaned up in a future step.
-            var tempImageProcessor = new ImageProcessor();
-
             _daminionClient = new DaminionApiClient();
-            _dataExtractor = new DaminionDataExtractor(_daminionClient, tempImageProcessor);
-            _localDataExtractor = new LocalImageDataExtractor(tempImageProcessor);
+            _dataExtractor = new DaminionDataExtractor(_daminionClient);
+            _localDataExtractor = new LocalImageDataExtractor();
             _mlNetTrainer = new MLNetImageClassifierTrainer();
 
             ConnectCommand = new AsyncRelayCommand(ConnectToDaminionAsync, () => !IsConnected && !IsTraining);
@@ -112,11 +107,10 @@ namespace DaminionTorchTrainer.ViewModels
                 Status = "Extracting data...";
                 var progressCallback = new Action<int, int, string>((curr, total, msg) => { ExtractionProgress = curr; ExtractionTotal = total; ExtractionStatus = msg; });
 
-                // HACK: The old data extractors still exist but we are not using them for training.
-                // We will just use the local file extractor to get a list of files and labels.
-                // This part of the code needs a major refactoring to align with the new ML.NET approach.
-                // For now, we get the dataset to pass to the ML.NET trainer.
-                CurrentDataset = await _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback);
+                CurrentDataset = SelectedDataSource == DataSourceType.API
+                    ? await _dataExtractor.ExtractTrainingDataAsync(SearchQuery, MaxItems, progressCallback)
+                    : await _localDataExtractor.ExtractTrainingDataAsync(LocalImageFolder, IncludeSubfolders, MaxItems, progressCallback);
+
                 Status = $"Extracted {CurrentDataset.Samples.Count} samples.";
             }
             catch (Exception ex) { Status = $"Error: {ex.Message}"; }
@@ -139,7 +133,7 @@ namespace DaminionTorchTrainer.ViewModels
                 Status = $"ML.NET training complete. Model saved at {modelPath}";
             }
             catch (OperationCanceledException) { Status = "Training canceled."; }
-            catch (Exception ex) { Status = $"Error: {ex.Message}"; }
+            catch (Exception ex) { Status = $"Error during training: {ex.Message}"; }
             finally
             {
                 IsTraining = false;
@@ -155,7 +149,7 @@ namespace DaminionTorchTrainer.ViewModels
             if (dialog.ShowDialog() == true) LocalImageFolder = dialog.FolderName;
         }
 
-        private bool CanExtractData() => !IsTraining && !IsExtracting && Directory.Exists(LocalImageFolder);
+        private bool CanExtractData() => !IsTraining && !IsExtracting && (SelectedDataSource == DataSourceType.API ? IsConnected : Directory.Exists(LocalImageFolder));
         private bool CanStartTraining() => !IsTraining && CurrentDataset != null && CurrentDataset.Samples.Any();
 
         #endregion

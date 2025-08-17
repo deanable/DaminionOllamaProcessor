@@ -39,10 +39,9 @@ namespace DaminionTorchTrainer.Services
             var imageData = new List<ImageData>();
             var allLabels = new HashSet<string>();
 
-            // ML.NET's ImageClassificationTrainer works best with single-label data.
-            // We will treat each tag as a separate data point.
-            // This creates a multi-label scenario by duplicating images with different labels.
-            foreach (var sample in dataset.Samples)
+            // ML.NET's ImageClassificationTrainer works with single-label data.
+            // We create a data point for each tag associated with an image.
+            foreach (var sample in dataset.Samples.Where(s => !string.IsNullOrEmpty(s.FilePath)))
             {
                 var labels = sample.Labels.Select((v, i) => v > 0.5f ? dataset.MetadataVocabulary.FirstOrDefault(kvp => kvp.Value == i).Key : null)
                                       .Where(k => k != null)
@@ -57,7 +56,7 @@ namespace DaminionTorchTrainer.Services
 
             if (!imageData.Any())
             {
-                logCallback("No labels found in the dataset. Cannot train a classifier.");
+                logCallback("No valid labels found in the dataset. Cannot train a classifier.");
                 throw new InvalidOperationException("No labels found in the dataset.");
             }
 
@@ -65,19 +64,18 @@ namespace DaminionTorchTrainer.Services
             trainingDataView = _mlContext.Data.ShuffleRows(trainingDataView);
 
             // 2. Define the training pipeline
-            logCallback("Defining the training pipeline...");
-            var pipeline = _mlContext.Transforms.Conversion.MapValueToKey(inputColumnName: "Label", outputColumnName: "LabelAsKey")
-                .Append(_mlContext.Transforms.LoadImages(outputColumnName: "input", imageFolder: "", inputColumnName: "ImagePath"))
-                .Append(_mlContext.Transforms.ResizeImages(outputColumnName: "input", imageWidth: 224, imageHeight: 224, inputColumnName: "input"))
-                .Append(_mlContext.Transforms.ExtractPixels(outputColumnName: "input"))
+            logCallback("Defining the ML.NET training pipeline...");
+            var pipeline = _mlContext.Transforms.Conversion.MapValueToKey(outputColumnName: "LabelAsKey", inputColumnName: "Label")
+                .Append(_mlContext.Transforms.LoadRawImageBytes(outputColumnName: "Image", imageFolder: null, inputColumnName: "ImagePath"))
+                .Append(_mlContext.Transforms.CopyColumns(outputColumnName: "Features", inputColumnName: "Image"))
                 .Append(_mlContext.MulticlassClassification.Trainers.ImageClassification(
                     labelColumnName: "LabelAsKey",
-                    featureColumnName: "input",
-                    validationSet: null)) // We can add a validation set here for better metrics
-                .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel", "PredictedLabel"));
+                    featureColumnName: "Features",
+                    arch: ImageClassificationTrainer.Architecture.ResnetV250))
+                .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
             // 3. Train the model
-            logCallback("Training the model... This may take a while.");
+            logCallback("Training the ML.NET model... This may take a while.");
             ITransformer trainedModel = pipeline.Fit(trainingDataView);
             logCallback("Model training complete.");
 
@@ -90,7 +88,6 @@ namespace DaminionTorchTrainer.Services
             _mlContext.Model.Save(trainedModel, trainingDataView.Schema, modelPath);
             logCallback($"Model saved to: {modelPath}");
 
-            // Also save the vocabulary
             var vocabPath = Path.Combine(modelDir, "vocabulary.json");
             var vocabJson = System.Text.Json.JsonSerializer.Serialize(allLabels.ToList());
             await File.WriteAllTextAsync(vocabPath, vocabJson);
